@@ -1,0 +1,58 @@
+// This is your Prisma schema file
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Variable {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   // 'ACTUAL' or 'BUDGET'
+  values      Value[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Value {
+  id         String   @id @default(cuid())
+  variableId String
+  variable   Variable @relation(fields: [variableId], references: [id])
+  period     DateTime
+  value      Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([variableId, period])
+}
+
+model Node {
+  id          String   @id @default(cuid())
+  type        String   // 'VARIABLE', 'PARAMETER', 'OPERATOR', 'OUTPUT'
+  name        String
+  description String?
+  attributes  Json?    // Store type-specific attributes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Self-referential many-to-many relationship for edges
+  childNodes  Edge[]   @relation("ParentToChild")
+  parentNodes Edge[]   @relation("ChildToParent")
+}
+
+model Edge {
+  id         String   @id @default(cuid())
+  parentId   String
+  childId    String
+  parent     Node     @relation("ParentToChild", fields: [parentId], references: [id])
+  child      Node     @relation("ChildToParent", fields: [childId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([parentId, childId])
+} 
