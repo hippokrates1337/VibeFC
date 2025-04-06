@@ -6,6 +6,16 @@ const config: Config = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  safelist: [
+    'text-left',
+    'text-right',
+    'text-center',
+    'font-mono',
+    'tabular-nums',
+    'bg-blue-100',
+    'bg-green-100',
+    'bg-yellow-100'
+  ],
   theme: {
     extend: {
       colors: {
@@ -48,7 +58,13 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gradient-conic':
+          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+      },
     },
   },
   plugins: [],
-} 
+}
+export default config 
