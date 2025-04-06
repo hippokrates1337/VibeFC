@@ -16,6 +16,9 @@ This document outlines the best practices and coding standards for developing we
 - **Modularization**: Prefer iteration and modularization over code duplication.
 - **Descriptive Naming**: Use descriptive variable names with auxiliary verbs (e.g., `isLoading`, `hasError`).
 - **File Structure**: Organize files with exported components, subcomponents, helpers, static content, and types.
+- **Naming Conventions**: Use camelCase for variables and functions, PascalCase for classes and components, and UPPER_CASE for constants.
+- **TypeScript Usage**: Always define types for variables, function parameters, and return values. Use interfaces and types for complex data structures.
+- **Syntax and Formatting**: Follow consistent indentation (2 spaces), use semicolons, and prefer single quotes for strings.
 
 ## Naming Conventions
 - **Components**: Place all components in `src/components` and name them like `new-component.tsx`.
@@ -37,6 +40,24 @@ This document outlines the best practices and coding standards for developing we
 - **Web Vitals**: Optimize for Web Vitals (LCP, CLS, FID).
 - **Data Fetching and Routing**: Follow Next.js documentation for Data Fetching, Rendering, and Routing.
 - **Placeholder Images**: Use `https://placekitten.com/` for placeholder images in seed data.
+
+## Testing Requirements
+
+- **Unit tests**: Write unit tests using **Jest** and **React Testing Library**.
+- **Test coverage**: Ensure test coverage is at least 80%.
+- **UI testing**: Use snapshot testing for UI components.
+
+## Documentation
+
+- **Comments**: Write JSDoc comments for functions and components.
+- **React validation**: Include PropTypes validation for React components.
+- **Readme**: Provide README.md files in each main directory 
+
+## Error Handling
+
+- **Try and catch**: Use `try/catch` blocks for asynchronous operations.
+- **React errors**: Implement global error boundary components in React applications.
+- **Input validation**: Validate input data using libraries like `zod` or `yup`.
 
 ## Project Structure
 - **/src Directory**: Place both `/app` and `/components` folders under a `/src` directory for better organization and scalability.
