@@ -1,6 +1,11 @@
 ---
 description: 
 globs: 
+alwaysApply: false
+---
+---
+description: 
+globs: 
 alwaysApply: true
 ---
 # Next.js (React, Tailwind)
@@ -19,6 +24,7 @@ This document outlines the best practices and coding standards for developing we
 - **Naming Conventions**: Use camelCase for variables and functions, PascalCase for classes and components, and UPPER_CASE for constants.
 - **TypeScript Usage**: Always define types for variables, function parameters, and return values. Use interfaces and types for complex data structures.
 - **Syntax and Formatting**: Follow consistent indentation (2 spaces), use semicolons, and prefer single quotes for strings.
+- **Conservatism**: When making changes or fixing errors, stay focused on the relevant areas and don't alter functionality that is unrelated.
 
 ## Naming Conventions
 - **Components**: Place all components in `src/components` and name them like `new-component.tsx`.

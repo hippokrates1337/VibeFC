@@ -13,8 +13,7 @@ datasource db {
 model Variable {
   id          String   @id @default(cuid())
   name        String
-  description String?
-  type        String   // 'ACTUAL' or 'BUDGET'
+  type        String   // 'Actual', 'Budget', 'Input', or 'Unknown'
   dates       DateTime[]
   values      Float[]
   createdAt   DateTime @default(now())

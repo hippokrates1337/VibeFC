@@ -1,34 +1,35 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { parse, format } from 'date-fns'
 import styles from './table.module.css'
-
-interface Variable {
-  id: string
-  name: string
-  description: string | null
-  type: 'ACTUAL' | 'BUDGET'
-}
-
-interface TableData {
-  headers: string[]
-  rows: Array<Array<string | number | null>>
-}
+import { useVariableStore, type Variable, type TimeSeriesData } from '@/lib/store/variables'
+import { ImportModal } from './import-modal'
 
 export default function DataIntake() {
-  const [variables, setVariables] = useState<Variable[]>([])
+  const { variables, setVariables } = useVariableStore()
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [tableData, setTableData] = useState<TableData | null>(null)
+  const [processedVariables, setProcessedVariables] = useState<Variable[]>([])
+  const [showImportModal, setShowImportModal] = useState(false)
+
+  const dates = useMemo(() => {
+    const allDates = variables.flatMap(variable => 
+      variable.timeSeries.map(ts => ts.date)
+    )
+    
+    // Remove duplicates and sort
+    return Array.from(new Set(allDates))
+      .sort((a, b) => a.getTime() - b.getTime())
+  }, [variables])
 
   // Add ref for the scroll container
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Update first column width
   useEffect(() => {
-    if (tableData) {
+    if (variables.length > 0) {
       const container = scrollContainerRef.current
       if (!container) return
 
@@ -39,7 +40,32 @@ export default function DataIntake() {
         container.style.setProperty('--first-column-width', `${width}px`)
       }
     }
-  }, [tableData])
+  }, [variables])
+
+  const parseDate = (dateStr: string): Date | null => {
+    const formats = [
+      'yyyy-MM-dd',    // ISO format
+      'dd.MM.yyyy',    // German format
+      'MM/dd/yyyy',    // US format
+      'dd/MM/yyyy',    // UK format
+      'yyyy.MM.dd',    // Alternative ISO format
+      'MM.yyyy',       // Short German format
+      'MM/yyyy',       // Short US/UK format
+      'yyyy-MM',       // Short ISO format
+    ]
+
+    for (const format of formats) {
+      try {
+        const date = parse(dateStr.trim(), format, new Date())
+        if (!isNaN(date.getTime())) {
+          return date
+        }
+      } catch {
+        continue
+      }
+    }
+    return null
+  }
 
   const validateHeaders = (headers: string[]): boolean => {
     if (headers.length < 3) return false // At least variable, type, and one date
@@ -48,200 +74,247 @@ export default function DataIntake() {
 
     // Check if all columns after the second one contain valid dates
     for (let i = 2; i < headers.length; i++) {
-      try {
-        parse(headers[i], 'yyyy-MM-dd', new Date())
-      } catch {
-        try {
-          parse(headers[i], 'dd.MM.yyyy', new Date())
-        } catch {
-          return false
-        }
+      const date = parseDate(headers[i])
+      if (!date) {
+        setError(`Invalid date format in column ${i + 1}. Expected yyyy-MM-dd or dd.MM.yyyy`)
+        return false
       }
     }
     return true
   }
 
-  const formatNumber = (value: string | number | null): string => {
-    if (value === null || value === '') return ''
-    const num = typeof value === 'string' ? parseFloat(value.replace(',', '.')) : value
-    if (isNaN(num)) return ''
-    return num.toLocaleString('de-DE', {
+  const formatDate = (date: Date): string => {
+    if (!date || isNaN(date.getTime())) {
+      console.error('Invalid date object:', date)
+      return 'Invalid Date'
+    }
+    return format(date, 'MM-yyyy')
+  }
+
+  const formatNumber = (value: number | null): string => {
+    if (value === null) return ''
+    return value.toLocaleString('de-DE', {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1
     })
   }
 
-  const formatDate = (dateStr: string): string => {
-    try {
-      const date = parse(dateStr, 'yyyy-MM-dd', new Date())
-      return format(date, 'MM-yyyy')
-    } catch {
-      try {
-        const date = parse(dateStr, 'dd.MM.yyyy', new Date())
-        return format(date, 'MM-yyyy')
-      } catch {
-        return dateStr
-      }
-    }
+  const isValidVariableType = (type: string): type is Variable['type'] => {
+    return ['ACTUAL', 'BUDGET', 'INPUT', 'UNKNOWN'].includes(type.toUpperCase() as Variable['type'])
   }
 
-  const processCSV = (csvText: string): TableData | null => {
-    // Try both delimiters
-    const delimiters = [',', ';']
-    let rows: string[][] = []
-    
-    for (const delimiter of delimiters) {
-      try {
-        rows = csvText.split('\n')
-          .map(line => line.split(delimiter)
-          .map(cell => cell.trim()))
-          .filter(row => row.length > 1 && row.some(cell => cell !== ''))
-        
-        if (rows.length >= 2) break // Valid data found
-      } catch {
-        continue
-      }
-    }
-
-    if (rows.length < 2) {
-      setError('Invalid CSV format')
-      return null
-    }
-
-    const headers = rows[0]
-    
-    if (!validateHeaders(headers)) {
-      setError('Invalid headers format. First column must be "variable", second column must be "type", and subsequent columns must be valid dates')
-      return null
-    }
-
-    // Process the data rows
-    const processedRows = rows.slice(1).map(row => {
-      return row.map((cell, index) => {
-        // First two columns remain as strings
-        if (index < 2) return cell || (index === 1 ? 'unknown' : '')
-        
-        // Convert numeric values (from third column onwards)
-        if (cell === '') return null
-        const value = parseFloat(cell.replace(',', '.'))
-        return isNaN(value) ? null : value
-      })
-    })
-
-    // Format the date headers
-    const formattedHeaders = [
-      headers[0],
-      headers[1],
-      ...headers.slice(2).map(date => formatDate(date))
-    ]
-
-    return {
-      headers: formattedHeaders,
-      rows: processedRows
-    }
-  }
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files?.length) return
-    setError(null)
+  const processCSV = async (file: File) => {
     setIsUploading(true)
-    
-    const file = event.target.files[0]
-    
-    if (file.type !== 'text/csv') {
-      setError('Please upload a CSV file')
-      setIsUploading(false)
-      return
-    }
+    setError(null)
 
     try {
       const text = await file.text()
-      const data = processCSV(text)
       
-      if (data) {
-        setTableData(data)
+      // Detect delimiter (comma or semicolon)
+      const firstLine = text.split('\n')[0]
+      const delimiter = firstLine.includes(';') ? ';' : ','
+      
+      const lines = text.split('\n')
+      const headers = lines[0].split(delimiter)
+
+      const nameIndex = headers.findIndex(h => h.toLowerCase().includes('variable'))
+      const typeIndex = headers.findIndex(h => h.toLowerCase().includes('type'))
+      const dateIndices = headers.map((h, i) => {
+        const date = parseDate(h.trim())
+        return date ? i : -1
+      }).filter(i => i !== -1)
+
+      if (nameIndex === -1 || typeIndex === -1) {
+        throw new Error('CSV must contain name and type columns')
       }
+
+      if (dateIndices.length === 0) {
+        throw new Error('CSV must contain at least one date column')
+      }
+
+      const newVariables: Variable[] = []
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim()
+        if (!line) continue
+
+        const values = line.split(delimiter).map(v => v.trim())
+        const name = values[nameIndex]
+        const type = values[typeIndex]?.toUpperCase()
+
+        if (!name || !type) continue
+
+        if (!['ACTUAL', 'BUDGET', 'INPUT'].includes(type)) {
+          throw new Error(`Invalid type "${type}" at line ${i + 1}. Must be ACTUAL, BUDGET, or INPUT.`)
+        }
+
+        // Process time series data
+        const timeSeries: TimeSeriesData[] = []
+        dateIndices.forEach((dateIndex, idx) => {
+          const rawValue = values[dateIndex]?.trim()
+          
+          if (rawValue) {
+            // Try German format first (comma as decimal separator)
+            const germanFormat = rawValue.replace('.', '').replace(',', '.')
+            const germanValue = parseFloat(germanFormat)
+            
+            if (!isNaN(germanValue)) {
+              const date = parseDate(headers[dateIndex])
+              if (date) {
+                timeSeries.push({ date, value: germanValue })
+              }
+            } else {
+              // Try English format (dot as decimal separator)
+              const englishValue = parseFloat(rawValue)
+              if (!isNaN(englishValue)) {
+                const date = parseDate(headers[dateIndex])
+                if (date) {
+                  timeSeries.push({ date, value: englishValue })
+                }
+              }
+            }
+          }
+        })
+
+        newVariables.push({
+          id: crypto.randomUUID(),
+          name,
+          type: type as 'ACTUAL' | 'BUDGET' | 'INPUT',
+          timeSeries: timeSeries
+        })
+      }
+
+      setProcessedVariables(newVariables)
+      setShowImportModal(true)
     } catch (err) {
-      setError('Error processing file')
-      console.error(err)
+      setError(err instanceof Error ? err.message : 'Failed to process CSV file')
     } finally {
       setIsUploading(false)
     }
   }
 
+  const handleImportConfirm = (decisions: { variable: Variable, action: 'add' | 'update' | 'skip', replaceId?: string }[]) => {
+    const newVariables = [...variables]
+    
+    decisions.forEach(({ variable, action, replaceId }) => {
+      if (action === 'add') {
+        newVariables.push(variable)
+      } else if (action === 'update' && replaceId) {
+        const index = newVariables.findIndex(v => v.id === replaceId)
+        if (index !== -1) {
+          newVariables[index] = variable
+        }
+      }
+      // Skip if action is 'skip'
+    })
+    
+    setVariables(newVariables)
+    setProcessedVariables([])
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Data Intake</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Data Intake</h1>
         <Link
           href="/"
-          className="text-blue-600 hover:text-blue-800 transition-colors"
+          className="text-primary hover:text-primary/80 transition-colors"
         >
           Back to Home
         </Link>
       </div>
 
-      {/* File Upload Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h2 className="text-xl font-semibold mb-4">Upload Data</h2>
-        <div className="flex items-center space-x-4">
-          <label className="relative cursor-pointer bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
-            <span>Choose File</span>
-            <input
-              type="file"
-              className="hidden"
-              accept=".csv"
-              onChange={handleFileUpload}
-              disabled={isUploading}
-            />
-          </label>
-          {isUploading && <span className="text-gray-600">Uploading...</span>}
+      <div className="space-y-6">
+        <div className="rounded-lg border bg-card p-6">
+          <h2 className="text-xl font-semibold mb-4">Upload Data</h2>
+          <div className="flex items-center space-x-4">
+            <label className="relative cursor-pointer bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+              <span>Choose File</span>
+              <input
+                type="file"
+                className="hidden"
+                accept=".csv"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    processCSV(file)
+                  }
+                }}
+                disabled={isUploading}
+              />
+            </label>
+            {isUploading && <span className="text-muted-foreground">Uploading...</span>}
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            Supported format: CSV
+          </p>
+          {error && (
+            <p className="text-destructive mt-2">{error}</p>
+          )}
         </div>
-        <p className="text-sm text-gray-500 mt-2">
-          Supported format: CSV
-        </p>
-        {error && (
-          <p className="text-red-500 mt-2">{error}</p>
-        )}
+
+        <ImportModal
+          isOpen={showImportModal}
+          onClose={() => {
+            setShowImportModal(false)
+            setProcessedVariables([])
+          }}
+          newVariables={processedVariables}
+          existingVariables={variables}
+          onConfirm={handleImportConfirm}
+        />
       </div>
 
       {/* Data Table */}
-      {tableData && (
-        <div className="bg-white p-6 rounded-lg shadow-md">
+      {variables.length > 0 && dates.length > 0 && (
+        <div className="rounded-lg border bg-card p-6 mt-6">
           <h2 className="text-xl font-semibold mb-4">Uploaded Data</h2>
           <div className={styles.tableContainer}>
             <div className={styles.scrollContainer} ref={scrollContainerRef}>
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    {tableData.headers.map((header, index) => (
+                    <th className={`${styles.headerCell} ${styles.textLeft}`}>
+                      Variable
+                    </th>
+                    <th className={`${styles.headerCell} ${styles.textCenter}`}>
+                      Type
+                    </th>
+                    {dates.map((date, index) => (
                       <th 
-                        key={index} 
-                        className={`${styles.headerCell} ${
-                          index >= 2 ? styles.textCenter : styles.textLeft
-                        }`}
+                        key={index}
+                        className={`${styles.headerCell} ${styles.textCenter}`}
                       >
-                        {header}
+                        {formatDate(date)}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {tableData.rows.map((row, rowIndex) => (
+                  {variables.map((variable, rowIndex) => (
                     <tr 
-                      key={rowIndex} 
+                      key={variable.id}
                       className={`${styles.row} ${rowIndex % 2 === 0 ? '' : styles.zebra}`}
                     >
-                      {row.map((cell, cellIndex) => (
-                        <td 
-                          key={cellIndex} 
-                          className={`${styles.cell} ${
-                            cellIndex >= 2 ? styles.numericCell : styles.textLeft
-                          }`}
-                        >
-                          {cellIndex >= 2 ? formatNumber(cell) : cell}
-                        </td>
-                      ))}
+                      <td className={`${styles.cell} ${styles.textLeft}`}>
+                        {variable.name}
+                      </td>
+                      <td className={`${styles.cell} ${styles.textCenter}`}>
+                        {variable.type}
+                      </td>
+                      {dates.map((date, index) => {
+                        const timeSeriesEntry = variable.timeSeries.find(
+                          ts => ts.date.getTime() === date.getTime()
+                        )
+                        return (
+                          <td 
+                            key={index}
+                            className={`${styles.cell} ${styles.numericCell}`}
+                          >
+                            {formatNumber(timeSeriesEntry?.value ?? null)}
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
                 </tbody>
