@@ -3,8 +3,15 @@
 import { useRef, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import styles from '../table.module.css'
-import { type Variable } from '@/lib/store/variables'
+import { type Variable, useVariableStore } from '@/lib/store/variables'
 import { formatDate, formatNumber } from './utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface DataTableProps {
   variables: Variable[]
@@ -15,6 +22,7 @@ interface DataTableProps {
 export function DataTable({ variables, dates, onDeleteClick }: DataTableProps) {
   // Add ref for the scroll container
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { setVariables } = useVariableStore()
 
   // Update first column width
   useEffect(() => {
@@ -30,6 +38,14 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps) {
       }
     }
   }, [variables])
+
+  // Handle variable type change
+  const handleTypeChange = (id: string, newType: Variable['type']) => {
+    const updatedVariables = variables.map(variable => 
+      variable.id === id ? { ...variable, type: newType } : variable
+    )
+    setVariables(updatedVariables)
+  }
   
   return (
     <div className="rounded-lg border bg-card p-6 mt-6">
@@ -74,7 +90,20 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps) {
                     </div>
                   </td>
                   <td className={`${styles.cell} ${styles.textCenter}`}>
-                    {variable.type}
+                    <Select
+                      defaultValue={variable.type}
+                      onValueChange={(value) => handleTypeChange(variable.id, value as Variable['type'])}
+                    >
+                      <SelectTrigger className="w-28 h-8">
+                        <SelectValue placeholder={variable.type} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ACTUAL">ACTUAL</SelectItem>
+                        <SelectItem value="BUDGET">BUDGET</SelectItem>
+                        <SelectItem value="INPUT">INPUT</SelectItem>
+                        <SelectItem value="UNKNOWN">UNKNOWN</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </td>
                   {dates.map((date, index) => {
                     const timeSeriesEntry = variable.timeSeries.find(
