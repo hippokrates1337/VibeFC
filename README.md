@@ -80,6 +80,17 @@ src/
 - Run `yarn build` to create a production build
 - Run `yarn start` to start the production server
 - Run `yarn lint` to check for code style issues
+- Run `yarn test` to run all tests
+- Run `yarn test:watch` to run tests in watch mode
+- Run `yarn test:coverage` to generate a test coverage report
+
+## Testing Strategy
+
+The application uses Jest and React Testing Library for testing:
+
+- **Unit Tests**: Located alongside source files in `__tests__` folders
+- **Component Tests**: Testing UI components in isolation
+- **Coverage Goals**: Aiming for 80%+ code coverage
 
 ## Data Model
 
