@@ -1,0 +1,101 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: NestJS backend rules for a modular, maintainable, and testable backend using TypeScript, Prisma, and Supabase.
+globs:
+  - "src/**/*.module.ts"
+  - "src/**/*.controller.ts"
+  - "src/**/*.service.ts"
+  - "src/**/*.dto.ts"
+  - "src/**/*.entity.ts"
+  - "prisma/schema.prisma"
+alwaysApply: false
+---
+
+# 🛠️ NestJS Backend Rules (2025)
+
+## 🧱 Architecture
+
+- **Modular Structure**:
+  - Create one feature module per domain.
+  - Organize files within `controllers/`, `services/`, `dto/`, `entities/`, and `tests/` folders per module.
+- **Core Module**:
+  - Centralize global configuration (e.g. interceptors, filters, logging, middleware, guards).
+- **Shared Module**:
+  - Use for utilities and providers reused across modules (e.g. logger, mailer, guards).
+- **Single Responsibility**:
+  - Controllers handle routing and delegation.
+  - Services contain business logic.
+  - DTOs define input shapes and validation.
+  - Entities define Prisma models.
+
+## 🧾 Naming & Structure
+
+- **Files & Folders**: Use `kebab-case` (e.g., `user-profile.service.ts`)
+- **Class & Interfaces**: Use `PascalCase`
+- **Variables & Functions**: Use `camelCase`
+- **DTO Naming**: `CreateXDto`, `UpdateXDto`, `AuthRequestDto`
+- **Exports**: One export per file
+- **Naming for Boolean Variables**: Use verbs (e.g., `isActive`, `canEdit`, `hasRole`)
+
+## ✨ Code Quality
+
+- **Avoid `any`**; use `unknown` with proper type guards if needed.
+- **Use `readonly` or `as const`** for immutable values.
+- **Don't nest deeply** — prefer early returns and utility extraction.
+- **Use dependency injection** over static access or singletons.
+- **Use interfaces** for business logic contracts, not just for DTOs.
+
+## ✅ Data Validation
+
+- Use `class-validator` decorators in DTOs.
+- Validate all external inputs (REST, CLI, cron jobs).
+- Define strict DTO schemas for each controller action.
+
+## 🧪 Testing Strategy
+
+- **Unit Tests**:
+  - Use Jest for all units (`.service.ts`, `.controller.ts`).
+  - Mock dependencies using `@nestjs/testing` and `jest.mock`.
+  - Follow the AAA (Arrange-Act-Assert) structure.
+- **Integration Tests**:
+  - Use `supertest` with `TestingModule` and a real NestJS server.
+  - Test endpoints end-to-end where possible.
+- **Naming**:
+  - Use names like `expectedResult`, `mockX`, `inputX` for clarity.
+- **Test Coverage**: Aim for 90%+ coverage on services.
+
+## ⚙️ Prisma & Supabase Integration
+
+- Use **Prisma as the only access layer** to Supabase.
+- Structure Prisma models clearly and avoid ambiguous naming.
+- Co-locate Prisma queries in services; avoid using Prisma in controllers.
+- Generate types from your Prisma schema using `@prisma/client`.
+
+## 🧯 Error Handling
+
+- Use `HttpException` or `RpcException` in services when appropriate.
+- Avoid leaking raw error messages — wrap and rethrow with context.
+- Use global filters for logging and transforming unhandled exceptions.
+- Use guards for auth-related pre-checks and permissions.
+
+## 🔐 Security
+
+- Validate JWTs using `PassportModule` with appropriate guards.
+- Use role-based access control via custom decorators + guards.
+- Never trust frontend input — validate everything.
+- Store secrets in `.env` and access using `ConfigService`.
+
+## 🔍 Observability
+
+- Use middleware or interceptors for request/response logging.
+- Add timestamps and correlation IDs to logs.
+- Use structured logging (e.g., pino, Winston).
+- Add smoke-test methods (`GET /health` or `/admin/test`) to all main controllers.
+
+---
+
+By following these backend-specific rules, your NestJS codebase will be clean, modular, testable, and ready to scale while fitting seamlessly alongside your global and frontend rules.

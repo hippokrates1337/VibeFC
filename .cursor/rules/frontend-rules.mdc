@@ -1,0 +1,94 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Next.js 14+ frontend rules for App Router, React Server Components, Tailwind CSS, and shadcn/ui.
+globs:
+  - "src/app/**/*"
+  - "src/components/**/*"
+  - "src/styles/**/*"
+  - "src/lib/**/*"
+alwaysApply: false
+---
+
+# ⚛️ Next.js 14+ Frontend Rules (2025)
+
+## 🗂️ Project Structure
+
+- **App Router**: Utilize the `app/` directory with file-based routing.
+- **Layouts**: Implement shared layouts using `layout.tsx` files.
+- **Components**:
+  - Place reusable components in `src/components/`.
+  - Organize feature-specific components within `src/components/feature-name/`.
+- **Utilities**: Store helper functions in `src/lib/`.
+
+## 🧱 Component Architecture
+
+- **Server Components**: Default to Server Components; use Client Components only when necessary.
+- **Client Components**:
+  - Mark with `'use client'` directive at the top.
+  - Wrap in `<Suspense>` with a fallback UI.
+- **Naming Conventions**:
+  - Use `PascalCase` for component filenames.
+  - Use `camelCase` for utility functions and variables.
+  - Use `kebab-case` for directory names.
+
+## 🎨 Styling with Tailwind CSS and shadcn/ui
+
+- **Tailwind CSS**:
+  - Utilize utility classes for styling.
+  - Configure responsive design using Tailwind's breakpoints.
+- **shadcn/ui**:
+  - Use for accessible and customizable UI components.
+  - Customize themes via `tailwind.config.ts`.
+
+## ⚙️ Data Fetching and State Management
+
+- **Data Fetching**:
+  - Use `fetch` with caching strategies in Server Components.
+  - Implement ISR and SSR as appropriate.
+- **State Management**:
+  - Manage local state within components.
+  - Use URL search parameters for shareable state via `nuqs`.
+
+## 🖼️ Image Optimization
+
+- Use Next.js `Image` component for all images.
+- Provide `alt` text for accessibility.
+- Utilize `placeholder="blur"` for better UX.
+
+## 🔍 SEO and Metadata
+
+- Define metadata using the `metadata` export in page components.
+- Include Open Graph and Twitter Card metadata.
+- Generate `sitemap.xml` and `robots.txt` for search engine indexing.
+
+## 🧪 Testing
+
+- Write unit tests for components using Jest and React Testing Library.
+- Aim for at least 80% test coverage.
+- Use snapshot testing for UI components.
+
+## ♿ Accessibility
+
+- Use semantic HTML elements.
+- Ensure keyboard navigability.
+- Implement ARIA attributes where necessary.
+
+## 🚀 Performance Optimization
+
+- Implement code splitting with dynamic imports.
+- Use lazy loading for non-critical components.
+- Optimize fonts and images for faster load times.
+
+## 🧩 Error Handling
+
+- Use `error.tsx` files for route-level error boundaries.
+- Implement global error boundaries for Client Components.
+- Validate inputs using `zod` or `yup`.
+
+---
+
+By adhering to these frontend-specific rules, your Next.js application will be well-structured, maintainable, and aligned with the latest best practices as of 2025.

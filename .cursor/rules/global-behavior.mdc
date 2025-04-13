@@ -1,0 +1,70 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Global rules for all projects. Defines AI behavior and universal coding standards.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# 🌍 Global Coding Standards and AI Behavior
+
+## 🧠 AI Behavior Guidelines
+
+- **Conciseness:** Provide succinct, accurate, and relevant code suggestions.
+- **Expertise:** Assume the user has intermediate to advanced knowledge; avoid unnecessary explanations.
+- **Clarity:** Use clear and straightforward language in comments and documentation.
+- **Simplicity:** Favor simple and maintainable solutions over complex ones.
+- **Assistance:** If uncertain, prompt the user for clarification rather than making assumptions.
+
+## 🧑‍💻 Coding Standards
+
+- **Language:** Use TypeScript for all codebases.
+- **Type Definitions:** Prefer `interface` over `type`; avoid `enum` in favor of union types or object maps.
+- **Naming Conventions:**
+  - `camelCase` for variables and functions
+  - `PascalCase` for classes and components
+  - `UPPER_CASE` for constants
+- **Code Structure:** Write small, focused modules with single responsibilities.
+- **Formatting:**
+  - 2-space indentation
+  - Semicolons
+  - Single quotes for strings
+
+## 🧪 Testing Practices
+
+- **Unit Testing:** Use Jest for unit tests.
+- **Test Coverage:** Minimum 80% test coverage.
+- **Test Structure:** Place tests alongside source files in `__tests__` folders or `*.test.ts` files.
+
+## 📝 Documentation and Comments
+
+- **Function Docs:** Use JSDoc to describe function purpose, parameters, and return values.
+- **Component Docs:** Use TypeScript interfaces or PropTypes for components.
+- **Readmes:** Include `README.md` files in main directories for documentation and onboarding.
+
+## ⚠️ Error Handling
+
+- **Try/Catch:** Wrap async/await calls in `try/catch` blocks.
+- **Input Validation:** Use `zod` or `yup` for validating inputs and API payloads.
+- **Error Messaging:** Provide meaningful error messages to assist with debugging.
+
+## 📁 Project Structure
+
+- **Source Folder:** Place all app code in a `src/` directory.
+- **Component Organization:**
+  - Use `src/components/` for shared or global components.
+  - Group components by feature when applicable.
+- **Utilities:** Place shared helpers and utilities in `src/utils/`.
+
+## 🔄 Continuous Improvement
+
+- **Review:** Revisit and refine rules periodically as tech or team needs evolve.
+- **Feedback:** Encourage developers to suggest improvements to this guide.
+
+---
+
+By following these global rules, Cursor AI will support a clean, scalable, and maintainable codebase across your team’s projects.
