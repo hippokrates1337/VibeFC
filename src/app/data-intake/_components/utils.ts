@@ -3,8 +3,19 @@ import { type Variable } from '@/lib/store/variables'
 
 /**
  * Parses a date string in various formats
+ * @param dateStr The date string to parse
+ * @returns A Date object if successful, null if parsing fails
  */
 export function parseDate(dateStr: string): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') {
+    return null
+  }
+
+  const trimmedDate = dateStr.trim()
+  if (!trimmedDate) {
+    return null
+  }
+
   const formats = [
     'yyyy-MM-dd',    // ISO format
     'dd.MM.yyyy',    // German format
@@ -18,7 +29,7 @@ export function parseDate(dateStr: string): Date | null {
 
   for (const format of formats) {
     try {
-      const date = parse(dateStr.trim(), format, new Date())
+      const date = parse(trimmedDate, format, new Date())
       if (!isNaN(date.getTime())) {
         return date
       }
@@ -31,6 +42,8 @@ export function parseDate(dateStr: string): Date | null {
 
 /**
  * Formats a date object to MM-yyyy format
+ * @param date The date to format
+ * @returns Formatted date string
  */
 export function formatDate(date: Date): string {
   if (!date || isNaN(date.getTime())) {
@@ -41,38 +54,77 @@ export function formatDate(date: Date): string {
 }
 
 /**
- * Formats a number value using German locale
+ * Formats a number value using international notation (. as decimal separator, , as thousand separator)
+ * @param value The number to format
+ * @param decimalPlaces Number of decimal places to display (default: 1)
+ * @returns Formatted number string
  */
-export function formatNumber(value: number | null): string {
+export function formatNumber(value: number | null, decimalPlaces: number = 1): string {
   if (value === null) return ''
-  return value.toLocaleString('de-DE', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1
-  })
+  
+  try {
+    return value.toLocaleString('en-US', {
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces
+    })
+  } catch (error) {
+    console.error('Error formatting number:', error)
+    return value.toString()
+  }
 }
 
 /**
  * Validates if a string is a valid variable type
+ * @param type The type string to validate
+ * @returns True if the type is valid, false otherwise
  */
 export function isValidVariableType(type: string): type is Variable['type'] {
+  if (!type) return false
   return ['ACTUAL', 'BUDGET', 'INPUT', 'UNKNOWN'].includes(type.toUpperCase() as Variable['type'])
 }
 
 /**
  * Validates CSV headers
+ * @param headers Array of header strings to validate
+ * @param onError Callback for error messages
+ * @returns True if headers are valid, false otherwise
  */
 export function validateHeaders(headers: string[], onError: (message: string) => void): boolean {
-  if (headers.length < 3) return false // At least variable, type, and one date
-  if (headers[0].toLowerCase() !== 'variable') return false
-  if (headers[1].toLowerCase() !== 'type') return false
+  if (!headers || !Array.isArray(headers)) {
+    onError('Invalid headers: must be an array')
+    return false
+  }
+  
+  if (headers.length < 3) {
+    onError('CSV must contain at least 3 columns: Variable, Type, and at least one date')
+    return false
+  }
+  
+  if (headers[0].toLowerCase() !== 'variable') {
+    onError('First column must be "Variable"')
+    return false
+  }
+  
+  if (headers[1].toLowerCase() !== 'type') {
+    onError('Second column must be "Type"')
+    return false
+  }
 
   // Check if all columns after the second one contain valid dates
+  let validDateColumns = 0
   for (let i = 2; i < headers.length; i++) {
     const date = parseDate(headers[i])
     if (!date) {
-      onError(`Invalid date format in column ${i + 1}. Expected yyyy-MM-dd or dd.MM.yyyy`)
+      onError(`Invalid date format in column ${i + 1}. Expected formats: yyyy-MM-dd, dd.MM.yyyy, etc.`)
       return false
     }
+    validDateColumns++
   }
+  
+  if (validDateColumns === 0) {
+    onError('CSV must contain at least one date column after Variable and Type')
+    return false
+  }
+  
   return true
 } 

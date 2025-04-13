@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useVariableStore, type Variable, type TimeSeriesData } from '@/lib/store/variables'
 import { ImportModal } from './import-modal'
@@ -9,12 +9,12 @@ import { DataTable } from './_components/data-table'
 import { UploadSection } from './_components/upload-section'
 import { parseDate, isValidVariableType } from './_components/utils'
 
-export default function DataIntake() {
+export default function DataIntake(): React.ReactNode {
   const { variables, setVariables } = useVariableStore()
-  const [isUploading, setIsUploading] = useState(false)
+  const [isUploading, setIsUploading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [processedVariables, setProcessedVariables] = useState<Variable[]>([])
-  const [showImportModal, setShowImportModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState<boolean>(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     variableId: string;
@@ -47,12 +47,21 @@ export default function DataIntake() {
       .sort((a, b) => a.getTime() - b.getTime())
   }, [variables])
 
-  const handleProcessCSV = async (file: File) => {
+  const handleProcessCSV = useCallback(async (file: File): Promise<void> => {
     setIsUploading(true)
     setError(null)
 
     try {
+      if (!file.name.endsWith('.csv')) {
+        throw new Error('Please upload a CSV file')
+      }
+
       const text = await file.text()
+      
+      // Check if file is empty
+      if (!text.trim()) {
+        throw new Error('The uploaded file is empty')
+      }
       
       // Detect delimiter (comma or semicolon)
       const firstLine = text.split('\n')[0]
@@ -88,13 +97,13 @@ export default function DataIntake() {
 
         if (!name || !type) continue
 
-        if (!['ACTUAL', 'BUDGET', 'INPUT'].includes(type)) {
+        if (!isValidVariableType(type)) {
           throw new Error(`Invalid type "${type}" at line ${i + 1}. Must be ACTUAL, BUDGET, or INPUT.`)
         }
 
         // Process time series data
         const timeSeries: TimeSeriesData[] = []
-        dateIndices.forEach((dateIndex, idx) => {
+        dateIndices.forEach((dateIndex) => {
           const rawValue = values[dateIndex]?.trim()
           
           if (rawValue) {
@@ -128,6 +137,10 @@ export default function DataIntake() {
         })
       }
 
+      if (newVariables.length === 0) {
+        throw new Error('No valid data found in the CSV file')
+      }
+
       setProcessedVariables(newVariables)
       setShowImportModal(true)
     } catch (err) {
@@ -135,9 +148,9 @@ export default function DataIntake() {
     } finally {
       setIsUploading(false)
     }
-  }
+  }, [])
 
-  const handleImportConfirm = (decisions: { variable: Variable, action: 'add' | 'update' | 'skip', replaceId?: string }[]) => {
+  const handleImportConfirm = useCallback((decisions: { variable: Variable, action: 'add' | 'update' | 'skip', replaceId?: string }[]): void => {
     const newVariables = [...variables]
     
     decisions.forEach(({ variable, action, replaceId }) => {
@@ -146,7 +159,7 @@ export default function DataIntake() {
       } else if (action === 'update' && replaceId) {
         const index = newVariables.findIndex(v => v.id === replaceId)
         if (index !== -1) {
-          newVariables[index] = variable
+          newVariables[index] = { ...variable, id: replaceId }
         }
       }
       // Skip if action is 'skip'
@@ -154,29 +167,30 @@ export default function DataIntake() {
     
     setVariables(newVariables)
     setProcessedVariables([])
-  }
+  }, [variables, setVariables])
 
-  const handleDeleteClick = (id: string, name: string) => {
+  const handleDeleteClick = useCallback((id: string, name: string): void => {
     setDeleteConfirmation({
       isOpen: true,
       variableId: id,
       variableName: name
     })
-  }
+  }, [])
 
-  const handleDeleteVariable = () => {
+  const handleDeleteVariable = useCallback((): void => {
     // Remove the variable with the given id
     const updatedVariables = variables.filter(variable => variable.id !== deleteConfirmation.variableId)
     setVariables(updatedVariables)
-  }
+    closeDeleteConfirmation()
+  }, [variables, deleteConfirmation.variableId, setVariables])
 
-  const closeDeleteConfirmation = () => {
+  const closeDeleteConfirmation = useCallback((): void => {
     setDeleteConfirmation({
       isOpen: false,
       variableId: '',
       variableName: ''
     })
-  }
+  }, [])
 
   return (
     <div className="container mx-auto px-4 py-8">

@@ -44,7 +44,7 @@ export function ImportModal({
   newVariables,
   existingVariables,
   onConfirm
-}: ImportModalProps) {
+}: ImportModalProps): React.ReactNode {
   const [decisions, setDecisions] = useState<VariableImportDecision[]>([])
   
   useEffect(() => {
@@ -58,7 +58,7 @@ export function ImportModal({
     }
   }, [newVariables])
 
-  const handleActionChange = (index: number, action: ImportAction) => {
+  const handleActionChange = (index: number, action: ImportAction): void => {
     setDecisions(prev => {
       const newDecisions = [...prev]
       newDecisions[index] = {
@@ -70,7 +70,7 @@ export function ImportModal({
     })
   }
 
-  const handleReplaceTargetChange = (index: number, replaceId: string) => {
+  const handleReplaceTargetChange = (index: number, replaceId: string): void => {
     setDecisions(prev => {
       const newDecisions = [...prev]
       newDecisions[index] = {
@@ -81,10 +81,12 @@ export function ImportModal({
     })
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = (): void => {
     onConfirm(decisions)
     onClose()
   }
+
+  if (!isOpen) return null
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -97,14 +99,7 @@ export function ImportModal({
         </DialogHeader>
         
         <div className="flex-1 overflow-hidden">
-          <div className="border-b px-6 py-2">
-            <div className="flex items-center text-sm">
-              <div className="w-[400px] font-medium">Variable</div>
-              <div className="w-[100px] font-medium">Type</div>
-              <div className="w-[180px] font-medium">Action</div>
-              <div className="flex-1 font-medium">Update</div>
-            </div>
-          </div>
+          <TableHeader />
           
           <ScrollArea className="h-[60vh]">
             <div className="px-6">
@@ -150,6 +145,19 @@ export function ImportModal({
   )
 }
 
+function TableHeader(): React.ReactNode {
+  return (
+    <div className="border-b px-6 py-2">
+      <div className="flex items-center text-sm">
+        <div className="w-[400px] font-medium">Variable</div>
+        <div className="w-[100px] font-medium">Type</div>
+        <div className="w-[180px] font-medium">Action</div>
+        <div className="flex-1 font-medium">Update</div>
+      </div>
+    </div>
+  )
+}
+
 interface ImportRowProps {
   decision: VariableImportDecision
   index: number
@@ -164,7 +172,7 @@ function ImportRow({
   existingVariables,
   onActionChange,
   onReplaceTargetChange
-}: ImportRowProps) {
+}: ImportRowProps): React.ReactNode {
   return (
     <div className="flex items-center py-3 border-b last:border-0">
       <div className="w-[400px] truncate" title={decision.variable.name}>
@@ -191,24 +199,44 @@ function ImportRow({
 
       <div className="flex-1 pl-4">
         {decision.action === 'update' && (
-          <Select
-            value={decision.replaceId || ''}
-            onValueChange={(value) => onReplaceTargetChange(index, value)}
-          >
-            <SelectTrigger className="h-8">
-              <SelectValue placeholder="Select a variable to update" />
-            </SelectTrigger>
-            <SelectContent>
-              {existingVariables.map(variable => (
-                <SelectItem key={variable.id} value={variable.id}>
-                  {variable.name} ({variable.type})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <UpdateTargetSelect 
+            value={decision.replaceId} 
+            existingVariables={existingVariables}
+            onChange={(value) => onReplaceTargetChange(index, value)}
+          />
         )}
       </div>
     </div>
+  )
+}
+
+interface UpdateTargetSelectProps {
+  value?: string
+  existingVariables: Variable[]
+  onChange: (value: string) => void
+}
+
+function UpdateTargetSelect({ 
+  value, 
+  existingVariables, 
+  onChange 
+}: UpdateTargetSelectProps): React.ReactNode {
+  return (
+    <Select
+      value={value || ''}
+      onValueChange={onChange}
+    >
+      <SelectTrigger className="h-8">
+        <SelectValue placeholder="Select a variable to update" />
+      </SelectTrigger>
+      <SelectContent>
+        {existingVariables.map(variable => (
+          <SelectItem key={variable.id} value={variable.id}>
+            {variable.name} ({variable.type})
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -216,7 +244,7 @@ interface VariableTypeBadgeProps {
   type: Variable['type']
 }
 
-function VariableTypeBadge({ type }: VariableTypeBadgeProps) {
+function VariableTypeBadge({ type }: VariableTypeBadgeProps): React.ReactNode {
   const badgeClasses = {
     ACTUAL: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20',
     BUDGET: 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20',
