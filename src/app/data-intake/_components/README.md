@@ -10,7 +10,7 @@ The `DataTable` component displays uploaded variables in a table format with the
 - Fixed column headers for variable name and type
 - Horizontal scrolling for time-series data
 - Delete functionality for individual variables
-- Properly formatted numbers in German locale
+- Properly formatted numbers in English locale (dot as decimal separator)
 - Zebra striping for better readability
 
 #### Date Handling
@@ -23,6 +23,7 @@ The `DataTable` component displays uploaded variables in a table format with the
 - Sticky first and second columns for better navigation during horizontal scrolling
 - Dynamic column width adjustment based on content
 - Responsive design with scrollable container
+- Custom CSS styling via table.module.css
 
 ### UploadSection
 
@@ -31,6 +32,7 @@ The `UploadSection` component handles the UI for uploading CSV files. It:
 - Displays loading state during upload
 - Shows errors if file processing fails
 - Provides clear user feedback about supported formats
+- Uses a drag-and-drop interface for better UX
 
 ## Utility Functions
 
@@ -41,11 +43,20 @@ This directory also includes utility functions in `utils.ts`:
 - `formatDate`: Formats Date objects into MM-yyyy strings for display
 
 ### Number Utilities
-- `formatNumber`: Formats numeric values using German locale (comma as decimal separator)
+- `formatNumber`: Formats numeric values using English locale (dot as decimal separator)
 
 ### Validation Utilities
-- `isValidVariableType`: Validates that a string is a valid variable type
+- `isValidVariableType`: Validates that a string is a valid variable type (ACTUAL, BUDGET, INPUT, UNKNOWN)
 - `validateHeaders`: Validates CSV headers for expected format
+
+## CSS Modules
+
+### table.module.css
+- Contains custom CSS classes for the DataTable component
+- Implements sticky columns using CSS position properties
+- Provides zebra striping with alternating row colors
+- Handles horizontal scrolling without losing header and first columns
+- Implements responsive design for various screen sizes
 
 ## Usage
 

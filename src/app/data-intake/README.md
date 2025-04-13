@@ -41,6 +41,7 @@ The module supports three types of variables:
 - **ACTUAL**: Historical/actual financial data
 - **BUDGET**: Budget/planned financial data
 - **INPUT**: User input data for forecasting
+- **UNKNOWN**: For backward compatibility or data migration scenarios
 
 ### Import Management
 
@@ -57,6 +58,7 @@ The main data intake page consists of:
 - File upload area for selecting CSV files
 - Table view showing currently imported variables with their time series data
 - Import button to initiate the CSV import process
+- Delete functionality for individual variables
 
 ### Import Modal
 
@@ -66,12 +68,19 @@ The import modal allows users to:
 - Select which existing variable to update when choosing the "update" action
 - Apply the selected actions to complete the import
 
+### Delete Confirmation Modal
+
+The delete confirmation modal provides a safety check before removing variables:
+- Displays the name of the variable to be deleted
+- Requires explicit confirmation before deletion
+- Prevents accidental data loss
+
 ## Implementation Details
 
 ### File Processing
 
 The CSV processing logic:
-1. Detects the delimiter (comma or semicolon)
+1. Detects the delimiter (comma or semicolon) automatically
 2. Identifies variable name and type columns
 3. Parses date columns and their corresponding values
 4. Creates variable objects with time series data
@@ -90,6 +99,19 @@ The date handling logic:
 Imported variables are stored in the application state using Zustand:
 - Variables are persisted in the browser's localStorage
 - Date objects are properly rehydrated when loading from storage
+- Each variable has a unique ID generated using crypto.randomUUID()
+
+## Component Structure
+
+The Data Intake module is organized as follows:
+- `page.tsx`: Main page component with the overall layout and state management
+- `import-modal.tsx`: Modal for reviewing and confirming data imports
+- `delete-confirmation-modal.tsx`: Modal for confirming variable deletion
+- `_components/`: Directory containing private components used only within this module
+  - `data-table.tsx`: Table component for displaying variables and their time series data
+  - `upload-section.tsx`: Component for handling file uploads
+  - `utils.ts`: Utility functions for date parsing, formatting, and validation
+  - `table.module.css`: CSS module for table styling
 
 ## Usage Example
 
@@ -118,6 +140,7 @@ The module handles various error scenarios:
 - Unsupported date formats
 - Invalid variable types
 - Number parsing errors
+- Empty files or invalid data
 
 ## Related Components
 
@@ -131,4 +154,5 @@ Planned improvements to the Data Intake module:
 - Bulk editing of variable properties
 - Data validation rules
 - Direct database integration (currently using localStorage)
-- Advanced data visualization options 
+- Advanced data visualization options
+- Search and filtering capabilities for the data table 

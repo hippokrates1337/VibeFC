@@ -24,8 +24,8 @@ export function DeleteConfirmationModal({
   onClose,
   variableName,
   onConfirm
-}: DeleteConfirmationModalProps) {
-  const handleConfirm = () => {
+}: DeleteConfirmationModalProps): React.ReactNode {
+  const handleConfirm = (): void => {
     onConfirm()
     onClose()
   }
