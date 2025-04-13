@@ -4,14 +4,20 @@ A collaborative platform for creating and maintaining financial forecasts.
 
 ## Features
 
-- **Data Intake:** Import financial data from various sources
+- **Data Intake:** 
+  - Import financial data from CSV files with flexible date format support
+  - Preview and manage imported variables with add/update/skip options
+  - Support for different number formats (German and English)
+  - Variable types: ACTUAL, BUDGET, and INPUT
+- **Variables Management:** Browse and view all imported variables with their time series data
 - **Forecast Definition:** Define and configure forecast calculations
 - **Forecast Analysis:** View and analyze forecast results
 
 ## Tech Stack
 
 - Frontend: Next.js 14 with React and TypeScript
-- Styling: Tailwind CSS
+- Styling: Tailwind CSS with Shadcn UI components
+- State Management: Zustand with localStorage persistence
 - Database: PostgreSQL with Prisma ORM
 - Backend: Next.js API Routes
 
@@ -59,10 +65,13 @@ The application will be available at http://localhost:3000.
 
 ```
 src/
-├── app/                    # Next.js app router pages
+├── app/                   # Next.js app router pages
+│   ├── data-intake/       # Data import functionality
+│   └── variables/         # Variables overview
 ├── components/            # Reusable React components
 ├── lib/                   # Utility functions and shared logic
-└── types/                # TypeScript type definitions
+│   └── store/             # Zustand state management
+└── providers/             # React context providers
 ```
 
 ## Development
@@ -72,14 +81,17 @@ src/
 - Run `yarn start` to start the production server
 - Run `yarn lint` to check for code style issues
 
-## Database Schema
+## Data Model
 
-The application uses the following main models:
+The application manages the following key data structures:
 
-- **Variable:** Stores raw data inputs
-- **Value:** Stores time-series values for variables
-- **Node:** Defines forecast calculation components
-- **Edge:** Connects nodes to form calculation trees
+- **Variable:** Financial data variables with metadata
+  - Properties: id, name, type (ACTUAL, BUDGET, INPUT)
+  - Contains time series data (date-value pairs)
+
+- **Time Series:** Date-value pairs for each variable
+  - Date format: Flexible parsing of various formats (ISO, German, US)
+  - Value format: Support for both dot and comma decimal separators
 
 ## Contributing
 
