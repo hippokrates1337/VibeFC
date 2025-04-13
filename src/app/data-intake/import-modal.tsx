@@ -19,12 +19,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Variable } from '@/lib/store/variables'
+import { type Variable } from '@/lib/store/variables'
 import { X } from 'lucide-react'
 
-type ImportAction = 'add' | 'update' | 'skip'
+export type ImportAction = 'add' | 'update' | 'skip'
 
-interface VariableImportDecision {
+export interface VariableImportDecision {
   variable: Variable
   action: ImportAction
   replaceId?: string
@@ -109,58 +109,14 @@ export function ImportModal({
           <ScrollArea className="h-[60vh]">
             <div className="px-6">
               {decisions.map((decision, index) => (
-                <div 
-                  key={decision.variable.id} 
-                  className="flex items-center py-3 border-b last:border-0"
-                >
-                  <div className="w-[400px] truncate" title={decision.variable.name}>
-                    <div className="font-medium">{decision.variable.name}</div>
-                  </div>
-                  <div className="w-[100px]">
-                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium
-                      ${decision.variable.type === 'ACTUAL' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20' : 
-                        decision.variable.type === 'BUDGET' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20' :
-                        decision.variable.type === 'INPUT' ? 'bg-purple-50 text-purple-700 ring-1 ring-purple-600/20' :
-                        'bg-gray-50 text-gray-700 ring-1 ring-gray-600/20'}`}>
-                      {decision.variable.type}
-                    </span>
-                  </div>
-                  <div className="w-[180px]">
-                    <Select
-                      value={decision.action}
-                      onValueChange={(value: string) => handleActionChange(index, value as ImportAction)}
-                    >
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="add">Add as New</SelectItem>
-                        <SelectItem value="update">Update Existing</SelectItem>
-                        <SelectItem value="skip">Skip</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex-1 pl-4">
-                    {decision.action === 'update' && (
-                      <Select
-                        value={decision.replaceId || ''}
-                        onValueChange={(value) => handleReplaceTargetChange(index, value)}
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Select a variable to update" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {existingVariables.map(variable => (
-                            <SelectItem key={variable.id} value={variable.id}>
-                              {variable.name} ({variable.type})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </div>
+                <ImportRow 
+                  key={decision.variable.id}
+                  decision={decision}
+                  index={index}
+                  existingVariables={existingVariables}
+                  onActionChange={handleActionChange}
+                  onReplaceTargetChange={handleReplaceTargetChange}
+                />
               ))}
             </div>
           </ScrollArea>
@@ -191,5 +147,86 @@ export function ImportModal({
         </DialogClose>
       </DialogContent>
     </Dialog>
+  )
+}
+
+interface ImportRowProps {
+  decision: VariableImportDecision
+  index: number
+  existingVariables: Variable[]
+  onActionChange: (index: number, action: ImportAction) => void
+  onReplaceTargetChange: (index: number, replaceId: string) => void
+}
+
+function ImportRow({
+  decision,
+  index,
+  existingVariables,
+  onActionChange,
+  onReplaceTargetChange
+}: ImportRowProps) {
+  return (
+    <div className="flex items-center py-3 border-b last:border-0">
+      <div className="w-[400px] truncate" title={decision.variable.name}>
+        <div className="font-medium">{decision.variable.name}</div>
+      </div>
+      <div className="w-[100px]">
+        <VariableTypeBadge type={decision.variable.type} />
+      </div>
+      <div className="w-[180px]">
+        <Select
+          value={decision.action}
+          onValueChange={(value: string) => onActionChange(index, value as ImportAction)}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="add">Add as New</SelectItem>
+            <SelectItem value="update">Update Existing</SelectItem>
+            <SelectItem value="skip">Skip</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex-1 pl-4">
+        {decision.action === 'update' && (
+          <Select
+            value={decision.replaceId || ''}
+            onValueChange={(value) => onReplaceTargetChange(index, value)}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue placeholder="Select a variable to update" />
+            </SelectTrigger>
+            <SelectContent>
+              {existingVariables.map(variable => (
+                <SelectItem key={variable.id} value={variable.id}>
+                  {variable.name} ({variable.type})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface VariableTypeBadgeProps {
+  type: Variable['type']
+}
+
+function VariableTypeBadge({ type }: VariableTypeBadgeProps) {
+  const badgeClasses = {
+    ACTUAL: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20',
+    BUDGET: 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20',
+    INPUT: 'bg-purple-50 text-purple-700 ring-1 ring-purple-600/20',
+    UNKNOWN: 'bg-gray-50 text-gray-700 ring-1 ring-gray-600/20'
+  }
+
+  return (
+    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${badgeClasses[type]}`}>
+      {type}
+    </span>
   )
 } 
