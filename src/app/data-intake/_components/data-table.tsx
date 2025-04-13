@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useRef, useEffect, useState } from 'react'
+import { Trash2, Pencil, Check, X } from 'lucide-react'
 import styles from '../table.module.css'
 import { type Variable, useVariableStore } from '@/lib/store/variables'
 import { formatDate, formatNumber } from './utils'
@@ -23,6 +23,8 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps) {
   // Add ref for the scroll container
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const { setVariables } = useVariableStore()
+  const [editingVariable, setEditingVariable] = useState<string | null>(null)
+  const [editedName, setEditedName] = useState<string>('')
 
   // Update first column width
   useEffect(() => {
@@ -45,6 +47,27 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps) {
       variable.id === id ? { ...variable, type: newType } : variable
     )
     setVariables(updatedVariables)
+  }
+  
+  // Start editing a variable name
+  const startEditing = (id: string, currentName: string) => {
+    setEditingVariable(id)
+    setEditedName(currentName)
+  }
+  
+  // Confirm name change
+  const confirmNameChange = (id: string) => {
+    const updatedVariables = variables.map(variable => 
+      variable.id === id ? { ...variable, name: editedName } : variable
+    )
+    setVariables(updatedVariables)
+    setEditingVariable(null)
+  }
+  
+  // Cancel name change
+  const cancelNameChange = () => {
+    setEditingVariable(null)
+    setEditedName('')
   }
   
   return (
@@ -86,7 +109,41 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps) {
                       >
                         <Trash2 size={16} />
                       </button>
-                      {variable.name}
+                      <button 
+                        className="text-gray-400 hover:text-blue-500 transition-colors" 
+                        aria-label={`Edit ${variable.name}`}
+                        onClick={() => startEditing(variable.id, variable.name)}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      
+                      {editingVariable === variable.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            className="border rounded px-2 py-1 text-sm w-full"
+                            autoFocus
+                          />
+                          <button 
+                            className="text-green-600 hover:text-green-800 transition-colors"
+                            onClick={() => confirmNameChange(variable.id)}
+                            aria-label="Confirm name change"
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button 
+                            className="text-red-600 hover:text-red-800 transition-colors"
+                            onClick={cancelNameChange}
+                            aria-label="Cancel name change"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        variable.name
+                      )}
                     </div>
                   </td>
                   <td className={`${styles.cell} ${styles.textCenter}`}>
