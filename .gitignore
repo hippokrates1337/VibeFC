@@ -2,3 +2,4 @@ passwords.txt
 node_modules
 data
 /.next/
+.env
