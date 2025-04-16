@@ -25,6 +25,16 @@ export default function DataIntake(): React.ReactNode {
     variableName: ''
   })
 
+  const [apiStatus, setApiStatus] = useState<{
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+  }>({
+    loading: false,
+    error: null,
+    success: false
+  });
+
   const dates = useMemo(() => {
     const allDates = variables.flatMap(variable => 
       variable.timeSeries.map(ts => ts.date)
@@ -150,8 +160,12 @@ export default function DataIntake(): React.ReactNode {
     }
   }, [])
 
-  const handleImportConfirm = useCallback((decisions: { variable: Variable, action: 'add' | 'update' | 'skip', replaceId?: string }[]): void => {
+  const handleImportConfirm = useCallback(async (decisions: { variable: Variable, action: 'add' | 'update' | 'skip', replaceId?: string }[]): Promise<void> => {
     const newVariables = [...variables]
+    const variablesToAdd = decisions.filter(d => d.action === 'add').map(d => d.variable)
+    
+    console.log('Variables to be added locally:', variablesToAdd.length);
+    console.log('Decision actions:', decisions.map(d => d.action));
     
     decisions.forEach(({ variable, action, replaceId }) => {
       if (action === 'add') {
@@ -167,7 +181,64 @@ export default function DataIntake(): React.ReactNode {
     
     setVariables(newVariables)
     setProcessedVariables([])
-  }, [variables, setVariables])
+
+    // Send variables marked as 'add' to the backend API
+    if (variablesToAdd.length > 0) {
+      setApiStatus({ loading: true, error: null, success: false });
+      
+      try {
+        // Format variables for the API
+        const apiPayload = {
+          variables: variablesToAdd.map(variable => ({
+            name: variable.name,
+            type: variable.type,
+            userId: 'frontend-user', // You may want to use actual user ID if available
+            values: variable.timeSeries.map(ts => ({
+              date: ts.date.toISOString().split('T')[0], // Format as YYYY-MM-DD
+              value: ts.value
+            }))
+          }))
+        };
+        
+        console.log('Sending payload to API:', JSON.stringify(apiPayload, null, 2));
+        
+        const response = await fetch('/api/data-intake/add-variables', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(apiPayload)
+        });
+        
+        console.log('API response status:', response.status);
+        const responseData = await response.json();
+        console.log('API response data:', responseData);
+        
+        if (!response.ok) {
+          throw new Error(responseData.message || 'Failed to save variables to the server');
+        }
+        
+        setApiStatus({
+          loading: false,
+          error: null,
+          success: true
+        });
+
+        // Hide success message after 3 seconds
+        setTimeout(() => {
+          setApiStatus(prev => ({ ...prev, success: false }));
+        }, 3000);
+        
+      } catch (error) {
+        console.error('Error in API request:', error);
+        setApiStatus({
+          loading: false,
+          error: error instanceof Error ? error.message : 'An unknown error occurred',
+          success: false
+        });
+      }
+    }
+  }, [variables, setVariables]);
 
   const handleDeleteClick = useCallback((id: string, name: string): void => {
     setDeleteConfirmation({
@@ -210,6 +281,37 @@ export default function DataIntake(): React.ReactNode {
           error={error} 
           onProcessCSV={handleProcessCSV} 
         />
+
+        {apiStatus.error && (
+          <div className="rounded-md bg-red-50 p-4 border border-red-200 mb-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">API Error</h3>
+                <p className="text-sm text-red-700">{apiStatus.error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {apiStatus.success && (
+          <div className="rounded-md bg-green-50 p-4 border border-green-200 mb-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-800">Variables successfully saved to the server</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <ImportModal
           isOpen={showImportModal}
