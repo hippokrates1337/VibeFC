@@ -1,0 +1,17 @@
+{
+  "name": "@vibefc/shared-types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript types for VibeFC monorepo",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "rimraf": "^5.0.5",
+    "typescript": "^5.1.3"
+  }
+} 
