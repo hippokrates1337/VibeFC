@@ -67,8 +67,7 @@ alwaysApply: false
 
 ## 🧪 Testing
 
-- Write unit tests for components using Jest and React Testing Library.
-- Aim for at least 80% test coverage.
+- Write unit tests for components using the React Testing Library.
 - Use snapshot testing for UI components.
 
 ## ♿ Accessibility

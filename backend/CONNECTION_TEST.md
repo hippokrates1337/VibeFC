@@ -98,6 +98,6 @@ Error response:
 
 Once you've confirmed your connection is working:
 
-1. Test the `/data-intake/add-variables` endpoint to ensure data can be saved.
+1. Test the `/data-intake/variables` endpoint to ensure data can be saved.
 2. Set up authentication if required by your application.
 3. Implement additional features using Supabase services. 

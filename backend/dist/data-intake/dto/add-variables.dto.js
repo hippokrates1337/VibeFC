@@ -9,56 +9,17 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AddVariablesDto = exports.VariableDto = exports.TimeSeriesPoint = exports.VariableType = void 0;
+exports.AddVariablesDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
-var VariableType;
-(function (VariableType) {
-    VariableType["ACTUAL"] = "ACTUAL";
-    VariableType["BUDGET"] = "BUDGET";
-    VariableType["INPUT"] = "INPUT";
-    VariableType["UNKNOWN"] = "UNKNOWN";
-})(VariableType || (exports.VariableType = VariableType = {}));
-class TimeSeriesPoint {
-}
-exports.TimeSeriesPoint = TimeSeriesPoint;
-__decorate([
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], TimeSeriesPoint.prototype, "date", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Object)
-], TimeSeriesPoint.prototype, "value", void 0);
-class VariableDto {
-}
-exports.VariableDto = VariableDto;
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], VariableDto.prototype, "name", void 0);
-__decorate([
-    (0, class_validator_1.IsEnum)(VariableType),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], VariableDto.prototype, "type", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], VariableDto.prototype, "userId", void 0);
-__decorate([
-    (0, class_validator_1.IsArray)(),
-    __metadata("design:type", Array)
-], VariableDto.prototype, "values", void 0);
+const variable_dto_1 = require("./variable.dto");
 class AddVariablesDto {
 }
 exports.AddVariablesDto = AddVariablesDto;
 __decorate([
     (0, class_validator_1.IsArray)(),
     (0, class_validator_1.ValidateNested)({ each: true }),
-    (0, class_transformer_1.Type)(() => VariableDto),
+    (0, class_transformer_1.Type)(() => variable_dto_1.VariableDto),
     __metadata("design:type", Array)
 ], AddVariablesDto.prototype, "variables", void 0);
 //# sourceMappingURL=add-variables.dto.js.map

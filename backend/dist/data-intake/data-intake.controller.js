@@ -17,6 +17,8 @@ exports.DataIntakeController = void 0;
 const common_1 = require("@nestjs/common");
 const data_intake_service_1 = require("./data-intake.service");
 const add_variables_dto_1 = require("./dto/add-variables.dto");
+const update_variables_dto_1 = require("./dto/update-variables.dto");
+const delete_variables_dto_1 = require("./dto/delete-variables.dto");
 let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
     constructor(dataIntakeService) {
         this.dataIntakeService = dataIntakeService;
@@ -35,7 +37,7 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
             if (error instanceof common_1.HttpException) {
                 throw error;
             }
-            this.logger.error(`Error processing add-variables request: ${error.message}`);
+            this.logger.error(`Error processing variables creation request: ${error.message}`);
             throw new common_1.HttpException({
                 statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
                 message: `Failed to add variables: ${error.message}`,
@@ -43,15 +45,99 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
             }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+    async getVariablesByUser(userId) {
+        try {
+            if (!userId) {
+                this.logger.warn('No user ID provided in request');
+                throw new common_1.HttpException('User ID is required', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const result = await this.dataIntakeService.getVariablesByUser(userId);
+            return result;
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            this.logger.error(`Error retrieving variables for user ${userId}: ${error.message}`);
+            throw new common_1.HttpException({
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                message: `Failed to retrieve variables: ${error.message}`,
+                error: 'Internal Server Error',
+            }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    async updateVariables(updateVariablesDto) {
+        try {
+            if (!updateVariablesDto.variables || updateVariablesDto.variables.length === 0) {
+                this.logger.warn('Empty variables array in update request');
+                throw new common_1.HttpException('No variables provided for update', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const result = await this.dataIntakeService.updateVariables(updateVariablesDto);
+            return result;
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            this.logger.error(`Error processing update-variables request: ${error.message}`);
+            throw new common_1.HttpException({
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                message: `Failed to update variables: ${error.message}`,
+                error: 'Internal Server Error',
+            }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    async deleteVariables(deleteVariablesDto) {
+        try {
+            if (!deleteVariablesDto.ids || deleteVariablesDto.ids.length === 0) {
+                this.logger.warn('Empty IDs array in delete request');
+                throw new common_1.HttpException('No variable IDs provided for deletion', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const result = await this.dataIntakeService.deleteVariables(deleteVariablesDto);
+            return result;
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            this.logger.error(`Error processing delete-variables request: ${error.message}`);
+            throw new common_1.HttpException({
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                message: `Failed to delete variables: ${error.message}`,
+                error: 'Internal Server Error',
+            }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 };
 exports.DataIntakeController = DataIntakeController;
 __decorate([
-    (0, common_1.Post)('add-variables'),
+    (0, common_1.Post)('variables'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [add_variables_dto_1.AddVariablesDto]),
     __metadata("design:returntype", Promise)
 ], DataIntakeController.prototype, "addVariables", null);
+__decorate([
+    (0, common_1.Get)('variables/:userId'),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], DataIntakeController.prototype, "getVariablesByUser", null);
+__decorate([
+    (0, common_1.Put)('variables'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [update_variables_dto_1.UpdateVariablesDto]),
+    __metadata("design:returntype", Promise)
+], DataIntakeController.prototype, "updateVariables", null);
+__decorate([
+    (0, common_1.Delete)('variables'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [delete_variables_dto_1.DeleteVariablesDto]),
+    __metadata("design:returntype", Promise)
+], DataIntakeController.prototype, "deleteVariables", null);
 exports.DataIntakeController = DataIntakeController = DataIntakeController_1 = __decorate([
     (0, common_1.Controller)('data-intake'),
     __metadata("design:paramtypes", [data_intake_service_1.DataIntakeService])

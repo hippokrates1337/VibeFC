@@ -17,6 +17,7 @@ interface DataTableProps {
   variables: Variable[]
   dates: Date[]
   onDeleteClick: (id: string, name: string) => void
+  onUpdateVariable: (variableId: string, updateData: { name?: string; timeSeries?: TimeSeriesData[]; type?: Variable['type'] }) => Promise<void>
 }
 
 // Interface for tracking which cell is being edited
@@ -46,7 +47,7 @@ const formatNumberForEdit = (value: number | null): string => {
   return value.toString()
 }
 
-export function DataTable({ variables, dates, onDeleteClick }: DataTableProps): React.ReactNode {
+export function DataTable({ variables, dates, onDeleteClick, onUpdateVariable }: DataTableProps): React.ReactNode {
   // Add ref for the scroll container
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const { setVariables } = useVariableStore()
@@ -73,10 +74,20 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps): 
 
   // Handle variable type change
   const handleTypeChange = (id: string, newType: Variable['type']): void => {
-    const updatedVariables = variables.map(variable => 
-      variable.id === id ? { ...variable, type: newType } : variable
-    )
-    setVariables(updatedVariables)
+    // Find the variable we're updating
+    const variable = variables.find(v => v.id === id)
+    if (!variable) return
+    
+    // Create a modified variable with the new type
+    // const updatedVariable = { ...variable, type: newType }
+    
+    // Call the API to update the variable type
+    // Send only the changed field for efficiency
+    onUpdateVariable(id, { type: newType });
+    // onUpdateVariable(id, { 
+    //   name: updatedVariable.name,  // Pass the name to ensure it's preserved
+    //   timeSeries: updatedVariable.timeSeries // Pass the time series to ensure it's preserved
+    // })
   }
   
   // Start editing a variable name
@@ -87,11 +98,9 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps): 
   
   // Confirm name change
   const confirmNameChange = (id: string): void => {
-    const updatedVariables = variables.map(variable => 
-      variable.id === id ? { ...variable, name: editedName } : variable
-    )
-    setVariables(updatedVariables)
-    setEditingVariable(null)
+    // Call the API to update the variable name
+    onUpdateVariable(id, { name: editedName });
+    setEditingVariable(null);
   }
   
   // Cancel name change
@@ -117,38 +126,39 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps): 
       return
     }
     
-    const updatedVariables = variables.map(variable => {
-      if (variable.id !== variableId) return variable
-      
-      // Get a copy of the time series
-      const updatedTimeSeries = [...variable.timeSeries]
-      
-      // Find the entry with matching date
-      const entryIndex = updatedTimeSeries.findIndex(
-        ts => ts.date.getTime() === date.getTime()
-      )
-      
-      if (entryIndex >= 0) {
-        // Update existing entry
-        updatedTimeSeries[entryIndex] = {
-          ...updatedTimeSeries[entryIndex],
-          value: parsedValue
-        }
-      } else if (parsedValue !== null) {
-        // Add new entry if value is not empty
-        updatedTimeSeries.push({
-          date,
-          value: parsedValue
-        })
-      }
-      
-      return {
-        ...variable,
-        timeSeries: updatedTimeSeries
-      }
-    })
+    // Find the variable we're updating
+    const variable = variables.find(v => v.id === variableId)
+    if (!variable) {
+      cancelValueChange()
+      return
+    }
     
-    setVariables(updatedVariables)
+    // Create a copy of the variable's time series
+    const updatedTimeSeries = [...variable.timeSeries]
+    
+    // Find the entry with matching date - compare by year/month only
+    const entryIndex = updatedTimeSeries.findIndex(
+      ts => ts.date.getFullYear() === date.getFullYear() && 
+           ts.date.getMonth() === date.getMonth()
+    )
+    
+    if (entryIndex >= 0) {
+      // Update existing entry
+      updatedTimeSeries[entryIndex] = {
+        ...updatedTimeSeries[entryIndex],
+        value: parsedValue
+      }
+    } else if (parsedValue !== null) {
+      // Add new entry if value is not empty
+      updatedTimeSeries.push({
+        date,
+        value: parsedValue
+      })
+    }
+    
+    // Call the API to update the time series
+    onUpdateVariable(variableId, { timeSeries: updatedTimeSeries })
+    
     cancelValueChange()
   }
   
@@ -203,6 +213,7 @@ export function DataTable({ variables, dates, onDeleteClick }: DataTableProps): 
                   onCancelValueChange={cancelValueChange}
                   setEditedName={setEditedName}
                   setEditedValue={setEditedValue}
+                  onUpdateVariable={onUpdateVariable}
                 />
               ))}
             </tbody>
@@ -231,6 +242,7 @@ interface TableRowProps {
   onCancelValueChange: () => void
   setEditedName: React.Dispatch<React.SetStateAction<string>>
   setEditedValue: React.Dispatch<React.SetStateAction<string>>
+  onUpdateVariable: (variableId: string, updateData: { name?: string; timeSeries?: TimeSeriesData[]; type?: Variable['type'] }) => Promise<void>
 }
 
 function TableRow({
@@ -250,7 +262,8 @@ function TableRow({
   onConfirmValueChange,
   onCancelValueChange,
   setEditedName,
-  setEditedValue
+  setEditedValue,
+  onUpdateVariable
 }: TableRowProps): React.ReactNode {
   return (
     <tr 
@@ -281,6 +294,7 @@ function TableRow({
                 onChange={(e) => setEditedName(e.target.value)}
                 className="border rounded px-2 py-1 text-sm w-full text-gray-900 bg-white"
                 autoFocus
+                aria-label="Edit variable name"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') onConfirmNameChange(variable.id)
                   if (e.key === 'Escape') onCancelNameChange()
@@ -311,7 +325,10 @@ function TableRow({
           defaultValue={variable.type}
           onValueChange={(value) => onTypeChange(variable.id, value as Variable['type'])}
         >
-          <SelectTrigger className="w-28 h-8">
+          <SelectTrigger 
+            className="w-28 h-8" 
+            aria-label={`Select type for ${variable.name}`}
+          >
             <SelectValue>
               <VariableTypeBadge type={variable.type} />
             </SelectValue>
@@ -371,56 +388,71 @@ function DataCell({
   onCancelValueChange,
   setEditedValue
 }: DataCellProps): React.ReactNode {
-  // Find value for this date if exists
-  const timeSeriesEntry = variable.timeSeries.find(
-    ts => ts.date.getTime() === date.getTime()
-  )
+  // Find the time series entry for this date - compare dates by year/month only, ignoring time components
+  const entry = variable.timeSeries.find(ts => {
+    // Compare year and month only for the date match
+    return ts.date.getFullYear() === date.getFullYear() && 
+           ts.date.getMonth() === date.getMonth();
+  });
   
-  const value = timeSeriesEntry?.value ?? null
-  const isEditing = editingCell.variableId === variable.id && editingCell.dateIndex === dateIndex
+  // Check if we're currently editing this cell
+  const isEditing = editingCell.variableId === variable.id && editingCell.dateIndex === dateIndex;
   
-  return (
-    <td className={`${styles.cell} ${styles.numericCell}`}>
-      {isEditing ? (
-        <div className="flex items-center gap-1">
+  // Get the value safely, ensuring it's always null if entry doesn't exist or value is not provided
+  const value = entry && entry.value !== undefined ? entry.value : null;
+
+  if (isEditing) {
+    // When editing, show input field
+    return (
+      <td className={styles.cell}>
+        <div className={styles.editContainer}>
           <input
             type="text"
             value={editedValue}
             onChange={(e) => setEditedValue(e.target.value)}
-            className="border rounded px-2 py-1 text-sm w-20 text-right"
+            className={styles.editInput}
             autoFocus
+            onFocus={(e) => e.target.select()} // Select all text when focused
             onKeyDown={(e) => {
-              if (e.key === 'Enter') onConfirmValueChange(variable.id, dateIndex)
-              if (e.key === 'Escape') onCancelValueChange()
+              if (e.key === 'Enter') {
+                onConfirmValueChange(variable.id, dateIndex);
+              } else if (e.key === 'Escape') {
+                onCancelValueChange();
+              }
             }}
           />
-          <div className="flex flex-col">
+          <div className={styles.editActions}>
             <button 
               className="text-green-600 hover:text-green-800 transition-colors"
               onClick={() => onConfirmValueChange(variable.id, dateIndex)}
               aria-label="Confirm value change"
             >
-              <Check size={14} />
+              <Check size={16} />
             </button>
             <button 
               className="text-red-600 hover:text-red-800 transition-colors"
               onClick={onCancelValueChange}
               aria-label="Cancel value change"
             >
-              <X size={14} />
+              <X size={16} />
             </button>
           </div>
         </div>
-      ) : (
-        <div 
-          className="cursor-pointer hover:underline hover:text-blue-600 transition-colors"
-          onClick={() => onStartEditingValue(variable.id, dateIndex, value)}
-        >
-          {value !== null ? formatNumber(value) : '—'}
-        </div>
-      )}
+      </td>
+    );
+  }
+  
+  // When not editing, show formatted value
+  return (
+    <td 
+      className={`${styles.cell} ${styles.dataCell} ${styles.textRight}`}
+      onClick={() => onStartEditingValue(variable.id, dateIndex, value)}
+    >
+      <span className={styles.cellValue}>
+        {value === null ? '-' : formatNumber(value)}
+      </span>
     </td>
-  )
+  );
 }
 
 interface VariableTypeBadgeProps {
@@ -440,4 +472,4 @@ function VariableTypeBadge({ type }: VariableTypeBadgeProps): React.ReactNode {
       {type}
     </span>
   )
-} 
+}

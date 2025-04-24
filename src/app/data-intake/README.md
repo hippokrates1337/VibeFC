@@ -55,8 +55,8 @@ When importing data, users can:
 ### Main Page
 
 The main data intake page consists of:
-- File upload area for selecting CSV files
-- Table view showing currently imported variables with their time series data
+- File upload area for selecting CSV files (with drag-and-drop support)
+- Table view showing currently imported variables with their time series data, including inline editing for names, types, and values.
 - Import button to initiate the CSV import process
 - Delete functionality for individual variables
 
@@ -96,18 +96,27 @@ The date handling logic:
 
 ### Data Storage
 
-Imported variables are stored in the application state using Zustand:
-- Variables are persisted in the browser's localStorage
-- Date objects are properly rehydrated when loading from storage
-- Each variable has a unique ID generated using crypto.randomUUID()
+Imported variables are primarily managed in the application state using Zustand:
+- Variables are persisted in the browser\'s localStorage for immediate user feedback and offline access.
+- Date objects are properly rehydrated when loading from storage.
+- Each variable has a unique ID generated using `crypto.randomUUID()`.
+
+### API Integration
+
+- **Saving New Variables**: When variables are added via the import modal (action: \'add\'), they are sent to the backend via a `POST` request to `/api/data-intake/variables`. This allows for server-side storage and processing.
+- **Updates/Deletions**: Currently, variable updates (type/name/value changes) and deletions performed directly in the table are only reflected in the local Zustand store and localStorage. API integration for these actions is pending.
 
 ## Component Structure
 
 The Data Intake module is organized as follows:
-- `page.tsx`: Main page component with the overall layout and state management
+- `page.tsx`: Client component that renders the main container
 - `import-modal.tsx`: Modal for reviewing and confirming data imports
 - `delete-confirmation-modal.tsx`: Modal for confirming variable deletion
 - `_components/`: Directory containing private components used only within this module
+  - `data-intake-container.tsx`: Main container component with the overall state management and layout
+  - `api-hooks.ts`: Custom hooks for API operations and CSV processing
+  - `data-status.tsx`: Component for displaying API operation status notifications
+  - `state-display.tsx`: Components for handling loading, error, and empty states
   - `data-table.tsx`: Table component for displaying variables and their time series data
   - `upload-section.tsx`: Component for handling file uploads
   - `utils.ts`: Utility functions for date parsing, formatting, and validation
