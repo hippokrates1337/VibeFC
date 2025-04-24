@@ -29,6 +29,7 @@ alwaysApply: true
   - `PascalCase` for classes and components
   - `UPPER_CASE` for constants
 - **Code Structure:** Write small, focused modules with single responsibilities.
+- **Dependencies**: When introducing new functionality, review whether all required dependencies are installed
 - **Formatting:**
   - 2-space indentation
   - Semicolons
@@ -59,11 +60,6 @@ alwaysApply: true
   - Use `src/components/` for shared or global components.
   - Group components by feature when applicable.
 - **Utilities:** Place shared helpers and utilities in `src/utils/`.
-
-## 🔄 Continuous Improvement
-
-- **Review:** Revisit and refine rules periodically as tech or team needs evolve.
-- **Feedback:** Encourage developers to suggest improvements to this guide.
 
 ---
 

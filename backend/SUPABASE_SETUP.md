@@ -51,7 +51,7 @@ Start the backend and make a test API call to ensure the connection is working c
 npm run start:dev
 ```
 
-Then make a POST request to `/data-intake/add-variables` with appropriate data.
+Then make a POST request to `/data-intake/variables` with appropriate data.
 
 ### 5. Example Request Payload
 

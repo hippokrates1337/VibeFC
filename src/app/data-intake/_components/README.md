@@ -10,6 +10,7 @@ The `DataTable` component displays uploaded variables in a table format with the
 - Fixed column headers for variable name and type
 - Horizontal scrolling for time-series data
 - Delete functionality for individual variables
+- **Inline Editing**: Allows users to directly edit variable names, types (via dropdown), and individual time series values within the table.
 - Properly formatted numbers in English locale (dot as decimal separator)
 - Zebra striping for better readability
 
@@ -24,6 +25,7 @@ The `DataTable` component displays uploaded variables in a table format with the
 - Dynamic column width adjustment based on content
 - Responsive design with scrollable container
 - Custom CSS styling via table.module.css
+- Inline editing controls (input fields, confirm/cancel buttons) appear on hover or click.
 
 ### UploadSection
 

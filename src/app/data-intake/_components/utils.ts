@@ -59,17 +59,39 @@ export function formatDate(date: Date): string {
  * @param decimalPlaces Number of decimal places to display (default: 1)
  * @returns Formatted number string
  */
-export function formatNumber(value: number | null, decimalPlaces: number = 1): string {
-  if (value === null) return ''
+export function formatNumber(value: number | null | undefined, decimalPlaces: number = 1): string {
+  // Handle undefined values the same as null
+  if (value === undefined) {
+    return ''; 
+  }
+  
+  if (value === null) {
+    return '';
+  }
+  
+  if (typeof value !== 'number') {
+    // Try to convert strings or other types to number
+    const converted = Number(value);
+    if (!isNaN(converted)) {
+      value = converted;
+    } else {
+      return String(value); // Return as-is if conversion fails
+    }
+  }
+  
+  if (isNaN(value)) {
+    return 'NaN';
+  }
   
   try {
-    return value.toLocaleString('en-US', {
+    const formatted = value.toLocaleString('en-US', {
       minimumFractionDigits: decimalPlaces,
       maximumFractionDigits: decimalPlaces
-    })
+    });
+    return formatted;
   } catch (error) {
-    console.error('Error formatting number:', error)
-    return value.toString()
+    console.error('Error formatting number:', error);
+    return value.toString();
   }
 }
 

@@ -160,4 +160,56 @@
 .row:hover .cell:first-child,
 .row:hover .cell:nth-child(2) {
   background-color: hsl(var(--accent));
+}
+
+/* Data cell styling */
+.dataCell {
+  cursor: pointer;
+}
+
+.dataCell:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Edit mode styling */
+.editContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.editInput {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.25rem;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.editActions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+  border-radius: 0.25rem;
+  padding: 0.125rem;
+  transition: all 150ms;
+}
+
+.actionButton:hover {
+  background-color: hsl(var(--secondary));
+}
+
+.cellValue {
+  display: block;
+  text-align: right;
+  width: 100%;
 } 
