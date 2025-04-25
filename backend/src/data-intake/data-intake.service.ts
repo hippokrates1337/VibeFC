@@ -283,40 +283,54 @@ export class DataIntakeService {
     }
     
     return values
-      .filter(item => item && typeof item === 'object')
-      .map(item => {
-        // Ensure date is a string
+      .filter(item => item && typeof item === 'object') // Keep initial filter for null/non-object entries
+      .map((item: any) => { // Explicitly type item as any for flexible processing
+        // Ensure date is a valid YYYY-MM-DD string
         const dateValue = item.date;
         let dateStr: string | null = null;
         
         if (typeof dateValue === 'string') {
-          dateStr = dateValue;
-        } else if (typeof dateValue === 'object' && dateValue !== null && 'toISOString' in dateValue) {
-          try {
-            const dateObj = dateValue as { toISOString(): string };
-            dateStr = dateObj.toISOString().split('T')[0];
-          } catch (e) {
-            this.logger.warn(`Error converting date object: ${e.message}`);
+          // Very basic check, consider a regex or date library for stricter validation
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) { 
+            dateStr = dateValue;
           }
+        } else if (dateValue instanceof Date && !isNaN(dateValue.getTime())) { // Check if it's a Date object
+           try {
+             dateStr = dateValue.toISOString().split('T')[0];
+           } catch (e) {
+             // already handled by isNaN check, but keep for safety
+           }
+        }
+
+        // If date is invalid, skip this entry entirely
+        if (!dateStr) {
+          this.logger.warn(`Skipping entry with invalid or missing date format for variable ${variableName}: ${JSON.stringify(item)}`);
+          return null;
         }
         
-        // Ensure value is a number or null
-        let numValue: number | null = null;
+        // Ensure value is a finite number or null
+        let numValue: number | null = null; // Default to null
         if (item.value === null) {
           numValue = null;
         } else if (typeof item.value === 'number') {
-          numValue = item.value;
-        } else if (item.value !== undefined && !isNaN(Number(item.value))) {
-          numValue = Number(item.value);
-        }
-        
-        if (!dateStr) {
-          this.logger.warn(`Skipping entry with invalid date format for variable ${variableName}`);
-          return null;
+          if (isFinite(item.value)) {
+            numValue = item.value;
+          } else {
+            this.logger.warn(`Converting non-finite number value (${item.value}) to null for variable ${variableName}`);
+          } // else stays null (handles Infinity, -Infinity, NaN)
+        } else if (item.value !== undefined) { // Handle strings etc.
+          const parsed = Number(item.value);
+          if (!isNaN(parsed) && isFinite(parsed)) {
+            numValue = parsed;
+          } else {
+             this.logger.warn(`Could not parse value (${item.value}) to finite number, setting to null for variable ${variableName}`);
+          }// else stays null
+        } else {
+           this.logger.warn(`Missing value, setting to null for variable ${variableName}: ${JSON.stringify(item)}`);
         }
         
         return { date: dateStr, value: numValue };
       })
-      .filter((item): item is TimeSeriesPoint => item !== null);
+      .filter((item): item is TimeSeriesPoint => item !== null); // Filter out entries that returned null
   }
 } 

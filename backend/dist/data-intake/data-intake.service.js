@@ -231,34 +231,48 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
         }
         return values
             .filter(item => item && typeof item === 'object')
-            .map(item => {
+            .map((item) => {
             const dateValue = item.date;
             let dateStr = null;
             if (typeof dateValue === 'string') {
-                dateStr = dateValue;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                    dateStr = dateValue;
+                }
             }
-            else if (typeof dateValue === 'object' && dateValue !== null && 'toISOString' in dateValue) {
+            else if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
                 try {
-                    const dateObj = dateValue;
-                    dateStr = dateObj.toISOString().split('T')[0];
+                    dateStr = dateValue.toISOString().split('T')[0];
                 }
                 catch (e) {
-                    this.logger.warn(`Error converting date object: ${e.message}`);
                 }
+            }
+            if (!dateStr) {
+                this.logger.warn(`Skipping entry with invalid or missing date format for variable ${variableName}: ${JSON.stringify(item)}`);
+                return null;
             }
             let numValue = null;
             if (item.value === null) {
                 numValue = null;
             }
             else if (typeof item.value === 'number') {
-                numValue = item.value;
+                if (isFinite(item.value)) {
+                    numValue = item.value;
+                }
+                else {
+                    this.logger.warn(`Converting non-finite number value (${item.value}) to null for variable ${variableName}`);
+                }
             }
-            else if (item.value !== undefined && !isNaN(Number(item.value))) {
-                numValue = Number(item.value);
+            else if (item.value !== undefined) {
+                const parsed = Number(item.value);
+                if (!isNaN(parsed) && isFinite(parsed)) {
+                    numValue = parsed;
+                }
+                else {
+                    this.logger.warn(`Could not parse value (${item.value}) to finite number, setting to null for variable ${variableName}`);
+                }
             }
-            if (!dateStr) {
-                this.logger.warn(`Skipping entry with invalid date format for variable ${variableName}`);
-                return null;
+            else {
+                this.logger.warn(`Missing value, setting to null for variable ${variableName}: ${JSON.stringify(item)}`);
             }
             return { date: dateStr, value: numValue };
         })

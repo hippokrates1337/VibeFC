@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 ---
 description: NestJS backend rules for a modular, maintainable, and testable backend using TypeScript, Prisma, and Supabase.
@@ -15,7 +15,7 @@ globs:
 alwaysApply: false
 ---
 
-# 🛠️ NestJS Backend Rules (2025)
+# 🛠️ NestJS Backend Rules
 
 ## 🧱 Architecture
 
@@ -30,13 +30,9 @@ alwaysApply: false
   - Controllers handle routing and delegation.
   - Services contain business logic.
   - DTOs define input shapes and validation.
-  - Entities define Prisma models.
 
 ## 🧾 Naming & Structure
 
-- **Files & Folders**: Use `kebab-case` (e.g., `user-profile.service.ts`)
-- **Class & Interfaces**: Use `PascalCase`
-- **Variables & Functions**: Use `camelCase`
 - **DTO Naming**: `CreateXDto`, `UpdateXDto`, `AuthRequestDto`
 - **Exports**: One export per file
 - **Naming for Boolean Variables**: Use verbs (e.g., `isActive`, `canEdit`, `hasRole`)
@@ -54,26 +50,6 @@ alwaysApply: false
 - Use `class-validator` decorators in DTOs.
 - Validate all external inputs (REST, CLI, cron jobs).
 - Define strict DTO schemas for each controller action.
-
-## 🧪 Testing Strategy
-
-- **Unit Tests**:
-  - Use Jest for all units (`.service.ts`, `.controller.ts`).
-  - Mock dependencies using `@nestjs/testing` and `jest.mock`.
-  - Follow the AAA (Arrange-Act-Assert) structure.
-- **Integration Tests**:
-  - Use `supertest` with `TestingModule` and a real NestJS server.
-  - Test endpoints end-to-end where possible.
-- **Naming**:
-  - Use names like `expectedResult`, `mockX`, `inputX` for clarity.
-- **Test Coverage**: Aim for 90%+ coverage on services.
-
-## ⚙️ Prisma & Supabase Integration
-
-- Use **Prisma as the only access layer** to Supabase.
-- Structure Prisma models clearly and avoid ambiguous naming.
-- Co-locate Prisma queries in services; avoid using Prisma in controllers.
-- Generate types from your Prisma schema using `@prisma/client`.
 
 ## 🧯 Error Handling
 

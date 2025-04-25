@@ -1,7 +1,8 @@
-import { IsArray, IsUUID } from 'class-validator';
+import { IsArray, IsString, IsNotEmpty } from 'class-validator';
 
 export class DeleteVariablesDto {
   @IsArray()
-  @IsUUID('4', { each: true })
+  @IsNotEmpty({ each: true })
+  @IsString({ each: true })
   ids: string[];
 } 

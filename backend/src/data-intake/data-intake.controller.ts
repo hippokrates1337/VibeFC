@@ -9,9 +9,22 @@ import {
   Param, 
   Logger, 
   HttpException, 
-  HttpStatus 
+  HttpStatus,
+  UseGuards,
+  Req,
+  HttpCode
 } from '@nestjs/common';
-import { DataIntakeService } from 'src/data-intake/data-intake.service';
+import { DataIntakeService } from './data-intake.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Request } from 'express';
+
+// Extend Express Request type to include user property
+interface RequestWithUser extends Request {
+  user: {
+    userId: string;
+    [key: string]: any;
+  };
+}
 
 // DTOs
 import { AddVariablesDto } from './dto/add-variables.dto';
@@ -19,6 +32,7 @@ import { UpdateVariablesDto } from './dto/update-variables.dto';
 import { DeleteVariablesDto } from './dto/delete-variables.dto';
 
 @Controller('data-intake')
+@UseGuards(JwtAuthGuard)
 export class DataIntakeController {
   private readonly logger = new Logger(DataIntakeController.name);
   
@@ -26,12 +40,24 @@ export class DataIntakeController {
 
   // CREATE - Add new variables
   @Post('variables')
-  async addVariables(@Body() addVariablesDto: AddVariablesDto) {
+  @HttpCode(201) // Set HTTP status code to 201 Created
+  async addVariables(@Req() req: RequestWithUser, @Body() addVariablesDto: AddVariablesDto) {
     try {
+      this.logger.log(`Received add variables request with ${addVariablesDto?.variables?.length || 0} variables`);
+      
       // Validate request
       if (!addVariablesDto.variables || addVariablesDto.variables.length === 0) {
         this.logger.warn('Empty variables array in request');
         throw new HttpException('No variables provided in request', HttpStatus.BAD_REQUEST);
+      }
+
+      // Add user ID to each variable if missing
+      if (req.user) {
+        addVariablesDto.variables.forEach(variable => {
+          if (!variable.userId) {
+            variable.userId = req.user.userId;
+          }
+        });
       }
       
       // Process the request
@@ -62,6 +88,8 @@ export class DataIntakeController {
   @Get('variables/:userId')
   async getVariablesByUser(@Param('userId') userId: string) {
     try {
+      this.logger.log(`Fetching variables for user: ${userId}`);
+      
       if (!userId) {
         this.logger.warn('No user ID provided in request');
         throw new HttpException('User ID is required', HttpStatus.BAD_REQUEST);
@@ -89,8 +117,10 @@ export class DataIntakeController {
 
   // UPDATE - Update variables
   @Put('variables')
-  async updateVariables(@Body() updateVariablesDto: UpdateVariablesDto) {
+  async updateVariables(@Req() req: RequestWithUser, @Body() updateVariablesDto: UpdateVariablesDto) {
     try {
+      this.logger.log(`Received update variables request with ${updateVariablesDto?.variables?.length || 0} variables`);
+      
       if (!updateVariablesDto.variables || updateVariablesDto.variables.length === 0) {
         this.logger.warn('Empty variables array in update request');
         throw new HttpException('No variables provided for update', HttpStatus.BAD_REQUEST);
@@ -118,8 +148,10 @@ export class DataIntakeController {
 
   // DELETE - Delete variables
   @Delete('variables')
-  async deleteVariables(@Body() deleteVariablesDto: DeleteVariablesDto) {
+  async deleteVariables(@Req() req: RequestWithUser, @Body() deleteVariablesDto: DeleteVariablesDto) {
     try {
+      this.logger.log(`Received delete variables request with ${deleteVariablesDto?.ids?.length || 0} variables`);
+      
       if (!deleteVariablesDto.ids || deleteVariablesDto.ids.length === 0) {
         this.logger.warn('Empty IDs array in delete request');
         throw new HttpException('No variable IDs provided for deletion', HttpStatus.BAD_REQUEST);
