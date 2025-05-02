@@ -26,5 +26,9 @@ module.exports = api => {
         },
       ],
     ],
+    plugins: [
+      // Add decorator plugin explicitly for Jest/NestJS compatibility
+      ['@babel/plugin-proposal-decorators', { legacy: true }],
+    ],
   };
 }; 

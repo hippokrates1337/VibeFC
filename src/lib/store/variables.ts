@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { UseBoundStore, StoreApi } from 'zustand'
 
 export interface TimeSeriesData {
   date: Date
@@ -64,6 +63,26 @@ const createVariableStore = () => {
           set({ selectedOrganizationId: organizationId });
         },
         fetchVariables: async (userId: string, token: string) => {
+          const state = get(); // Get current state at the beginning
+
+          // Prevent duplicate fetches if already loading
+          if (state.isLoading) {
+            console.log('[fetchVariables] Variables are already being fetched, skipping duplicate fetch.');
+            return;
+          }
+
+          // Avoid fetching if variables already exist for the selected organization
+          // If no org is selected, this check might need refinement depending on desired behavior.
+          // Currently, it checks if *any* variable exists for the selected org.
+          const relevantVariablesExist = state.selectedOrganizationId
+            ? state.variables.some(v => v.organizationId === state.selectedOrganizationId)
+            : false; // Only skip if an org is selected and data for it exists
+
+          if (relevantVariablesExist) {
+            console.log('[fetchVariables] Variables already exist in store for the selected organization, skipping fetch.');
+            return;
+          }
+
           console.log('[fetchVariables] Starting fetch attempt for user:', userId);
           
           console.log('[fetchVariables] Setting loading state to true');
@@ -210,22 +229,6 @@ const createVariableStore = () => {
 
 // Explicitly type the store hook
 export const useVariableStore = createVariableStore();
-
-// Add selector hooks for convenience
-// Define filtering logic directly within the hook's selector
-/* Remove custom hook
-export const useFilteredVariables = () => useVariableStore(
-  state => {
-    const { variables, selectedOrganizationId } = state;
-    if (!selectedOrganizationId) {
-      return variables;
-    }
-    console.log('[useFilteredVariables selector] Filtering variables for organization:', selectedOrganizationId);
-    return variables.filter(variable => variable.organizationId === selectedOrganizationId);
-  }
-);
-*/
-
 export const useSetSelectedOrganizationId = () => useVariableStore((state) => state.setSelectedOrganizationId);
 export const useIsVariablesLoading = () => useVariableStore((state) => state.isLoading);
 export const useFetchVariables = () => useVariableStore((state) => state.fetchVariables);

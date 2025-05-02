@@ -60,6 +60,16 @@ This directory also includes utility functions in `utils.ts`:
 - Handles horizontal scrolling without losing header and first columns
 - Implements responsive design for various screen sizes
 
+## Testing
+
+Unit tests for `DataIntakeContainer` can be found in `../__tests__/data-intake-container.test.tsx`.
+The tests utilize Jest and React Testing Library.
+
+### Mocking Strategy
+- **Hooks:** Individual hooks (e.g., `useVariableStore` selectors, `useAuth`, custom hooks like `useVariableApi`, `useCsvProcessor`) are mocked using `jest.mock`. Type casting (`as unknown as jest.Mock`) is applied to the imported hook variables *after* the `jest.mock` call to satisfy TypeScript when dealing with complex hook signatures (like those from Zustand).
+- **Components:** Child components (`DataTable`, `UploadSection`, etc.) and UI library components (`Alert`) are mocked to isolate the container's logic.
+- **State Scenarios:** Different states (loading, error, empty, data present) are simulated by overriding the default mock implementations of the relevant hooks within specific `test` blocks.
+
 ## Usage
 
 These components are private to the Data Intake feature and should only be imported within the `data-intake` directory. They work alongside the `ImportModal` and `DeleteConfirmationModal` components to provide a complete data management workflow.
