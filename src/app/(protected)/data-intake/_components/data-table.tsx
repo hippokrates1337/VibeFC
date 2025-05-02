@@ -173,7 +173,7 @@ export function DataTable({ variables, dates, onDeleteClick, onUpdateVariable }:
       <h2 className="text-xl font-semibold mb-4">Uploaded Data</h2>
       <div className={styles.tableContainer}>
         <div className={styles.scrollContainer} ref={scrollContainerRef}>
-          <table className={styles.table}>
+          <table className={styles.table} data-testid="data-table">
             <thead>
               <tr>
                 <th className={`${styles.headerCell} ${styles.textLeft}`}>

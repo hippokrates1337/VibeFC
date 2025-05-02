@@ -44,7 +44,7 @@ export function OrganizationSelector() {
   // No organizations yet
   if (organizations.length === 0) {
     return (
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2" data-testid="org-selector-container">
         <Button
           variant="outline"
           size="sm"
@@ -62,10 +62,11 @@ export function OrganizationSelector() {
   }
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center space-x-2" data-testid="org-selector-container">
       <Select 
         value={currentOrganization?.id || ''} 
         onValueChange={handleSwitch}
+        data-testid="organization-selector"
       >
         <SelectTrigger className="w-[180px]">
           <SelectValue placeholder="Select organization" />

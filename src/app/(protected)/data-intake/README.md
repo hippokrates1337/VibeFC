@@ -102,17 +102,18 @@ The date handling logic:
 3. Groups time series data by month for display in the table
 4. Sorts dates chronologically for consistent display
 
-### Data Storage
+### Data Storage and Fetching
 
-Imported variables are primarily managed in the application state using Zustand:
-- Variables are persisted in the browser\'s localStorage for immediate user feedback and offline access.
-- Date objects are properly rehydrated when loading from storage.
-- Each variable has a unique ID generated using `crypto.randomUUID()`.
+Variable data management combines local state with backend synchronization:
+- **Local State:** Zustand (`@/lib/store/variables.ts`) manages the application state for variables. Data is persisted in `localStorage` for immediate UI updates and offline access during a session. Date objects are rehydrated upon loading from storage.
+- **Backend Fetching:** When the user selects an organization, the application attempts to fetch variables specifically for that organization from the backend if they aren't already loaded in the store. This fetch is triggered via the `fetchVariables` function in the Zustand store.
+- **Unique IDs:** Each variable has a unique ID, either assigned by the backend or generated locally (`crypto.randomUUID()`) before being sent to the backend.
 
 ### API Integration
 
-- **Saving New Variables**: When variables are added via the import modal (action: \'add\'), they are sent to the backend via a `POST` request to `/api/data-intake/variables`. This allows for server-side storage and processing.
-- **Updates/Deletions**: Currently, variable updates (type/name/value changes) and deletions performed directly in the table are only reflected in the local Zustand store and localStorage. API integration for these actions is pending.
+- **Fetching Variables**: When data for the selected organization is needed and not available locally, the application fetches it via a `GET` request to `{NEXT_PUBLIC_BACKEND_URL}/data-intake/variables/{userId}`. This requires user authentication (JWT token). The `variableStore` manages the loading and error states for this operation.
+- **Saving New Variables**: Variables added via the CSV import modal (action: 'add') are sent to the backend via a `POST` request, likely to an endpoint like `/api/data-intake/variables` (handled by `api-hooks.ts`). This persists new variables server-side.
+- **Updates/Deletions**: Variable updates (name, type, values) and deletions performed in the data table trigger API calls (e.g., `PUT`, `DELETE`) to update the backend, managed by `api-hooks.ts`. The local Zustand store is updated optimistically or upon successful API response.
 
 ## Component Structure
 
@@ -161,7 +162,8 @@ The module handles various error scenarios:
 
 ## Related Components
 
-- **Variable Store**: Manages the state of all variables (`/src/lib/store/variables.ts`)
+- **Variable Store**: Manages the state of all variables, including fetching logic (`/src/lib/store/variables.ts`)
+- **Organization Store**: Manages the currently selected organization (`/src/lib/store/organization.ts`)
 - **Variables Page**: Displays an overview of all imported variables (`/src/app/variables/page.tsx`)
 
 ## Future Enhancements

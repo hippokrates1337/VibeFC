@@ -3,15 +3,15 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for app/(protected)/data-intake/_components/data-status.tsx</title>
+    <title>Code coverage report for app/(protected)/organizations/page.tsx</title>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="../../../../prettify.css" />
-    <link rel="stylesheet" href="../../../../base.css" />
-    <link rel="shortcut icon" type="image/x-icon" href="../../../../favicon.png" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style type='text/css'>
         .coverage-summary .sorter {
-            background-image: url(../../../../sort-arrow-sprite.png);
+            background-image: url(../../../sort-arrow-sprite.png);
         }
     </style>
 </head>
@@ -19,20 +19,20 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">app/(protected)/data-intake/_components</a> data-status.tsx</h1>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">app/(protected)/organizations</a> page.tsx</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>25/25</span>
+                <span class='fraction'>29/29</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>6/6</span>
+                <span class='fraction'>1/1</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>25/25</span>
+                <span class='fraction'>29/29</span>
             </div>
         
             
@@ -87,7 +87,11 @@
 <a name='L22'></a><a href='#L22'>22</a>
 <a name='L23'></a><a href='#L23'>23</a>
 <a name='L24'></a><a href='#L24'>24</a>
-<a name='L25'></a><a href='#L25'>25</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -95,46 +99,54 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span></td><td class="text"><pre class="prettyprint lang-js">import React from 'react'
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">import { OrganizationSettings } from '@/components/organization/OrganizationSettings';
+import { MembersList } from '@/components/organization/MembersList';
+import { InviteMemberForm } from '@/components/organization/InviteMemberForm';
 &nbsp;
-interface ApiStatusProps {
-  success: boolean
-  error: string | null
-}
+export const metadata = {
+  title: 'Organization Management - VibeFC',
+  description: 'Manage your organization settings and members',
+};
 &nbsp;
-export const ApiStatus: React.FC&lt;ApiStatusProps&gt; = ({ success, error }) =&gt; {
-  if (!success &amp;&amp; !error) return null
-&nbsp;
+export default function OrganizationsPage() {
   return (
-    &lt;&gt;
-      {success &amp;&amp; (
-        &lt;div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4"&gt;
-          &lt;span className="block sm:inline"&gt;Variables saved successfully.&lt;/span&gt;
+    &lt;div className="container py-10 space-y-10"&gt;
+      &lt;div className="flex items-center justify-between"&gt;
+        &lt;h1 className="text-3xl font-bold"&gt;Organization Management&lt;/h1&gt;
+      &lt;/div&gt;
+      
+      &lt;div className="grid grid-cols-1 md:grid-cols-3 gap-10"&gt;
+        &lt;div className="md:col-span-2 space-y-10"&gt;
+          &lt;OrganizationSettings /&gt;
+          &lt;MembersList /&gt;
         &lt;/div&gt;
-      )}
-      {error &amp;&amp; (
-        &lt;div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"&gt;
-          &lt;span className="block sm:inline"&gt;{error}&lt;/span&gt;
+        
+        &lt;div&gt;
+          &lt;InviteMemberForm /&gt;
         &lt;/div&gt;
-      )}
-    &lt;/&gt;
-  )
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
 } </pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -144,14 +156,14 @@ export const ApiStatus: React.FC&lt;ApiStatusProps&gt; = ({ success, error }) =&
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
                 at 2025-05-02T16:27:59.227Z
             </div>
-        <script src="../../../../prettify.js"></script>
+        <script src="../../../prettify.js"></script>
         <script>
             window.onload = function () {
                 prettyPrint();
             };
         </script>
-        <script src="../../../../sorter.js"></script>
-        <script src="../../../../block-navigation.js"></script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
     </body>
 </html>
     

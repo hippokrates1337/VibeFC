@@ -69,8 +69,21 @@ export const DataIntakeContainer = () => {
   })
 
   useEffect(() => {
+    console.log('[DataIntakeContainer useEffect] Org ID from store changed to:', selectedOrgIdFromOrgStore);
+    // Update the selected ID in the variable store
     setSelectedOrganizationIdInStore(selectedOrgIdFromOrgStore);
-  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore]);
+    
+    // Trigger fetch ONLY if we have a selected org, user, and token
+    if (selectedOrgIdFromOrgStore && user && session?.access_token) {
+      console.log('[DataIntakeContainer useEffect] Triggering fetchVariables for org:', selectedOrgIdFromOrgStore);
+      // Let the store handle the logic of whether to actually fetch (based on existing data/loading state)
+      fetchVariables(user.id, session.access_token);
+    } else {
+       console.log('[DataIntakeContainer useEffect] Skipping fetchVariables - missing orgId, user, or token.');
+       // Optionally clear variables if no org is selected?
+       // useVariableStore.getState().clearVariables(); // Decide if this is desired behaviour
+    }
+  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore, fetchVariables, user, session?.access_token]); // Add dependencies
 
   const dates = useMemo(() => {
     const allDates = filteredVariables.flatMap(variable => 
