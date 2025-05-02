@@ -3,6 +3,7 @@ import { Request } from 'express';
 interface RequestWithUser extends Request {
     user: {
         userId: string;
+        organizationId?: string;
         [key: string]: any;
     };
 }

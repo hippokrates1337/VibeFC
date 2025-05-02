@@ -22,6 +22,7 @@ import { Request } from 'express';
 interface RequestWithUser extends Request {
   user: {
     userId: string;
+    organizationId?: string;
     [key: string]: any;
   };
 }
@@ -51,11 +52,14 @@ export class DataIntakeController {
         throw new HttpException('No variables provided in request', HttpStatus.BAD_REQUEST);
       }
 
-      // Add user ID to each variable if missing
+      // Add user ID and potentially organization ID to each variable if missing
       if (req.user) {
         addVariablesDto.variables.forEach(variable => {
-          if (!variable.userId) {
-            variable.userId = req.user.userId;
+          if (!variable.user_id) {
+            variable.user_id = req.user.userId;
+          }
+          if (!variable.organization_id && req.user.organizationId) {
+            variable.organization_id = req.user.organizationId;
           }
         });
       }
@@ -126,7 +130,7 @@ export class DataIntakeController {
         throw new HttpException('No variables provided for update', HttpStatus.BAD_REQUEST);
       }
       
-      const result = await this.dataIntakeService.updateVariables(updateVariablesDto);
+      const result = await this.dataIntakeService.updateVariables(updateVariablesDto /*, req.user?.userId */);
       return result;
     } catch (error) {
       if (error instanceof HttpException) {
@@ -150,14 +154,34 @@ export class DataIntakeController {
   @Delete('variables')
   async deleteVariables(@Req() req: RequestWithUser, @Body() deleteVariablesDto: DeleteVariablesDto) {
     try {
-      this.logger.log(`Received delete variables request with ${deleteVariablesDto?.ids?.length || 0} variables`);
+      this.logger.log(`Received delete variables request with ${deleteVariablesDto?.ids?.length || 0} variables from user ${req.user?.userId}`);
       
-      if (!deleteVariablesDto.ids || deleteVariablesDto.ids.length === 0) {
+      // Destructure DTO
+      const { ids, organizationId } = deleteVariablesDto;
+
+      if (!ids || ids.length === 0) {
         this.logger.warn('Empty IDs array in delete request');
         throw new HttpException('No variable IDs provided for deletion', HttpStatus.BAD_REQUEST);
       }
+
+      // Validate organizationId from DTO
+      if (!organizationId) {
+        this.logger.warn('Organization ID missing in delete request body');
+        throw new HttpException('Organization ID must be provided in the request body', HttpStatus.BAD_REQUEST);
+      }
+
+      // Ensure user context exists (userId)
+      if (!req.user || !req.user.userId) { 
+        this.logger.error('User ID missing in request context for deletion'); 
+        throw new HttpException('Authentication context is missing', HttpStatus.UNAUTHORIZED);
+      }
       
-      const result = await this.dataIntakeService.deleteVariables(deleteVariablesDto);
+      // Pass userId and organizationId from DTO to the service
+      const result = await this.dataIntakeService.deleteVariables(
+        { ids }, // Pass only {ids} if service only needs that from DTO
+        req.user.userId,
+        organizationId // Use organizationId from DTO
+      );
       return result;
     } catch (error) {
       if (error instanceof HttpException) {

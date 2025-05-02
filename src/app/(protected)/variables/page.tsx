@@ -5,7 +5,7 @@ import { useVariableStore } from '@/lib/store/variables'
 import { format } from 'date-fns'
 
 export default function VariablesPage() {
-  const { variables } = useVariableStore()
+  const variables = useVariableStore(state => state.variables)
 
   return (
     <div className="container mx-auto px-4 py-8">

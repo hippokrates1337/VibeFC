@@ -34,8 +34,11 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
             }
             if (req.user) {
                 addVariablesDto.variables.forEach(variable => {
-                    if (!variable.userId) {
-                        variable.userId = req.user.userId;
+                    if (!variable.user_id) {
+                        variable.user_id = req.user.userId;
+                    }
+                    if (!variable.organization_id && req.user.organizationId) {
+                        variable.organization_id = req.user.organizationId;
                     }
                 });
             }
@@ -100,12 +103,21 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
     }
     async deleteVariables(req, deleteVariablesDto) {
         try {
-            this.logger.log(`Received delete variables request with ${deleteVariablesDto?.ids?.length || 0} variables`);
-            if (!deleteVariablesDto.ids || deleteVariablesDto.ids.length === 0) {
+            this.logger.log(`Received delete variables request with ${deleteVariablesDto?.ids?.length || 0} variables from user ${req.user?.userId}`);
+            const { ids, organizationId } = deleteVariablesDto;
+            if (!ids || ids.length === 0) {
                 this.logger.warn('Empty IDs array in delete request');
                 throw new common_1.HttpException('No variable IDs provided for deletion', common_1.HttpStatus.BAD_REQUEST);
             }
-            const result = await this.dataIntakeService.deleteVariables(deleteVariablesDto);
+            if (!organizationId) {
+                this.logger.warn('Organization ID missing in delete request body');
+                throw new common_1.HttpException('Organization ID must be provided in the request body', common_1.HttpStatus.BAD_REQUEST);
+            }
+            if (!req.user || !req.user.userId) {
+                this.logger.error('User ID missing in request context for deletion');
+                throw new common_1.HttpException('Authentication context is missing', common_1.HttpStatus.UNAUTHORIZED);
+            }
+            const result = await this.dataIntakeService.deleteVariables({ ids }, req.user.userId, organizationId);
             return result;
         }
         catch (error) {

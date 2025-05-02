@@ -37,7 +37,12 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
                     const id = variable.id;
                     const name = variable.name || 'Unnamed Variable';
                     const type = variable.type || variable_dto_1.VariableType.UNKNOWN;
-                    const userId = variable.userId || 'anonymous';
+                    const userId = variable.user_id;
+                    const organizationId = variable.organization_id;
+                    if (!userId || !organizationId) {
+                        this.logger.error(`Missing userId (${userId}) or organizationId (${organizationId}) for variable ${name}`);
+                        throw new Error(`User ID and Organization ID are required for variable ${name}`);
+                    }
                     const validType = Object.values(variable_dto_1.VariableType).includes(type)
                         ? type
                         : variable_dto_1.VariableType.UNKNOWN;
@@ -50,6 +55,7 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
                         type: validType,
                         values: normalizedValues,
                         user_id: userId,
+                        organization_id: organizationId,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     })
@@ -175,7 +181,7 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             throw error;
         }
     }
-    async deleteVariables(deleteVariablesDto) {
+    async deleteVariables(deleteVariablesDto, requestingUserId, requestingOrgId) {
         const { ids } = deleteVariablesDto;
         if (!ids || ids.length === 0) {
             this.logger.warn('No variable IDs received for deletion');
@@ -189,9 +195,11 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             const { data: existingData, error: existingError } = await this.supabase.client
                 .from('variables')
                 .select('id')
-                .in('id', ids);
+                .in('id', ids)
+                .eq('user_id', requestingUserId)
+                .eq('organization_id', requestingOrgId);
             if (existingError) {
-                this.logger.error(`Failed to verify existing variables: ${existingError.message}`);
+                this.logger.error(`Failed to verify existing variables for user ${requestingUserId} in org ${requestingOrgId}: ${existingError.message}`);
                 throw new Error(`Failed to verify existing variables: ${existingError.message}`);
             }
             const existingIds = existingData.map(item => item.id);
@@ -209,9 +217,11 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             const { error: deleteError } = await this.supabase.client
                 .from('variables')
                 .delete()
-                .in('id', existingIds);
+                .in('id', existingIds)
+                .eq('user_id', requestingUserId)
+                .eq('organization_id', requestingOrgId);
             if (deleteError) {
-                this.logger.error(`Failed to delete variables: ${deleteError.message}`);
+                this.logger.error(`Failed to delete variables for user ${requestingUserId} in org ${requestingOrgId}: ${deleteError.message}`);
                 throw new Error(`Failed to delete variables: ${deleteError.message}`);
             }
             this.logger.log(`Successfully deleted ${existingIds.length} variables`);

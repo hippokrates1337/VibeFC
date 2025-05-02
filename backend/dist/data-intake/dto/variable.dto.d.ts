@@ -12,7 +12,8 @@ export declare class VariableDto {
     id: string;
     name?: string;
     type?: VariableType;
-    userId?: string;
+    user_id?: string;
+    organization_id: string;
     values: TimeSeriesPoint[];
 }
 export interface VariableEntity {

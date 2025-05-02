@@ -39,7 +39,14 @@ export class DataIntakeService {
           const id = variable.id; // Use the provided ID from the client
           const name = variable.name || 'Unnamed Variable';
           const type = variable.type || VariableType.UNKNOWN;
-          const userId = variable.userId || 'anonymous';
+          const userId = variable.user_id; // Read user_id from DTO
+          const organizationId = variable.organization_id; // Read organization_id from DTO
+          
+          // Validate required fields
+          if (!userId || !organizationId) {
+            this.logger.error(`Missing userId (${userId}) or organizationId (${organizationId}) for variable ${name}`);
+            throw new Error(`User ID and Organization ID are required for variable ${name}`);
+          }
           
           // Validate type
           const validType = Object.values(VariableType).includes(type as VariableType) 
@@ -58,6 +65,7 @@ export class DataIntakeService {
               type: validType,
               values: normalizedValues,
               user_id: userId,
+              organization_id: organizationId, // Add organization_id to insert
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
@@ -212,7 +220,11 @@ export class DataIntakeService {
   }
 
   // DELETE - Delete variables
-  async deleteVariables(deleteVariablesDto: DeleteVariablesDto) {
+  async deleteVariables(
+    deleteVariablesDto: DeleteVariablesDto, 
+    requestingUserId: string, // Added user ID from controller
+    requestingOrgId: string // Added organization ID from controller
+  ) {
     const { ids } = deleteVariablesDto;
     
     if (!ids || ids.length === 0) {
@@ -226,14 +238,23 @@ export class DataIntakeService {
     try {
       this.logger.log(`Deleting ${ids.length} variables`);
       
-      // First verify which variables exist
+      // === Security Enhancement: We need user context here ===
+      // The current implementation doesn't receive the user ID or organization ID.
+      // To securely delete, the service method needs access to the requesting user's ID
+      // and their associated organization(s).
+      // This requires modifying the controller to pass the user context (e.g., req.user.userId)
+      // and potentially the organization context to this service method.
+      
+      // First verify which variables exist AND belong to the user/org
       const { data: existingData, error: existingError } = await this.supabase.client
         .from('variables')
         .select('id')
-        .in('id', ids);
-      
+        .in('id', ids)
+        .eq('user_id', requestingUserId) // Check ownership
+        .eq('organization_id', requestingOrgId); // Check organization membership
+        
       if (existingError) {
-        this.logger.error(`Failed to verify existing variables: ${existingError.message}`);
+        this.logger.error(`Failed to verify existing variables for user ${requestingUserId} in org ${requestingOrgId}: ${existingError.message}`);
         throw new Error(`Failed to verify existing variables: ${existingError.message}`);
       }
       
@@ -257,10 +278,12 @@ export class DataIntakeService {
       const { error: deleteError } = await this.supabase.client
         .from('variables')
         .delete()
-        .in('id', existingIds);
+        .in('id', existingIds)
+        .eq('user_id', requestingUserId) // Ensure user owns the records
+        .eq('organization_id', requestingOrgId); // Ensure records belong to the org
       
       if (deleteError) {
-        this.logger.error(`Failed to delete variables: ${deleteError.message}`);
+        this.logger.error(`Failed to delete variables for user ${requestingUserId} in org ${requestingOrgId}: ${deleteError.message}`);
         throw new Error(`Failed to delete variables: ${deleteError.message}`);
       }
       

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { UseBoundStore, StoreApi } from 'zustand'
 
 export interface TimeSeriesData {
   date: Date
@@ -11,16 +12,19 @@ export interface Variable {
   name: string
   type: 'ACTUAL' | 'BUDGET' | 'INPUT' | 'UNKNOWN'
   timeSeries: TimeSeriesData[]
+  organizationId?: string
 }
 
 interface VariableState {
   variables: Variable[]
   isLoading: boolean
   error: string | null
+  selectedOrganizationId: string | null
   setVariables: (variables: Variable[]) => void
   addVariables: (variables: Variable[]) => void
   clearVariables: () => void
-  fetchVariables: () => Promise<void>
+  fetchVariables: (userId: string, token: string) => Promise<void>
+  setSelectedOrganizationId: (organizationId: string | null) => void
 }
 
 // Helper function to rehydrate dates in a variable
@@ -41,6 +45,7 @@ const createVariableStore = () => {
         variables: [] as Variable[],
         isLoading: false,
         error: null,
+        selectedOrganizationId: null,
         setVariables: (variables: Variable[]) => set({ variables }),
         addVariables: (variables: Variable[]) => 
           set((state) => ({
@@ -54,35 +59,30 @@ const createVariableStore = () => {
             ]
           })),
         clearVariables: () => set({ variables: [] }),
-        fetchVariables: async () => {
-          console.log('[fetchVariables] Starting fetch attempt');
-          console.log('[fetchVariables] Current state:', {
-            variableCount: get().variables.length,
-            isLoading: get().isLoading
-          });
+        setSelectedOrganizationId: (organizationId: string | null) => {
+          console.log('[VariableStore] setSelectedOrganizationId called with:', organizationId);
+          set({ selectedOrganizationId: organizationId });
+        },
+        fetchVariables: async (userId: string, token: string) => {
+          console.log('[fetchVariables] Starting fetch attempt for user:', userId);
           
-          // Check if variables already exist in the store or are already loading
-          if (get().variables.length > 0) {
-            console.log('[fetchVariables] Variables already exist in store, skipping fetch.');
-            return; // Exit early if variables are present
-          }
-          
-          if (get().isLoading) {
-            console.log('[fetchVariables] Variables are already being fetched, skipping duplicate fetch.');
-            return; // Exit early if a fetch is already in progress
-          }
-
           console.log('[fetchVariables] Setting loading state to true');
           set({ isLoading: true, error: null });
           
           try {
-            const userId = "frontend-user";
+            // Use environment variable for the standalone backend API URL
+            const backendUrlBase = process.env.NEXT_PUBLIC_BACKEND_URL;
+            if (!backendUrlBase) {
+              throw new Error('Backend API URL is not configured. Set NEXT_PUBLIC_BACKEND_URL environment variable.');
+            }
+            const fetchUrl = `${backendUrlBase}/data-intake/variables/${userId}`;
             
-            console.log('[fetchVariables] Fetching variables from API...');
-            const response = await fetch(`/api/data-intake/variables/user/${userId}`, {
+            console.log(`[fetchVariables] Fetching variables from Backend API: ${fetchUrl}`);
+            const response = await fetch(fetchUrl, {
               method: 'GET',
               headers: {
                 'Accept': 'application/json',
+                'Authorization': `Bearer ${token}`
               },
               cache: 'no-store'
             });
@@ -143,10 +143,16 @@ const createVariableStore = () => {
                     })
                   : [];
                 
+                // Ensure organizationId is mapped from the backend response
+                if (!v.organization_id) {
+                  console.warn(`[fetchVariables] Variable ${v.id} (${v.name}) received from backend is missing organization_id.`);
+                }
+
                 return {
                   id: v.id,
                   name: v.name,
                   type: v.type as 'ACTUAL' | 'BUDGET' | 'INPUT' | 'UNKNOWN',
+                  organizationId: v.organization_id, // Map organizationId
                   timeSeries: transformedTimeSeries
                 };
               });
@@ -161,10 +167,13 @@ const createVariableStore = () => {
             console.error('[fetchVariables] Error fetching variables:', error);
             set({ 
               error: error instanceof Error ? error.message : 'Failed to load variables from the server.',
-              isLoading: false 
             });
+          } finally {
+            // Ensure isLoading is always reset
+            console.log('[fetchVariables] Fetch attempt finished, setting isLoading to false.');
+            set({ isLoading: false }); 
           }
-        }
+        },
       }),
       {
         name: 'variable-storage',
@@ -191,8 +200,7 @@ const createVariableStore = () => {
           // Use setTimeout to ensure the store is fully initialized
           console.log('[onRehydrateStorage] Scheduling fetch after rehydration');
           setTimeout(() => {
-            console.log('[onRehydrateStorage] Initiating fetch from rehydration callback');
-            useVariableStore.getState().fetchVariables();
+            console.log('[onRehydrateStorage] Rehydration complete.');
           }, 100);
         }
       }
@@ -200,4 +208,25 @@ const createVariableStore = () => {
   )
 }
 
-export const useVariableStore = createVariableStore(); 
+// Explicitly type the store hook
+export const useVariableStore = createVariableStore();
+
+// Add selector hooks for convenience
+// Define filtering logic directly within the hook's selector
+/* Remove custom hook
+export const useFilteredVariables = () => useVariableStore(
+  state => {
+    const { variables, selectedOrganizationId } = state;
+    if (!selectedOrganizationId) {
+      return variables;
+    }
+    console.log('[useFilteredVariables selector] Filtering variables for organization:', selectedOrganizationId);
+    return variables.filter(variable => variable.organizationId === selectedOrganizationId);
+  }
+);
+*/
+
+export const useSetSelectedOrganizationId = () => useVariableStore((state) => state.setSelectedOrganizationId);
+export const useIsVariablesLoading = () => useVariableStore((state) => state.isLoading);
+export const useFetchVariables = () => useVariableStore((state) => state.fetchVariables);
+export const useVariableError = () => useVariableStore((state) => state.error); 

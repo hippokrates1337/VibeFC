@@ -11,33 +11,13 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HealthController = void 0;
 const common_1 = require("@nestjs/common");
-const supabase_service_1 = require("../supabase/supabase.service");
 let HealthController = class HealthController {
-    constructor(supabaseService) {
-        this.supabaseService = supabaseService;
-    }
+    constructor() { }
     async check() {
         return {
             status: 'ok',
             timestamp: new Date().toISOString(),
         };
-    }
-    async checkSupabase() {
-        try {
-            const isConnected = await this.supabaseService.testConnection();
-            return {
-                status: isConnected ? 'ok' : 'error',
-                message: 'Supabase connection successful',
-                timestamp: new Date().toISOString(),
-            };
-        }
-        catch (error) {
-            return {
-                status: 'error',
-                message: `Supabase connection failed: ${error.message}`,
-                timestamp: new Date().toISOString(),
-            };
-        }
     }
 };
 exports.HealthController = HealthController;
@@ -47,14 +27,8 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], HealthController.prototype, "check", null);
-__decorate([
-    (0, common_1.Get)('supabase'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Promise)
-], HealthController.prototype, "checkSupabase", null);
 exports.HealthController = HealthController = __decorate([
     (0, common_1.Controller)('health'),
-    __metadata("design:paramtypes", [supabase_service_1.SupabaseService])
+    __metadata("design:paramtypes", [])
 ], HealthController);
 //# sourceMappingURL=health.controller.js.map

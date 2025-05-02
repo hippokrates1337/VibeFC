@@ -48,10 +48,15 @@ __decorate([
     __metadata("design:type", String)
 ], VariableDto.prototype, "type", void 0);
 __decorate([
-    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsUUID)(),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
-], VariableDto.prototype, "userId", void 0);
+], VariableDto.prototype, "user_id", void 0);
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], VariableDto.prototype, "organization_id", void 0);
 __decorate([
     (0, class_validator_1.IsArray)(),
     __metadata("design:type", Array)

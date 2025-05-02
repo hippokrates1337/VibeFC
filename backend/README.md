@@ -13,6 +13,16 @@ The backend is built using the NestJS framework with TypeScript. It follows a mo
 - **`sql/`**: Contains supplementary SQL scripts or database-related files.
 - **`test/`**: (Expected, based on rules) Should contain end-to-end tests.
 
+## Database Schema Overview
+
+The backend utilizes a Supabase PostgreSQL database. Key tables in the `public` schema include:
+
+-   **`organizations`**: Stores organization details (ID, name, owner, timestamps). Linked to `auth.users` via `owner_id`.
+-   **`organization_members`**: Manages user membership within organizations (ID, org_id, user_id, role, timestamps). Links `organizations` and `auth.users`. Roles include 'admin', 'editor', 'viewer'.
+-   **`variables`**: Contains variable data associated with organizations (ID, name, type, values, user_id, timestamps, optional org_id). The `type` can be 'ACTUAL', 'BUDGET', 'INPUT', or 'UNKNOWN'.
+
+Row Level Security (RLS) is enabled on these tables.
+
 ## Getting Started
 
 1.  **Install Dependencies:** Run `npm install` or the provided `install-deps.ps1` script.

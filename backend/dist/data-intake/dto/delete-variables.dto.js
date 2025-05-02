@@ -20,4 +20,9 @@ __decorate([
     (0, class_validator_1.IsString)({ each: true }),
     __metadata("design:type", Array)
 ], DeleteVariablesDto.prototype, "ids", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], DeleteVariablesDto.prototype, "organizationId", void 0);
 //# sourceMappingURL=delete-variables.dto.js.map

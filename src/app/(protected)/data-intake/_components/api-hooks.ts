@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react'
-import { type Variable, type TimeSeriesData } from '@/lib/store/variables'
+import { type Variable, type TimeSeriesData, useFetchVariables } from '@/lib/store/variables'
+import { useAuth } from '@/providers/auth-provider'
+import { useOrganizationStore } from '@/lib/store/organization'
 
 interface ApiStatus {
   loading: boolean
@@ -8,11 +10,34 @@ interface ApiStatus {
 }
 
 export const useVariableApi = (variables: Variable[], setVariables: (variables: Variable[]) => void) => {
+  const { session, user } = useAuth()
+  const currentOrganization = useOrganizationStore(state => state.currentOrganization)
+  const fetchVariables = useFetchVariables()
   const [apiStatus, setApiStatus] = useState<ApiStatus>({
     loading: false,
     error: null,
     success: false
   })
+
+  const getAuthHeaders = useCallback(() => {
+    if (!session?.access_token) {
+      console.error('No access token found. User might be logged out.')
+      throw new Error('Authentication token is missing. Please log in again.')
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    }
+  }, [session])
+
+  // Helper to get backend base URL
+  const getBackendUrl = useCallback(() => {
+    const backendUrlBase = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (!backendUrlBase) {
+      throw new Error('Backend API URL is not configured. Set NEXT_PUBLIC_BACKEND_URL environment variable.');
+    }
+    return backendUrlBase;
+  }, []);
 
   const resetSuccessStatus = useCallback(() => {
     setTimeout(() => {
@@ -52,28 +77,43 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
     if (variablesToAdd.length > 0) {
       setApiStatus({ loading: true, error: null, success: false })
       
+      // Check for user and organization context
+      if (!user || !currentOrganization) {
+        setApiStatus({
+          loading: false,
+          error: 'User or organization context is missing. Cannot import variables.',
+          success: false,
+        })
+        console.error('Missing user or organization context')
+        return
+      }
+
       try {
-        // Format variables for the API
+        const headers = getAuthHeaders()
+
+        // Format variables for the API, including user and organization IDs
         const apiPayload = {
           variables: variablesToAdd.map(variable => ({
-            id: variable.id, // Use frontend-generated ID as the primary ID
+            id: variable.id,
             name: variable.name,
             type: variable.type,
-            userId: 'frontend-user', // You may want to use actual user ID if available
+            user_id: user.id,
+            organization_id: currentOrganization.id,
             values: variable.timeSeries.map(ts => ({
-              date: `${ts.date.getFullYear()}-${String(ts.date.getMonth() + 1).padStart(2, '0')}-${String(ts.date.getDate()).padStart(2, '0')}`, // Format as YYYY-MM-DD without timezone conversion
-              value: ts.value
-            }))
-          }))
+              date: `${ts.date.getFullYear()}-${String(ts.date.getMonth() + 1).padStart(2, '0')}-${String(ts.date.getDate()).padStart(2, '0')}`,
+              value: ts.value,
+            })),
+          })),
         }
         
-        console.log('Sending payload to API:', JSON.stringify(apiPayload, null, 2))
+        const backendUrl = getBackendUrl();
+        const importUrl = `${backendUrl}/data-intake/variables`;
+        console.log('Sending payload to Backend API:', importUrl);
+        console.log('Payload:', JSON.stringify(apiPayload, null, 2));
         
-        const response = await fetch('/api/data-intake/variables', {
+        const response = await fetch(importUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: headers,
           body: JSON.stringify(apiPayload)
         })
         
@@ -102,6 +142,14 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           success: true
         })
 
+        // Fetch variables again after successful import to ensure sync
+        if (user && session?.access_token) {
+          console.log('[handleImportVariables] Import successful, refetching variables...');
+          await fetchVariables(user.id, session.access_token);
+        } else {
+          console.warn('[handleImportVariables] Cannot refetch variables: missing user or token.');
+        }
+
         resetSuccessStatus()
         
       } catch (error) {
@@ -113,12 +161,25 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         })
       }
     }
-  }, [variables, setVariables, resetSuccessStatus])
+  }, [variables, setVariables, resetSuccessStatus, session, user, currentOrganization, getAuthHeaders, getBackendUrl, fetchVariables])
 
-  const handleDeleteVariable = useCallback(async (variableId: string): Promise<void> => {
+  const handleDeleteVariable = useCallback(async (variableId: string, organizationId: string | null): Promise<void> => {
+    // Validate organizationId before proceeding
+    if (!organizationId) {
+      console.error('Organization ID is missing, cannot delete variable.')
+      setApiStatus({
+        loading: false,
+        error: 'Cannot delete: Organization context is missing.',
+        success: false,
+      })
+      return
+    }
+
     try {
       setApiStatus({ loading: true, error: null, success: false })
       
+      const headers = getAuthHeaders()
+
       // Debug logging
       console.log('==== DELETE OPERATION START ====')
       console.log('Variable ID to delete:', variableId)
@@ -130,19 +191,17 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         throw new Error('Variable not found in local store')
       }
       
-      // We now use the same ID for both frontend and backend
-      const idToDelete = variableId
-      console.log('Using ID for API call:', idToDelete)
-      
-      const apiUrl = `/api/data-intake/variables/item/${idToDelete}`
-      console.log('Calling API endpoint:', apiUrl)
+      // Backend expects DELETE /api/data-intake/variables with body { ids: [...], organizationId: "..." }
+      const backendUrl = getBackendUrl();
+      const deleteUrl = `${backendUrl}/data-intake/variables`;
+      const payload = { ids: [variableId], organizationId: organizationId }
+      console.log('Calling Backend API endpoint:', deleteUrl, 'with payload:', payload)
       
       // Call backend API to delete the variable
-      const response = await fetch(apiUrl, {
+      const response = await fetch(deleteUrl, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: headers,
+        body: JSON.stringify(payload)
       })
       
       console.log('API Response Status:', response.status, response.statusText)
@@ -204,15 +263,38 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       })
       console.log('==== DELETE OPERATION FAILED ====')
     }
-  }, [variables, setVariables, resetSuccessStatus])
+  }, [variables, setVariables, resetSuccessStatus, session, getAuthHeaders, getBackendUrl])
 
   const handleUpdateVariable = useCallback(async (
     variableId: string, 
-    updateData: { name?: string; timeSeries?: TimeSeriesData[] }
+    updateData: { name?: string; timeSeries?: TimeSeriesData[] },
+    organizationId: string | null
   ): Promise<void> => {
+    // Add validation for organizationId if service layer requires it for PUT
+    if (!organizationId) {
+      console.error('Organization ID is missing, cannot update variable.')
+      setApiStatus({
+        loading: false,
+        error: 'Cannot update: Organization context is missing.',
+        success: false,
+      })
+      return
+    }
     setApiStatus({ loading: true, error: null, success: false })
     
+    // Check for user context (needed for potential future backend logic)
+    if (!user) {
+      setApiStatus({
+        loading: false,
+        error: 'User context is missing. Cannot update variable.',
+        success: false,
+      })
+      console.error('Missing user context for update')
+      return
+    }
+
     try {
+      const headers = getAuthHeaders()
       console.log('==== UPDATE OPERATION START ====')
       console.log('Variable ID to update:', variableId)
       console.log('Update data:', updateData)
@@ -230,7 +312,8 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
             id: variableId,
             name: updateData.name || variableToUpdate.name,
             type: variableToUpdate.type,
-            // Map timeSeries to values array if provided, otherwise use existing values
+            user_id: user.id,
+            organization_id: organizationId,
             values: updateData.timeSeries 
               ? updateData.timeSeries.map(ts => ({
                   date: `${ts.date.getFullYear()}-${String(ts.date.getMonth() + 1).padStart(2, '0')}-${String(ts.date.getDate()).padStart(2, '0')}`, 
@@ -244,13 +327,14 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         ]
       }
       
-      console.log('Sending payload to API:', JSON.stringify(payload, null, 2))
+      const backendUrl = getBackendUrl();
+      const updateUrl = `${backendUrl}/data-intake/variables`;
+      console.log('Sending payload to Backend API:', updateUrl);
+      console.log('Payload:', JSON.stringify(payload, null, 2));
       
-      const response = await fetch('/api/data-intake/variables', {
+      const response = await fetch(updateUrl, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify(payload)
       })
       
@@ -303,7 +387,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       })
       console.log('==== UPDATE OPERATION FAILED ====')
     }
-  }, [variables, setVariables, resetSuccessStatus])
+  }, [variables, setVariables, resetSuccessStatus, session, user, getAuthHeaders, getBackendUrl])
 
   return {
     apiStatus,

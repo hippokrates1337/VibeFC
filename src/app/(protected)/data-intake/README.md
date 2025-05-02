@@ -1,3 +1,11 @@
+# Data Intake (`src/app/data-intake/`)
+
+This directory contains the routes and potentially components related to the data intake feature.
+
+**Authorization:** Access to this section requires the user to be authenticated. This is enforced by the `src/middleware.ts`.
+
+*(Add more details about the specific functionality within this section as it's developed)*
+
 # Data Intake Module
 
 The Data Intake module provides functionality for importing and managing financial data in the VibeFC platform. This module allows users to upload CSV files containing time series data, preview the data before import, and manage how new data is integrated with existing data.

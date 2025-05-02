@@ -30,7 +30,7 @@ The Data Intake Module is responsible for managing time-series variables in the 
 
 ### Create - Add Variables
 - **Endpoint**: `POST /data-intake/variables`
-- **Payload**: `AddVariablesDto` containing an array of variables to add
+- **Payload**: `AddVariablesDto` containing an array of variables (`VariableDto`) to add. Each variable should include `id`, `values`, `user_id`, `organization_id`, and optionally `name`, `type`.
 - **Response**: Added variables with count and success message
 
 ### Read - Get Variables by User
@@ -40,12 +40,12 @@ The Data Intake Module is responsible for managing time-series variables in the 
 
 ### Update - Modify Variables
 - **Endpoint**: `PUT /data-intake/variables`
-- **Payload**: `UpdateVariablesDto` containing an array of variables to update
+- **Payload**: `UpdateVariablesDto` containing an array of variables to update (`UpdateVariableDto`). Each object in the array requires `id` and can optionally include `name`, `type`, `values`.
 - **Response**: Updated variables with count and success message
 
 ### Delete - Remove Variables
 - **Endpoint**: `DELETE /data-intake/variables`
-- **Payload**: `DeleteVariablesDto` containing array of variable IDs to delete
+- **Payload**: `DeleteVariablesDto` containing array of variable IDs (`ids`) to delete. The service layer ensures deletion only happens for variables belonging to the authenticated user's organization.
 - **Response**: Delete confirmation with count
 
 ## Data Models
@@ -75,25 +75,9 @@ interface VariableEntity {
   name: string;
   type: VariableType;
   values: TimeSeriesPoint[];
-  user_id: string;
+  user_id: string;       // snake_case for database column
+  organization_id: string; // snake_case for database column (Mandatory)
   created_at: string;
   updated_at: string;
 }
 ```
-
-## Error Handling
-- The module implements comprehensive error handling using NestJS `HttpException`
-- Each endpoint has try/catch blocks for robust error management
-- Errors are logged using NestJS Logger service
-- API responses include appropriate HTTP status codes and error messages
-
-## Data Validation
-- Input validation using class-validator decorators
-- Time-series data normalization
-- Type checking for variable types
-
-## Implementation Details
-- Variables are stored in Supabase using the `variables` table
-- Each variable contains an array of time-series data points
-- Time-series data is validated and normalized before storage
-- The module supports client-generated UUIDs for variable entities 

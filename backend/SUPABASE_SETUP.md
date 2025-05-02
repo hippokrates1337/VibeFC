@@ -41,6 +41,7 @@ The schema includes:
 - `type`: Variable type (ACTUAL, BUDGET, INPUT, or UNKNOWN)
 - `values`: JSONB array of time series data points
 - `user_id`: User identifier for row-level security
+- `organization_id`: Organization identifier (UUID, FK to organizations)
 - `created_at` and `updated_at`: Timestamps
 
 ### 4. Test the Connection
@@ -64,6 +65,7 @@ Here's an example of the expected payload format for the add-variables endpoint:
       "name": "Revenue",
       "type": "ACTUAL",
       "userId": "user123",
+      "organizationId": "org-uuid-456",
       "values": [
         { "date": "2024-01-01", "value": 1000 },
         { "date": "2024-02-01", "value": 1250 },

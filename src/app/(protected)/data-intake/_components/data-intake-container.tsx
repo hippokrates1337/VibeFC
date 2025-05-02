@@ -1,5 +1,13 @@
-import { useMemo, useState, useCallback } from 'react'
-import { useVariableStore } from '@/lib/store/variables'
+import { useMemo, useState, useCallback, useEffect } from 'react'
+import { 
+  useVariableStore,
+  useSetSelectedOrganizationId,
+  useIsVariablesLoading,
+  useFetchVariables,
+  useVariableError,
+  Variable
+} from '@/lib/store/variables' 
+import { useOrganizationStore } from '@/lib/store/organization';
 import { ImportModal } from '../import-modal'
 import { DeleteConfirmationModal } from '../delete-confirmation-modal'
 import { DataTable } from './data-table'
@@ -7,16 +15,38 @@ import { UploadSection } from './upload-section'
 import { useVariableApi, useCsvProcessor } from './api-hooks'
 import { ApiStatus } from './data-status'
 import { LoadingState, ErrorState, EmptyState } from './state-display'
+import { useAuth } from '@/providers/auth-provider'
 
 export const DataIntakeContainer = () => {
-  const { variables, setVariables, isLoading, error: storeError, fetchVariables } = useVariableStore()
+  const variables = useVariableStore(state => state.variables);
+  const selectedOrganizationId = useVariableStore(state => state.selectedOrganizationId);
+
+  const filteredVariables = useMemo(() => {
+    if (!selectedOrganizationId) {
+      return variables;
+    }
+    console.log('[DataIntakeContainer useMemo] Filtering variables for organization:', selectedOrganizationId);
+    return (variables || []).filter(variable => variable.organizationId === selectedOrganizationId);
+  }, [variables, selectedOrganizationId]);
+
+  const setSelectedOrganizationIdInStore = useSetSelectedOrganizationId();
+  const storeIsLoading = useIsVariablesLoading();
+  const storeError = useVariableError();
+  const fetchVariables = useFetchVariables();
   
+  const { user, session, isLoading: authIsLoading } = useAuth()
+  const currentOrganization = useOrganizationStore(state => state.currentOrganization);
+  const selectedOrgIdFromOrgStore = currentOrganization?.id || null;
+
+  const rawVariables = useVariableStore((state) => state.variables);
+  const setVariables = useVariableStore((state) => state.setVariables);
+
   const {
     apiStatus,
     handleImportVariables,
     handleDeleteVariable,
     handleUpdateVariable
-  } = useVariableApi(variables, setVariables)
+  } = useVariableApi(rawVariables, setVariables)
   
   const {
     isUploading,
@@ -26,8 +56,8 @@ export const DataIntakeContainer = () => {
     showImportModal,
     setShowImportModal,
     parseCSV
-  } = useCsvProcessor(variables)
-  
+  } = useCsvProcessor(rawVariables)
+
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     variableId: string;
@@ -38,15 +68,17 @@ export const DataIntakeContainer = () => {
     variableName: ''
   })
 
+  useEffect(() => {
+    setSelectedOrganizationIdInStore(selectedOrgIdFromOrgStore);
+  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore]);
+
   const dates = useMemo(() => {
-    const allDates = variables.flatMap(variable => 
+    const allDates = filteredVariables.flatMap(variable => 
       variable.timeSeries.map(ts => ts.date)
     )
     
-    // Group dates by their time value (ignoring hour/minute/second)
     const dateMap = new Map<number, Date>()
     allDates.forEach(date => {
-      // Create a new date with just the year and month to handle month duplicates
       const normalizedDate = new Date(date.getFullYear(), date.getMonth(), 1)
       const timeValue = normalizedDate.getTime()
       
@@ -55,10 +87,9 @@ export const DataIntakeContainer = () => {
       }
     })
     
-    // Convert map values back to array and sort
     return Array.from(dateMap.values())
       .sort((a, b) => a.getTime() - b.getTime())
-  }, [variables])
+  }, [filteredVariables])
 
   const handleDeleteClick = useCallback((id: string, name: string): void => {
     setDeleteConfirmation({
@@ -77,16 +108,15 @@ export const DataIntakeContainer = () => {
   }, [])
 
   const handleConfirmDelete = useCallback((): void => {
-    handleDeleteVariable(deleteConfirmation.variableId)
+    console.log('[handleConfirmDelete] Org ID being passed:', selectedOrgIdFromOrgStore); 
+    handleDeleteVariable(deleteConfirmation.variableId, selectedOrgIdFromOrgStore) 
     closeDeleteConfirmation()
-  }, [deleteConfirmation.variableId, handleDeleteVariable, closeDeleteConfirmation])
+  }, [deleteConfirmation.variableId, handleDeleteVariable, closeDeleteConfirmation, selectedOrgIdFromOrgStore])
 
-  // Render loading state
-  if (isLoading) {
+  if (storeIsLoading || authIsLoading) {
     return <LoadingState pageTitle="Data Intake" />
   }
 
-  // Render error state
   if (storeError) {
     return (
       <ErrorState 
@@ -99,7 +129,6 @@ export const DataIntakeContainer = () => {
     )
   }
 
-  // Main return statement
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Data Intake</h1>
@@ -112,15 +141,15 @@ export const DataIntakeContainer = () => {
         error={error}
       />
 
-      {!variables.length ? (
-        <EmptyState message="No variables found. Upload a CSV file to get started." />
+      {!filteredVariables.length && !storeIsLoading ? (
+        <EmptyState message="No variables found for the selected organization, or no organization selected. Upload a CSV file or select an organization." />
       ) : (
         <div className="mt-8">
           <DataTable
-            variables={variables}
+            variables={filteredVariables}
             dates={dates}
             onDeleteClick={handleDeleteClick}
-            onUpdateVariable={handleUpdateVariable}
+            onUpdateVariable={(variableId, updateData) => handleUpdateVariable(variableId, updateData, selectedOrgIdFromOrgStore)}
           />
         </div>
       )}
@@ -130,7 +159,7 @@ export const DataIntakeContainer = () => {
           isOpen={showImportModal}
           onClose={() => setShowImportModal(false)}
           newVariables={processedVariables}
-          existingVariables={variables}
+          existingVariables={rawVariables}
           onConfirm={handleImportVariables}
         />
       )}

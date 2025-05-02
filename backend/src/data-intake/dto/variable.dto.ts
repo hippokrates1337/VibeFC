@@ -29,9 +29,13 @@ export class VariableDto {
   @IsOptional()
   type?: VariableType;
 
-  @IsString()
+  @IsUUID()
   @IsOptional()
-  userId?: string;
+  user_id?: string;
+
+  @IsUUID()
+  @IsNotEmpty()
+  organization_id: string;
 
   @IsArray()
   values: TimeSeriesPoint[];
