@@ -28,25 +28,44 @@ The Data Intake Module is responsible for managing time-series variables in the 
 
 ## API Endpoints
 
-### Create - Add Variables
+All endpoints are protected by `JwtAuthGuard` and expect a valid JWT bearer token.
+
+### Create Variables
 - **Endpoint**: `POST /data-intake/variables`
-- **Payload**: `AddVariablesDto` containing an array of variables (`VariableDto`) to add. Each variable should include `id`, `values`, `user_id`, `organization_id`, and optionally `name`, `type`.
-- **Response**: Added variables with count and success message
+- **Auth**: Required.
+- **Payload**: `AddVariablesDto` - An object containing an array `variables` of `VariableDto` objects.
+  - Each `VariableDto` requires `id` (UUID format), `organization_id` (UUID format), and `values` (array of `TimeSeriesPoint`).
+  - `name` (string), `type` (`VariableType`), and `user_id` (UUID format) are optional but recommended.
+  - The controller uses the `user_id` and `organization_id` provided within each variable object in the payload. Validation ensures these are valid UUIDs if provided.
+  - **Response (201 Created)**: An array of the successfully created `VariableEntity` objects.
+  - **Errors**: `400 Bad Request` (invalid DTO, e.g., missing fields, invalid UUIDs, empty array), `401 Unauthorized`, `500 Internal Server Error`.
 
-### Read - Get Variables by User
+### Read Variables by User's Organizations
 - **Endpoint**: `GET /data-intake/variables/:userId`
-- **Parameters**: `userId` in path
-- **Response**: List of variables belonging to the specified user
+- **Auth**: Required.
+- **Parameters**: `userId` (string, UUID format) - The ID of the user whose organizational variables should be fetched.
+- **Logic**: The service fetches all organization IDs associated with the given `userId` and then retrieves all variables belonging to those organizations.
+- **Response (200 OK)**: An array of the found `VariableEntity` objects.
+- **Errors**: `400 Bad Request` (missing/invalid `userId` format), `401 Unauthorized`, `500 Internal Server Error`.
 
-### Update - Modify Variables
+### Update Variables
 - **Endpoint**: `PUT /data-intake/variables`
-- **Payload**: `UpdateVariablesDto` containing an array of variables to update (`UpdateVariableDto`). Each object in the array requires `id` and can optionally include `name`, `type`, `values`.
-- **Response**: Updated variables with count and success message
+- **Auth**: Required.
+- **Payload**: `UpdateVariablesDto` - An object containing an array `variables` of `UpdateVariableDto` objects.
+  - Each `UpdateVariableDto` requires the `id` (UUID format) of the variable to update.
+  - Optional fields: `name` (string), `type` (`VariableType`), `values` (array of `TimeSeriesPoint`). Only provided fields are updated. `organization_id` and `user_id` cannot be updated via this endpoint.
+  - **Response (200 OK)**: An array of the successfully updated `VariableEntity` objects.
+  - **Errors**: `400 Bad Request` (invalid DTO, e.g., missing ID, invalid UUID, empty array), `401 Unauthorized`, `404 Not Found` (if a variable ID doesn't exist), `500 Internal Server Error`.
 
-### Delete - Remove Variables
+### Delete Variables
 - **Endpoint**: `DELETE /data-intake/variables`
-- **Payload**: `DeleteVariablesDto` containing array of variable IDs (`ids`) to delete. The service layer ensures deletion only happens for variables belonging to the authenticated user's organization.
-- **Response**: Delete confirmation with count
+- **Auth**: Required.
+- **Payload**: `DeleteVariablesDto` - An object containing:
+  - `ids`: An array of variable `id`s (UUID format) to delete.
+  - `organizationId`: The UUID of the organization these variables belong to. **This field is mandatory in the request body for verification.**
+- **Logic**: The controller verifies that `organizationId` is present in the request body. It then passes the `ids`, the authenticated user's ID (`requestingUserId`), and the `organizationId` from the payload to the service. The service likely uses these for permission checks (e.g., RLS) before deletion.
+- **Response (200 OK)**: An object containing a `deletedCount` property indicating the number of variables deleted (e.g., `{ "deletedCount": 2 }`).
+- **Errors**: `400 Bad Request` (invalid DTO, missing `ids` or `organizationId`, invalid UUIDs, empty `ids` array), `401 Unauthorized`, `500 Internal Server Error`.
 
 ## Data Models
 
@@ -71,13 +90,13 @@ class TimeSeriesPoint {
 ### Variable Entity
 ```typescript
 interface VariableEntity {
-  id: string;
+  id: string; // UUID format
   name: string;
   type: VariableType;
   values: TimeSeriesPoint[];
-  user_id: string;       // snake_case for database column
-  organization_id: string; // snake_case for database column (Mandatory)
-  created_at: string;
-  updated_at: string;
+  user_id: string;       // UUID format, snake_case for database column
+  organization_id: string; // UUID format, snake_case for database column (Mandatory)
+  created_at: string; // ISO Date string
+  updated_at: string; // ISO Date string
 }
 ```

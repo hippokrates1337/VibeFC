@@ -86,24 +86,43 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
     }
     async getVariablesByUser(userId) {
         try {
-            this.logger.log(`Fetching variables for user: ${userId}`);
-            const { data, error } = await this.supabase.client
-                .from('variables')
-                .select('*')
+            this.logger.log(`Fetching organizations for user: ${userId}`);
+            const { data: orgMembers, error: orgError } = await this.supabase.client
+                .from('organization_members')
+                .select('organization_id')
                 .eq('user_id', userId);
-            if (error) {
-                this.logger.error(`Failed to fetch variables for user ${userId}: ${error.message}`);
-                throw new Error(`Failed to fetch variables: ${error.message}`);
+            if (orgError) {
+                this.logger.error(`Failed to fetch organizations for user ${userId}: ${orgError.message}`);
+                throw new Error(`Failed to fetch organizations: ${orgError.message}`);
             }
-            if (!data || data.length === 0) {
-                this.logger.warn(`No variables found for user ${userId}`);
+            if (!orgMembers || orgMembers.length === 0) {
+                this.logger.warn(`User ${userId} is not a member of any organization.`);
                 return {
-                    message: 'No variables found',
+                    message: 'User not found in any organization or no variables available for their organizations',
                     count: 0,
                     variables: [],
                 };
             }
-            this.logger.log(`Found ${data.length} variables for user ${userId}`);
+            const organizationIds = orgMembers.map(member => member.organization_id);
+            this.logger.log(`User ${userId} belongs to organizations: ${organizationIds.join(', ')}`);
+            this.logger.log(`Fetching variables for organizations: ${organizationIds.join(', ')}`);
+            const { data, error } = await this.supabase.client
+                .from('variables')
+                .select('*')
+                .in('organization_id', organizationIds);
+            if (error) {
+                this.logger.error(`Failed to fetch variables for organizations ${organizationIds.join(', ')}: ${error.message}`);
+                throw new Error(`Failed to fetch variables: ${error.message}`);
+            }
+            if (!data || data.length === 0) {
+                this.logger.warn(`No variables found for organizations ${organizationIds.join(', ')}`);
+                return {
+                    message: 'No variables found for the user\'s organizations',
+                    count: 0,
+                    variables: [],
+                };
+            }
+            this.logger.log(`Found ${data.length} variables for organizations associated with user ${userId}`);
             return {
                 message: 'Variables retrieved successfully',
                 count: data.length,
@@ -111,8 +130,8 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             };
         }
         catch (error) {
-            this.logger.error(`Error fetching variables for user ${userId}: ${error.message}`);
-            throw new Error(`Error fetching variables: ${error.message}`);
+            this.logger.error(`Error in getVariablesByUser for user ${userId}: ${error.message}`);
+            throw new Error(`Error fetching variables by user's organizations: ${error.message}`);
         }
     }
     async updateVariables(updateVariablesDto) {

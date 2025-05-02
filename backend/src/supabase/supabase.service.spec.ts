@@ -1,197 +1,190 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from './supabase.service';
-import { createClient } from '@supabase/supabase-js';
-import { Logger } from '@nestjs/common';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Logger, UnauthorizedException, INestApplication } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { Request } from 'express';
 
-// Mock the Supabase client creation and specific method chains
-const mockLimit = jest.fn();
-const mockVariablesSelect = jest.fn().mockReturnValue({ limit: mockLimit });
-const mockGenericSelect = jest.fn(); // For other selects if needed
+// Define the interface inline for the test file or import if shared
+interface RequestWithUser extends Request {
+  user?: {
+    userId: string;
+    organizationId?: string;
+    [key: string]: any;
+  };
+  headers: {
+    authorization?: string;
+    [key: string]: any; // Ensure other headers can exist
+  };
+}
 
-const mockFrom = jest.fn((tableName: string) => {
-  if (tableName === 'variables') {
-    return { select: mockVariablesSelect };
-  }
-  // Fallback for other tables if service is extended
-  return { select: mockGenericSelect }; 
-});
 
-const mockSupabaseClient = {
-  from: mockFrom,
+// Mock the Supabase client
+const mockSupabaseClientInstance = {
+  // Add mocks for any methods you might call on the client in actual usage tests later
+  from: jest.fn().mockReturnThis(),
+  select: jest.fn().mockReturnThis(),
+  // ... other methods
 };
 
+// Mock the createClient function itself
 jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => mockSupabaseClient),
+  createClient: jest.fn(() => mockSupabaseClientInstance),
 }));
 
-// Mock Logger methods
+// Mock Logger methods (optional, can be useful)
 Logger.prototype.log = jest.fn();
 Logger.prototype.error = jest.fn();
+Logger.prototype.warn = jest.fn();
+
 
 describe('SupabaseService', () => {
   let service: SupabaseService;
   let configService: ConfigService;
+  let mockRequest: Partial<RequestWithUser>; // Use Partial for easier mocking
 
-  const mockConfigService = {
-    get: jest.fn((key: string) => {
-      if (key === 'SUPABASE_URL') return 'http://test-url.com';
-      if (key === 'SUPABASE_KEY') return 'test-key';
-      return null;
-    }),
-  };
+  const mockSupabaseUrl = 'http://test-url.com';
+  const mockSupabaseAnonKey = 'test-anon-key';
+  const mockJwt = 'mock-jwt-token';
 
   beforeEach(async () => {
     // Reset mocks before each test
     jest.clearAllMocks();
+
+    // Default mock request - customize in specific tests if needed
+    mockRequest = {
+      headers: {
+        authorization: `Bearer ${mockJwt}`,
+      },
+      // Add other request properties if your service uses them
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SupabaseService,
         {
           provide: ConfigService,
-          useValue: mockConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'SUPABASE_URL') return mockSupabaseUrl;
+              if (key === 'SUPABASE_ANON_KEY') return mockSupabaseAnonKey;
+              return null;
+            }),
+          },
+        },
+        {
+          provide: REQUEST,
+          useValue: mockRequest, // Provide the mocked request object
         },
       ],
     }).compile();
 
-    service = module.get<SupabaseService>(SupabaseService);
-    configService = module.get<ConfigService>(ConfigService);
+    // IMPORTANT: Because it's request-scoped, get the service instance from the module context
+    // Use resolve instead of get for request-scoped providers
+    service = await module.resolve<SupabaseService>(SupabaseService);
+    configService = module.get<ConfigService>(ConfigService); // ConfigService is likely a singleton, so get is fine
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  describe('onModuleInit', () => {
-    it('should initialize supabase client with correct credentials and options', async () => {
-      // Mock the testConnection call chain specifically for this test
-      mockLimit.mockResolvedValueOnce({ error: null }); 
+  describe('client getter', () => {
+    it('should initialize Supabase client with correct credentials and auth header on first access', () => {
+      const client = service.client; // Access the getter
 
-      await service.onModuleInit();
-      expect(mockConfigService.get).toHaveBeenCalledWith('SUPABASE_URL');
-      expect(mockConfigService.get).toHaveBeenCalledWith('SUPABASE_KEY');
+      expect(client).toBe(mockSupabaseClientInstance); // Should return the mocked instance
+      expect(createClient).toHaveBeenCalledTimes(1);
       expect(createClient).toHaveBeenCalledWith(
-        'http://test-url.com',
-        'test-key',
-        {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false,
+        mockSupabaseUrl,
+        mockSupabaseAnonKey,
+        expect.objectContaining({
+          global: {
+            headers: { Authorization: `Bearer ${mockJwt}` },
           },
-        },
+          auth: expect.objectContaining({ // Check auth options if specific ones are important
+             autoRefreshToken: false,
+             persistSession: false,
+           }),
+        }),
       );
-      expect(Logger.prototype.log).toHaveBeenCalledWith('Supabase client initialized with service_role key (bypasses RLS)');
-      expect(Logger.prototype.log).toHaveBeenCalledWith('Successfully connected to Supabase');
+      // Check config service calls
+      expect(configService.get).toHaveBeenCalledWith('SUPABASE_URL');
+      expect(configService.get).toHaveBeenCalledWith('SUPABASE_ANON_KEY');
+      expect(Logger.prototype.log).toHaveBeenCalledWith('Request-scoped Supabase client initialized for user.');
     });
 
-    it('should call testConnection on initialization', async () => {
-      // Mock the testConnection call chain specifically for this test
-      mockLimit.mockResolvedValueOnce({ error: null }); 
-      const testConnectionSpy = jest.spyOn(service, 'testConnection');
-      await service.onModuleInit();
-      expect(testConnectionSpy).toHaveBeenCalled();
+    it('should return the same client instance on subsequent accesses', () => {
+      const client1 = service.client;
+      const client2 = service.client;
+
+      expect(client1).toBe(mockSupabaseClientInstance);
+      expect(client2).toBe(client1); // Should be the same instance
+      expect(createClient).toHaveBeenCalledTimes(1); // createClient only called once
     });
 
-    it('should throw error if Supabase credentials are not provided', async () => {
-      mockConfigService.get.mockReturnValueOnce(null); // Simulate missing URL
-      await expect(service.onModuleInit()).rejects.toThrow(
-        'Supabase credentials are not provided in environment variables',
-      );
-      expect(Logger.prototype.error).not.toHaveBeenCalled(); // Error before logging connection attempt
+    it('should throw error if SUPABASE_URL is not provided', () => {
+      // Override mock config for this test
+      (configService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'SUPABASE_ANON_KEY') return mockSupabaseAnonKey;
+        return null; // Simulate missing URL
+      });
+
+      expect(() => service.client).toThrow('Supabase credentials are not properly configured.');
+      expect(Logger.prototype.error).toHaveBeenCalledWith('Supabase URL or Anon Key not configured');
+      expect(createClient).not.toHaveBeenCalled();
     });
 
-    it('should log and throw error if testConnection fails during init', async () => {
-      const testError = new Error('Connection failed');
-      // Instead of mocking testConnection, mock the underlying DB call it makes
-      mockLimit.mockResolvedValueOnce({ error: testError }); // Simulate DB returning error
+    it('should throw error if SUPABASE_ANON_KEY is not provided', () => {
+       // Override mock config for this test
+       (configService.get as jest.Mock).mockImplementation((key: string) => {
+         if (key === 'SUPABASE_URL') return mockSupabaseUrl;
+         return null; // Simulate missing Key
+       });
 
-      await expect(service.onModuleInit()).rejects.toThrow('Database connection test failed: Connection failed');
-      // The service now logs the specific DB error message inside testConnection
-      expect(Logger.prototype.error).toHaveBeenCalledWith(`Database connection test failed: ${testError.message}`);
-      // And logs the failure to connect in onModuleInit
-      expect(Logger.prototype.error).toHaveBeenCalledWith(`Failed to connect to Supabase: Database connection test failed: ${testError.message}`);
+       expect(() => service.client).toThrow('Supabase credentials are not properly configured.');
+       expect(Logger.prototype.error).toHaveBeenCalledWith('Supabase URL or Anon Key not configured');
+       expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException if Authorization header is missing', async () => {
+      // Modify the request mock for this specific test case
+      const moduleRef = await Test.createTestingModule({
+         providers: [
+           SupabaseService,
+           { provide: ConfigService, useValue: configService }, // Use the existing mocked config
+           { provide: REQUEST, useValue: { headers: {} } }, // No auth header
+         ],
+       }).compile();
+      // Use resolve for the scoped service within this custom context
+      const serviceWithNoAuth = await moduleRef.resolve<SupabaseService>(SupabaseService);
+
+
+      expect(() => serviceWithNoAuth.client).toThrow(UnauthorizedException);
+      expect(() => serviceWithNoAuth.client).toThrow('Authorization token is missing or invalid.');
+      expect(Logger.prototype.warn).toHaveBeenCalledWith('Attempted to create Supabase client without Authorization header.');
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException if Authorization header is not Bearer', async () => {
+       // Modify the request mock for this specific test case
+       const moduleRef = await Test.createTestingModule({
+         providers: [
+           SupabaseService,
+           { provide: ConfigService, useValue: configService }, // Use the existing mocked config
+           { provide: REQUEST, useValue: { headers: { authorization: 'Basic someauth' } } }, // Wrong scheme
+         ],
+       }).compile();
+        // Use resolve for the scoped service within this custom context
+       const serviceWithWrongAuth = await moduleRef.resolve<SupabaseService>(SupabaseService);
+
+       expect(() => serviceWithWrongAuth.client).toThrow(UnauthorizedException);
+       expect(() => serviceWithWrongAuth.client).toThrow('Authorization token is missing or invalid.');
+       expect(Logger.prototype.warn).toHaveBeenCalledWith('Attempted to create Supabase client without Authorization header.');
+       expect(createClient).not.toHaveBeenCalled();
     });
   });
 
-  describe('client', () => {
-    it('should return the initialized supabase client instance', async () => {
-      // Mock the testConnection call chain for initialization
-      mockLimit.mockResolvedValueOnce({ error: null }); 
-      await service.onModuleInit(); // Ensure client is initialized
-      expect(service.client).toBe(mockSupabaseClient);
-    });
-
-     it('should return undefined if client is accessed before initialization', () => {
-      // Accessing client directly without init might not be possible if private
-      // If SupabaseService is instantiated outside Nest lifecycle (unlikely)
-      let uninitializedService = new SupabaseService(configService);
-      // The getter might still exist, but the internal client is undefined
-      expect(uninitializedService.client).toBeUndefined(); 
-    });
-  });
-
-  describe('testConnection', () => {
-    beforeEach(async () => {
-      // Need to init the client before testing testConnection directly
-      // Re-initialize service instance to get fresh mocks if needed, or clear mocks
-      // await service.onModuleInit(); // Ensure client is initialized via lifecycle
-      
-      // Clear mocks before each test in this suite
-      mockFrom.mockClear();
-      mockVariablesSelect.mockClear();
-      mockLimit.mockClear();
-      // Ensure the service's internal client is the mocked one (should be via module setup)
-      // We assume the service has been initialized correctly by the test module setup
-      if (!service || !service.client) {
-        // Initialize if not done by outer beforeEach (e.g. if running tests selectively)
-        mockLimit.mockResolvedValueOnce({ error: null }); // Mock for testConnection during init
-        const module: TestingModule = await Test.createTestingModule({
-             providers: [
-               SupabaseService,
-               { provide: ConfigService, useValue: mockConfigService },
-             ],
-           }).compile();
-        service = module.get<SupabaseService>(SupabaseService);
-        await service.onModuleInit(); // Manually trigger init if needed
-      }
-    });
-
-    it('should return true if connection is successful', async () => {
-      // Ensure the mock is set for this specific call
-      mockLimit.mockResolvedValueOnce({ error: null }); // testConnection only checks error
-      const result = await service.testConnection();
-      expect(result).toBe(true);
-      expect(mockFrom).toHaveBeenCalledWith('variables');
-      expect(mockVariablesSelect).toHaveBeenCalledWith('id');
-      expect(mockLimit).toHaveBeenCalledWith(1);
-      expect(Logger.prototype.error).not.toHaveBeenCalled();
-    });
-
-    it('should throw and log error if Supabase returns an error', async () => {
-      const dbError = { message: 'Database connection error', code: '500' };
-      // Ensure the mock is set for this specific call
-      mockLimit.mockResolvedValueOnce({ data: null, error: dbError });
-
-      await expect(service.testConnection()).rejects.toThrow(
-        `Database connection test failed: ${dbError.message}`,
-      );
-      expect(mockFrom).toHaveBeenCalledWith('variables');
-      expect(mockVariablesSelect).toHaveBeenCalledWith('id');
-      expect(mockLimit).toHaveBeenCalledWith(1);
-      expect(Logger.prototype.error).toHaveBeenCalledWith(`Database connection test failed: ${dbError.message}`);
-    });
-
-    it('should throw and log error if the client query throws', async () => {
-      const queryError = new Error('Network error');
-      // Mock the limit call itself throwing
-      mockLimit.mockRejectedValueOnce(queryError); 
-
-      await expect(service.testConnection()).rejects.toThrow(queryError);
-      expect(mockFrom).toHaveBeenCalledWith('variables');
-      expect(mockVariablesSelect).toHaveBeenCalledWith('id');
-      expect(mockLimit).toHaveBeenCalledWith(1);
-      expect(Logger.prototype.error).toHaveBeenCalledWith(`Connection test failed: ${queryError.message}`);
-    });
-  });
+  // Remove describe blocks for 'onModuleInit' and 'testConnection' as they no longer exist
 }); 

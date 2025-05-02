@@ -12,7 +12,7 @@ export interface Variable {
   name: string
   type: 'ACTUAL' | 'BUDGET' | 'INPUT' | 'UNKNOWN'
   timeSeries: TimeSeriesData[]
-  organizationId?: string
+  organizationId: string
 }
 
 interface VariableState {

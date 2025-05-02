@@ -21,6 +21,11 @@ import { UpdateVariableDto } from './dto/update-variables.dto';
 import { DeleteVariablesDto } from './dto/delete-variables.dto';
 import { VariableDto, VariableType, TimeSeriesPoint } from './dto/variable.dto';
 
+// --- Mocks ---
+// Mock UUIDs for testing
+const MOCK_USER_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+const MOCK_ORG_ID = 'b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
+
 // Mock Service
 const mockDataIntakeService = {
   addVariables: jest.fn(),
@@ -29,12 +34,12 @@ const mockDataIntakeService = {
   deleteVariables: jest.fn(),
 };
 
-// Mock Guard - Create proper implementation
+// Mock Guard
 const mockJwtAuthGuard = {
-  canActivate: jest.fn((context) => {
-    // Add user to request object (what JwtAuthGuard actually does)
+  canActivate: jest.fn((context: ExecutionContext) => {
     const req = context.switchToHttp().getRequest();
-    req.user = { userId: 'test-user' };
+    // Use mock UUIDs for user context
+    req.user = { userId: MOCK_USER_ID, organizationId: MOCK_ORG_ID };
     return true;
   })
 };
@@ -45,44 +50,37 @@ describe('DataIntakeController (Integration)', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      // Import the actual module if complex dependencies are needed, 
-      // otherwise just declare controller and mocked providers.
-      // imports: [DataIntakeModule], // Option 1: Import full module
-      controllers: [DataIntakeController], // Option 2: Declare controller directly
+      controllers: [DataIntakeController],
       providers: [
-        // Provide the mock service
         { provide: DataIntakeService, useValue: mockDataIntakeService },
-        // We might need Reflector for interceptors even if guard is mocked
-        Reflector, 
+        Reflector,
       ],
     })
-    .overrideGuard(JwtAuthGuard) // Override the actual guard with the mock
+    .overrideGuard(JwtAuthGuard)
     .useValue(mockJwtAuthGuard)
     .compile();
 
     app = moduleFixture.createNestApplication();
-    
-    // Apply global pipes and interceptors as in main.ts for realistic testing
-    app.useGlobalPipes(new ValidationPipe({ 
-      transform: true, 
+
+    app.useGlobalPipes(new ValidationPipe({
+      transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
       skipMissingProperties: false
     }));
     app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
-    
+
     await app.init();
 
     dataIntakeService = moduleFixture.get<DataIntakeService>(DataIntakeService);
   });
 
   beforeEach(() => {
-    // Reset mocks before each test
     jest.clearAllMocks();
-    // Set the default behavior for the guard
-    mockJwtAuthGuard.canActivate.mockImplementation((context) => {
+    // Reset guard to default mock implementation
+    mockJwtAuthGuard.canActivate.mockImplementation((context: ExecutionContext) => {
       const req = context.switchToHttp().getRequest();
-      req.user = { userId: 'test-user' };
+      req.user = { userId: MOCK_USER_ID, organizationId: MOCK_ORG_ID };
       return true;
     });
   });
@@ -93,52 +91,53 @@ describe('DataIntakeController (Integration)', () => {
 
   // --- POST /data-intake/variables --- 
   describe('POST /data-intake/variables', () => {
-    const userId = 'test-user'; // Assuming guard adds user to request
-    // Create valid time series points
+    // Use mock UUIDs
+    const userId = MOCK_USER_ID;
+    const organizationId = MOCK_ORG_ID;
+
     const validTimeSeriesPoints: TimeSeriesPoint[] = [
       { date: '2023-01-01', value: 100 }
     ];
-    
-    // Create a proper VariableDto with all required fields
+
+    // Use valid UUIDs in the DTO
     const variablesToAdd: VariableDto[] = [
-      { 
-        id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID format
-        name: 'Var1', 
-        type: VariableType.INPUT, 
+      {
+        id: '123e4567-e89b-12d3-a456-426614174000', // Keep existing valid UUID for variable ID
+        name: 'Var1',
+        type: VariableType.INPUT,
         values: validTimeSeriesPoints,
-        userId: userId 
+        user_id: userId, // Use mock UUID
+        organization_id: organizationId // Use mock UUID
       },
     ];
-    
-    // Create a proper AddVariablesDto
+
     const addDto: AddVariablesDto = { variables: variablesToAdd };
-    
-    const mockAddedVariables = variablesToAdd.map(v => ({ 
-      ...v, 
-      created_at: 'ts', 
-      updated_at: 'ts' 
+
+    // Mock return value - ensure shape matches what service returns
+    const mockAddedVariablesResult = variablesToAdd.map(v => ({
+      ...v,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }));
 
     it('should call service.addVariables and return result on success', async () => {
-      // Make sure the service returns the expected result
-      mockDataIntakeService.addVariables.mockResolvedValue(mockAddedVariables);
+      mockDataIntakeService.addVariables.mockResolvedValue(mockAddedVariablesResult);
 
       await request(app.getHttpServer())
         .post('/data-intake/variables')
-        .set('Authorization', 'Bearer fake-token') // Simulate token
+        .set('Authorization', 'Bearer fake-token')
         .send(addDto)
         .expect(201) // Expect HTTP 201 Created
         .expect((res) => {
-          expect(res.body).toEqual(mockAddedVariables);
+          // Ensure body matches the structure returned by the service mock
+          expect(res.body).toEqual(mockAddedVariablesResult);
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      // Check if service was called with the right arguments
-      expect(mockDataIntakeService.addVariables).toHaveBeenCalledWith(
-        expect.objectContaining({ variables: expect.arrayContaining([expect.objectContaining({ userId })]) })
-      );
+      // Controller passes the DTO directly to the service after potentially adding IDs (which doesn't happen here as they exist)
+      expect(mockDataIntakeService.addVariables).toHaveBeenCalledWith(addDto);
     });
-    
+
     it('should return 400 on invalid DTO (empty array)', async () => {
         const invalidDto = { variables: [] };
         await request(app.getHttpServer())
@@ -146,72 +145,75 @@ describe('DataIntakeController (Integration)', () => {
           .set('Authorization', 'Bearer fake-token')
           .send(invalidDto)
           .expect(400); // Expect HTTP 400 Bad Request (ValidationPipe)
-          
+
         expect(mockDataIntakeService.addVariables).not.toHaveBeenCalled();
       });
 
-    it('should return 400 on invalid DTO (missing required field)', async () => {
-        const invalidDto = { 
-          variables: [{ 
-            /* Missing id field which is required */
+    it('should return 400 on invalid DTO (missing required field - e.g., organization_id)', async () => {
+        const invalidDto = {
+          variables: [{
+            id: 'c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33',
             name: 'Test',
-            type: VariableType.INPUT, 
-            values: validTimeSeriesPoints 
-          }] 
+            type: VariableType.INPUT,
+            values: validTimeSeriesPoints,
+            user_id: MOCK_USER_ID,
+            // Missing organization_id
+          }]
         };
-        
+
         await request(app.getHttpServer())
             .post('/data-intake/variables')
             .set('Authorization', 'Bearer fake-token')
             .send(invalidDto)
             .expect(400);
-            
+
         expect(mockDataIntakeService.addVariables).not.toHaveBeenCalled();
     });
 
     it('should return 401 if auth guard denies access', async () => {
-        // Override guard to throw UnauthorizedException
         mockJwtAuthGuard.canActivate.mockImplementation(() => {
           throw new UnauthorizedException();
         });
-        
+
         await request(app.getHttpServer())
             .post('/data-intake/variables')
-            .send(addDto)
-            .expect(401); // Expect HTTP 401 Unauthorized
-            
+            .send(addDto) // Use the valid addDto
+            .expect(401);
+
         expect(mockDataIntakeService.addVariables).not.toHaveBeenCalled();
     });
-    
+
     it('should return 500 if service throws an error', async () => {
         mockDataIntakeService.addVariables.mockRejectedValue(
           new HttpException('DB error', HttpStatus.INTERNAL_SERVER_ERROR)
         );
-        
+
         await request(app.getHttpServer())
             .post('/data-intake/variables')
             .set('Authorization', 'Bearer fake-token')
-            .send(addDto)
-            .expect(500); // Expect HTTP 500 Internal Server Error
+            .send(addDto) // Use the valid addDto
+            .expect(500);
     });
   });
 
   // --- GET /data-intake/variables/:userId --- 
   describe('GET /data-intake/variables/:userId', () => {
-    const userId = 'user-to-fetch';
-    const mockUserVariables = [{ 
-      id: '123e4567-e89b-12d3-a456-426614174000', 
-      name: 'Var1', 
-      type: VariableType.ACTUAL, 
-      values: [{ date: '2023-01-01', value: 100 }], 
-      userId 
+    // Use a valid UUID format for the parameter
+    const userIdToFetch = 'd3eebc99-9c0b-4ef8-bb6d-6bb9bd380a44';
+    const mockUserVariables = [{
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      name: 'Var1',
+      type: VariableType.ACTUAL,
+      values: [{ date: '2023-01-01', value: 100 }],
+      user_id: userIdToFetch,
+      organization_id: MOCK_ORG_ID // Assume variables belong to an org
     }];
 
     it('should call service.getVariablesByUser and return data', async () => {
       mockDataIntakeService.getVariablesByUser.mockResolvedValue(mockUserVariables);
 
       await request(app.getHttpServer())
-        .get(`/data-intake/variables/${userId}`)
+        .get(`/data-intake/variables/${userIdToFetch}`) // Use valid UUID
         .set('Authorization', 'Bearer fake-token')
         .expect(200)
         .expect((res) => {
@@ -219,28 +221,27 @@ describe('DataIntakeController (Integration)', () => {
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockDataIntakeService.getVariablesByUser).toHaveBeenCalledWith(userId);
+      expect(mockDataIntakeService.getVariablesByUser).toHaveBeenCalledWith(userIdToFetch);
     });
 
      it('should return 401 if auth guard denies access', async () => {
-         // Override guard to throw UnauthorizedException
          mockJwtAuthGuard.canActivate.mockImplementation(() => {
            throw new UnauthorizedException();
          });
-         
+
          await request(app.getHttpServer())
-             .get(`/data-intake/variables/${userId}`)
+             .get(`/data-intake/variables/${userIdToFetch}`)
              .expect(401);
          expect(mockDataIntakeService.getVariablesByUser).not.toHaveBeenCalled();
      });
-     
+
     it('should return 500 if service throws an error', async () => {
         mockDataIntakeService.getVariablesByUser.mockRejectedValue(
           new HttpException('Fetch error', HttpStatus.INTERNAL_SERVER_ERROR)
         );
-        
+
         await request(app.getHttpServer())
-            .get(`/data-intake/variables/${userId}`)
+            .get(`/data-intake/variables/${userIdToFetch}`)
             .set('Authorization', 'Bearer fake-token')
             .expect(500);
     });
@@ -248,9 +249,9 @@ describe('DataIntakeController (Integration)', () => {
 
   // --- PUT /data-intake/variables --- 
   describe('PUT /data-intake/variables', () => {
-    const userId = 'test-user';
+    const userId = MOCK_USER_ID;
     const variablesToUpdate: UpdateVariableDto[] = [
-      { 
+      {
         id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID
         name: 'Updated Name',
         type: VariableType.INPUT,
@@ -258,16 +259,15 @@ describe('DataIntakeController (Integration)', () => {
       },
     ];
     const updateDto: UpdateVariablesDto = { variables: variablesToUpdate };
-    const mockUpdatedVariables = [{ 
-      id: '123e4567-e89b-12d3-a456-426614174000', 
-      name: 'Updated Name', 
-      type: VariableType.INPUT, 
-      values: [{ date: '2023-01-01', value: 200 }], 
-      userId 
-    }];
+    const mockUpdatedVariablesResult = variablesToUpdate.map(v => ({
+      ...v,
+      user_id: userId,
+      organization_id: MOCK_ORG_ID,
+      updated_at: new Date().toISOString()
+    }));
 
     it('should call service.updateVariables and return result', async () => {
-      mockDataIntakeService.updateVariables.mockResolvedValue(mockUpdatedVariables);
+      mockDataIntakeService.updateVariables.mockResolvedValue(mockUpdatedVariablesResult);
 
       await request(app.getHttpServer())
         .put('/data-intake/variables')
@@ -275,15 +275,16 @@ describe('DataIntakeController (Integration)', () => {
         .send(updateDto)
         .expect(200)
         .expect((res) => {
-          expect(res.body).toEqual(mockUpdatedVariables);
+          expect(res.body).toEqual(mockUpdatedVariablesResult);
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
+      // Controller passes DTO directly, service might use user context internally
       expect(mockDataIntakeService.updateVariables).toHaveBeenCalledWith(updateDto);
     });
 
     it('should return 400 on invalid DTO', async () => {
-        const invalidDto = { variables: [] };
+        const invalidDto = { variables: [] }; // Empty array fails validation
         await request(app.getHttpServer())
             .put('/data-intake/variables')
             .set('Authorization', 'Bearer fake-token')
@@ -291,43 +292,43 @@ describe('DataIntakeController (Integration)', () => {
             .expect(400);
         expect(mockDataIntakeService.updateVariables).not.toHaveBeenCalled();
     });
-    
+
     it('should return 401 if auth guard denies access', async () => {
-        // Override guard to throw UnauthorizedException
         mockJwtAuthGuard.canActivate.mockImplementation(() => {
           throw new UnauthorizedException();
         });
-        
+
         await request(app.getHttpServer())
             .put('/data-intake/variables')
-            .send(updateDto)
+            .send(updateDto) // Use valid DTO
             .expect(401);
         expect(mockDataIntakeService.updateVariables).not.toHaveBeenCalled();
     });
-    
+
     it('should return 500 if service throws an error', async () => {
         mockDataIntakeService.updateVariables.mockRejectedValue(
           new HttpException('Update error', HttpStatus.INTERNAL_SERVER_ERROR)
         );
-        
+
         await request(app.getHttpServer())
             .put('/data-intake/variables')
             .set('Authorization', 'Bearer fake-token')
-            .send(updateDto)
+            .send(updateDto) // Use valid DTO
             .expect(500);
     });
   });
 
   // --- DELETE /data-intake/variables --- 
   describe('DELETE /data-intake/variables', () => {
-    const userId = 'test-user';
-    // Use valid UUIDs in the delete DTOs
+    const userId = MOCK_USER_ID;
+    const organizationId = MOCK_ORG_ID;
     const idsToDelete = [
-      '123e4567-e89b-12d3-a456-426614174000', 
+      '123e4567-e89b-12d3-a456-426614174000',
       '123e4567-e89b-12d3-a456-426614174001'
     ];
-    const deleteDto: DeleteVariablesDto = { ids: idsToDelete }; 
-    const mockDeleteResult = { deletedCount: 2 };
+    // Include mandatory organizationId in the DTO
+    const deleteDto: DeleteVariablesDto = { ids: idsToDelete, organizationId };
+    const mockDeleteResult = { deletedCount: 2 }; // Example result structure
 
     it('should call service.deleteVariables and return result', async () => {
       mockDataIntakeService.deleteVariables.mockResolvedValue(mockDeleteResult);
@@ -335,18 +336,23 @@ describe('DataIntakeController (Integration)', () => {
       await request(app.getHttpServer())
         .delete('/data-intake/variables')
         .set('Authorization', 'Bearer fake-token')
-        .send(deleteDto)
+        .send(deleteDto) // Send the DTO including organizationId
         .expect(200)
         .expect((res) => {
           expect(res.body).toEqual(mockDeleteResult);
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockDataIntakeService.deleteVariables).toHaveBeenCalledWith(deleteDto);
+      // Verify service call arguments: ({ ids }, userId, organizationId)
+      expect(mockDataIntakeService.deleteVariables).toHaveBeenCalledWith(
+        { ids: idsToDelete }, // Service expects {ids} object based on controller code
+        userId,           // User ID from request context
+        organizationId    // Org ID from DTO body
+      );
     });
-    
+
     it('should return 400 on invalid DTO (empty ids array)', async () => {
-        const invalidDto = { ids: [] };
+        const invalidDto = { ids: [], organizationId }; // Still need orgId, but ids is invalid
         await request(app.getHttpServer())
             .delete('/data-intake/variables')
             .set('Authorization', 'Bearer fake-token')
@@ -355,21 +361,29 @@ describe('DataIntakeController (Integration)', () => {
         expect(mockDataIntakeService.deleteVariables).not.toHaveBeenCalled();
     });
 
+    it('should return 400 on invalid DTO (missing organizationId)', async () => {
+        const invalidDto = { ids: idsToDelete }; // Missing mandatory orgId
+        await request(app.getHttpServer())
+            .delete('/data-intake/variables')
+            .set('Authorization', 'Bearer fake-token')
+            .send(invalidDto)
+            .expect(400); // Controller validation should fail
+        expect(mockDataIntakeService.deleteVariables).not.toHaveBeenCalled();
+    });
+
     it('should return 401 if auth guard denies access', async () => {
-        // Override guard to throw UnauthorizedException
         mockJwtAuthGuard.canActivate.mockImplementation(() => {
           throw new UnauthorizedException();
         });
-        
+
         await request(app.getHttpServer())
             .delete('/data-intake/variables')
-            .send(deleteDto)
+            .send(deleteDto) // Use valid DTO
             .expect(401);
         expect(mockDataIntakeService.deleteVariables).not.toHaveBeenCalled();
     });
-    
+
     it('should return 500 if service throws an error', async () => {
-        // Mock proper HTTP exception with 500 status
         const serverError = new HttpException(
           {
             statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -378,13 +392,13 @@ describe('DataIntakeController (Integration)', () => {
           },
           HttpStatus.INTERNAL_SERVER_ERROR
         );
-        
+
         mockDataIntakeService.deleteVariables.mockRejectedValue(serverError);
-        
+
         await request(app.getHttpServer())
             .delete('/data-intake/variables')
             .set('Authorization', 'Bearer fake-token')
-            .send(deleteDto)
+            .send(deleteDto) // Use valid DTO
             .expect(500);
     });
   });
