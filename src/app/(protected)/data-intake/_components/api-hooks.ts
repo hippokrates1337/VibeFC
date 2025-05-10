@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { type Variable, type TimeSeriesData, useFetchVariables } from '@/lib/store/variables'
 import { useAuth } from '@/providers/auth-provider'
 import { useOrganizationStore } from '@/lib/store/organization'
+import { logger } from '@/lib/utils/logger'
 
 interface ApiStatus {
   loading: boolean
@@ -21,7 +22,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
 
   const getAuthHeaders = useCallback(() => {
     if (!session?.access_token) {
-      console.error('No access token found. User might be logged out.')
+      logger.error('No access token found. User might be logged out.')
       throw new Error('Authentication token is missing. Please log in again.')
     }
     return {
@@ -51,8 +52,8 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
     const newVariables = [...variables]
     const variablesToAdd = decisions.filter(d => d.action === 'add').map(d => d.variable)
     
-    console.log('Variables to be added locally:', variablesToAdd.length)
-    console.log('Decision actions:', decisions.map(d => d.action))
+    logger.log('Variables to be added locally:', variablesToAdd.length)
+    logger.log('Decision actions:', decisions.map(d => d.action))
     
     // Map of frontend variable IDs to their original variable objects
     const frontendVariableMap = new Map<string, Variable>()
@@ -84,7 +85,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           error: 'User or organization context is missing. Cannot import variables.',
           success: false,
         })
-        console.error('Missing user or organization context')
+        logger.error('Missing user or organization context')
         return
       }
 
@@ -108,8 +109,8 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         
         const backendUrl = getBackendUrl();
         const importUrl = `${backendUrl}/data-intake/variables`;
-        console.log('Sending payload to Backend API:', importUrl);
-        console.log('Payload:', JSON.stringify(apiPayload, null, 2));
+        logger.log('Sending payload to Backend API:', importUrl);
+        logger.log('Payload:', JSON.stringify(apiPayload, null, 2));
         
         const response = await fetch(importUrl, {
           method: 'POST',
@@ -117,9 +118,9 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           body: JSON.stringify(apiPayload)
         })
         
-        console.log('API response status:', response.status)
+        logger.log('API response status:', response.status)
         const responseData = await response.json()
-        console.log('API response data:', responseData)
+        logger.log('API response data:', responseData)
         
         if (!response.ok) {
           throw new Error(responseData.message || 'Failed to save variables to the server')
@@ -127,12 +128,12 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         
         // Check if the response contains created variables with backend IDs
         if (responseData.variables && Array.isArray(responseData.variables)) {
-          console.log('Received variables from backend:', responseData.variables)
+          logger.log('Received variables from backend:', responseData.variables)
           
           // We no longer need to map IDs since the same ID is used in both frontend and backend
           // Just log for debugging purposes
           responseData.variables.forEach((variable: any) => {
-            console.log(`Variable with ID ${variable.id} successfully saved`)
+            logger.log(`Variable with ID ${variable.id} successfully saved`)
           })
         }
         
@@ -144,16 +145,16 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
 
         // Fetch variables again after successful import to ensure sync
         if (user && session?.access_token) {
-          console.log('[handleImportVariables] Import successful, refetching variables...');
+          logger.log('[handleImportVariables] Import successful, refetching variables...');
           await fetchVariables(user.id, session.access_token);
         } else {
-          console.warn('[handleImportVariables] Cannot refetch variables: missing user or token.');
+          logger.warn('[handleImportVariables] Cannot refetch variables: missing user or token.');
         }
 
         resetSuccessStatus()
         
       } catch (error) {
-        console.error('Error in API request:', error)
+        logger.error('Error in API request:', error)
         setApiStatus({
           loading: false,
           error: error instanceof Error ? error.message : 'An unknown error occurred',
@@ -166,7 +167,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
   const handleDeleteVariable = useCallback(async (variableId: string, organizationId: string | null): Promise<void> => {
     // Validate organizationId before proceeding
     if (!organizationId) {
-      console.error('Organization ID is missing, cannot delete variable.')
+      logger.error('Organization ID is missing, cannot delete variable.')
       setApiStatus({
         loading: false,
         error: 'Cannot delete: Organization context is missing.',
@@ -181,9 +182,9 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       const headers = getAuthHeaders()
 
       // Debug logging
-      console.log('==== DELETE OPERATION START ====')
-      console.log('Variable ID to delete:', variableId)
-      console.log('Current variables in store:', variables.map(v => ({ id: v.id, name: v.name })))
+      logger.log('==== DELETE OPERATION START ====')
+      logger.log('Variable ID to delete:', variableId)
+      logger.log('Current variables in store:', variables.map(v => ({ id: v.id, name: v.name })))
       
       // Find the variable to get the backend ID if it exists
       const variableToDelete = variables.find(v => v.id === variableId)
@@ -195,7 +196,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       const backendUrl = getBackendUrl();
       const deleteUrl = `${backendUrl}/data-intake/variables`;
       const payload = { ids: [variableId], organizationId: organizationId }
-      console.log('Calling Backend API endpoint:', deleteUrl, 'with payload:', payload)
+      logger.log('Calling Backend API endpoint:', deleteUrl, 'with payload:', payload)
       
       // Call backend API to delete the variable
       const response = await fetch(deleteUrl, {
@@ -204,16 +205,16 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         body: JSON.stringify(payload)
       })
       
-      console.log('API Response Status:', response.status, response.statusText)
+      logger.log('API Response Status:', response.status, response.statusText)
       
       if (!response.ok) {
         // Try to parse as JSON, but handle cases where it might be HTML or other formats
         const contentType = response.headers.get('content-type')
-        console.log('Response content type:', contentType)
+        logger.log('Response content type:', contentType)
         
         if (contentType && contentType.includes('application/json')) {
           const errorData = await response.json()
-          console.log('Error data:', errorData)
+          logger.log('Error data:', errorData)
           throw new Error(errorData.message || `Failed to delete variable: ${response.status} ${response.statusText}`)
         } else {
           throw new Error(`Failed to delete variable: ${response.status} ${response.statusText}`)
@@ -223,26 +224,26 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         try {
           const responseText = await response.text()
           if (responseText) {
-            console.log('Response text:', responseText)
+            logger.log('Response text:', responseText)
             const responseData = JSON.parse(responseText)
-            console.log('Response data:', responseData)
+            logger.log('Response data:', responseData)
             
             // If the backend tells us the variable doesn't exist there, we can still remove it locally
             if (responseData.message === "No variables found to delete" && responseData.count === 0) {
-              console.log('Variable not found in backend but proceeding with local deletion')
+              logger.log('Variable not found in backend but proceeding with local deletion')
             }
           } else {
-            console.log('Empty response body')
+            logger.log('Empty response body')
           }
         } catch (e) {
-          console.log('Could not parse response:', e)
+          logger.log('Could not parse response:', e)
         }
       }
       
       // Remove the variable locally only after successful API call
       const updatedVariables = variables.filter(variable => variable.id !== variableId)
-      console.log('Updating local state, removing variable with ID:', variableId)
-      console.log('Updated variables count:', updatedVariables.length)
+      logger.log('Updating local state, removing variable with ID:', variableId)
+      logger.log('Updated variables count:', updatedVariables.length)
       setVariables(updatedVariables)
       
       setApiStatus({
@@ -253,15 +254,15 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       
       resetSuccessStatus()
       
-      console.log('==== DELETE OPERATION COMPLETE ====')
+      logger.log('==== DELETE OPERATION COMPLETE ====')
     } catch (error) {
-      console.error('Error deleting variable:', error)
+      logger.error('Error deleting variable:', error)
       setApiStatus({
         loading: false,
         error: error instanceof Error ? error.message : 'Failed to delete variable from server',
         success: false
       })
-      console.log('==== DELETE OPERATION FAILED ====')
+      logger.log('==== DELETE OPERATION FAILED ====')
     }
   }, [variables, setVariables, resetSuccessStatus, session, getAuthHeaders, getBackendUrl])
 
@@ -272,7 +273,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
   ): Promise<void> => {
     // Add validation for organizationId if service layer requires it for PUT
     if (!organizationId) {
-      console.error('Organization ID is missing, cannot update variable.')
+      logger.error('Organization ID is missing, cannot update variable.')
       setApiStatus({
         loading: false,
         error: 'Cannot update: Organization context is missing.',
@@ -289,15 +290,15 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         error: 'User context is missing. Cannot update variable.',
         success: false,
       })
-      console.error('Missing user context for update')
+      logger.error('Missing user context for update')
       return
     }
 
     try {
       const headers = getAuthHeaders()
-      console.log('==== UPDATE OPERATION START ====')
-      console.log('Variable ID to update:', variableId)
-      console.log('Update data:', updateData)
+      logger.log('==== UPDATE OPERATION START ====')
+      logger.log('Variable ID to update:', variableId)
+      logger.log('Update data:', updateData)
       
       // Find the variable to update
       const variableToUpdate = variables.find(v => v.id === variableId)
@@ -329,8 +330,8 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       
       const backendUrl = getBackendUrl();
       const updateUrl = `${backendUrl}/data-intake/variables`;
-      console.log('Sending payload to Backend API:', updateUrl);
-      console.log('Payload:', JSON.stringify(payload, null, 2));
+      logger.log('Sending payload to Backend API:', updateUrl);
+      logger.log('Payload:', JSON.stringify(payload, null, 2));
       
       const response = await fetch(updateUrl, {
         method: 'PUT',
@@ -338,9 +339,9 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         body: JSON.stringify(payload)
       })
       
-      console.log('API response status:', response.status)
+      logger.log('API response status:', response.status)
       const responseData = await response.json()
-      console.log('API response data:', responseData)
+      logger.log('API response data:', responseData)
       
       if (!response.ok) {
         throw new Error(responseData.message || 'Failed to update variable on the server')
@@ -377,15 +378,15 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       
       resetSuccessStatus()
       
-      console.log('==== UPDATE OPERATION COMPLETE ====')
+      logger.log('==== UPDATE OPERATION COMPLETE ====')
     } catch (error) {
-      console.error('Error updating variable:', error)
+      logger.error('Error updating variable:', error)
       setApiStatus({
         loading: false,
         error: error instanceof Error ? error.message : 'Failed to update variable on server',
         success: false
       })
-      console.log('==== UPDATE OPERATION FAILED ====')
+      logger.log('==== UPDATE OPERATION FAILED ====')
     }
   }, [variables, setVariables, resetSuccessStatus, session, user, getAuthHeaders, getBackendUrl])
 
@@ -403,14 +404,20 @@ export const useCsvProcessor = (variables: Variable[]) => {
   const [error, setError] = useState<string | null>(null)
   const [processedVariables, setProcessedVariables] = useState<Variable[]>([])
   const [showImportModal, setShowImportModal] = useState<boolean>(false)
+  const currentOrganization = useOrganizationStore(state => state.currentOrganization)
 
   const parseCSV = useCallback(async (file: File): Promise<void> => {
+    logger.log('[parseCSV] Starting CSV processing');
     setIsUploading(true)
     setError(null)
 
     try {
       if (!file.name.endsWith('.csv')) {
         throw new Error('Please upload a CSV file')
+      }
+
+      if (!currentOrganization?.id) {
+        throw new Error('No organization selected. Please select an organization before uploading data.')
       }
 
       const text = await file.text()
@@ -423,6 +430,7 @@ export const useCsvProcessor = (variables: Variable[]) => {
       // Detect delimiter (comma or semicolon)
       const firstLine = text.split('\n')[0]
       const delimiter = firstLine.includes(';') ? ';' : ','
+      logger.log(`[parseCSV] Detected delimiter: "${delimiter}"`);
       
       const lines = text.split('\n')
       const headers = lines[0].split(delimiter)
@@ -433,6 +441,8 @@ export const useCsvProcessor = (variables: Variable[]) => {
         const date = parseDate(h.trim())
         return date ? i : -1
       }).filter(i => i !== -1)
+
+      logger.log(`[parseCSV] Found column indices - name: ${nameIndex}, type: ${typeIndex}, dates: ${dateIndices.length}`);
 
       if (nameIndex === -1 || typeIndex === -1) {
         throw new Error('CSV must contain name and type columns')
@@ -489,8 +499,9 @@ export const useCsvProcessor = (variables: Variable[]) => {
         newVariables.push({
           id: crypto.randomUUID(),
           name,
-          type: type as 'ACTUAL' | 'BUDGET' | 'INPUT',
-          timeSeries: timeSeries
+          type: type as 'ACTUAL' | 'BUDGET' | 'INPUT' | 'UNKNOWN',
+          timeSeries: timeSeries,
+          organizationId: currentOrganization.id
         })
       }
 
@@ -498,14 +509,16 @@ export const useCsvProcessor = (variables: Variable[]) => {
         throw new Error('No valid data found in the CSV file')
       }
 
+      logger.log(`[parseCSV] Successfully processed ${newVariables.length} variables from CSV`);
       setProcessedVariables(newVariables)
       setShowImportModal(true)
     } catch (err) {
+      logger.error('[parseCSV] Error processing CSV:', err);
       setError(err instanceof Error ? err.message : 'Failed to process CSV file')
     } finally {
       setIsUploading(false)
     }
-  }, [])
+  }, [currentOrganization])
 
   return {
     isUploading,

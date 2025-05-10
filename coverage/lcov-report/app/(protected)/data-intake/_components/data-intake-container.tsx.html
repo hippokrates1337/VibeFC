@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">88.57% </span>
+                <span class="strong">87.7% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>155/175</span>
+                <span class='fraction'>164/187</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">92% </span>
+                <span class="strong">82.14% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>23/25</span>
+                <span class='fraction'>23/28</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">88.57% </span>
+                <span class="strong">87.7% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>155/175</span>
+                <span class='fraction'>164/187</span>
             </div>
         
             
@@ -237,7 +237,19 @@
 <a name='L172'></a><a href='#L172'>172</a>
 <a name='L173'></a><a href='#L173'>173</a>
 <a name='L174'></a><a href='#L174'>174</a>
-<a name='L175'></a><a href='#L175'>175</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -257,6 +269,8 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
@@ -304,6 +318,16 @@
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
@@ -429,16 +453,18 @@ import { useVariableApi, useCsvProcessor } from './api-hooks'
 import { ApiStatus } from './data-status'
 import { LoadingState, ErrorState, EmptyState } from './state-display'
 import { useAuth } from '@/providers/auth-provider'
+import { logger } from '@/lib/utils/logger'
 &nbsp;
 export const DataIntakeContainer = () =&gt; {
   const variables = useVariableStore(state =&gt; state.variables);
   const selectedOrganizationId = useVariableStore(state =&gt; state.selectedOrganizationId);
+  const setVariables = useVariableStore((state) =&gt; state.setVariables);
 &nbsp;
   const filteredVariables = useMemo(() =&gt; {
     if (!selectedOrganizationId) {
       return variables;
     }
-    console.log('[DataIntakeContainer useMemo] Filtering variables for organization:', selectedOrganizationId);
+    logger.log('[DataIntakeContainer useMemo] Filtering variables for organization:', selectedOrganizationId);
     return (variables<span class="branch-0 cbranch-no" title="branch not covered" > || [])</span>.filter(variable =&gt; variable.organizationId === selectedOrganizationId);
   }, [variables, selectedOrganizationId]);
 &nbsp;
@@ -451,15 +477,12 @@ export const DataIntakeContainer = () =&gt; {
   const currentOrganization = useOrganizationStore(state =&gt; state.currentOrganization);
   const selectedOrgIdFromOrgStore = currentOrganization?.id || null;
 &nbsp;
-  const rawVariables = useVariableStore((state) =&gt; state.variables);
-  const setVariables = useVariableStore((state) =&gt; state.setVariables);
-&nbsp;
   const {
     apiStatus,
     handleImportVariables,
     handleDeleteVariable,
     handleUpdateVariable
-  } = useVariableApi(rawVariables, setVariables)
+  } = useVariableApi(variables, setVariables)
   
   const {
     isUploading,
@@ -469,7 +492,7 @@ export const DataIntakeContainer = () =&gt; {
     showImportModal,
     setShowImportModal,
     parseCSV
-  } = useCsvProcessor(rawVariables)
+  } = useCsvProcessor(variables)
 &nbsp;
   const [deleteConfirmation, setDeleteConfirmation] = useState&lt;{
     isOpen: boolean;
@@ -482,8 +505,21 @@ export const DataIntakeContainer = () =&gt; {
   })
 &nbsp;
   useEffect(() =&gt; {
+    logger.log('[DataIntakeContainer useEffect] Org ID from store changed to:', selectedOrgIdFromOrgStore);
+    // Update the selected ID in the variable store
     setSelectedOrganizationIdInStore(selectedOrgIdFromOrgStore);
-  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore]);
+    
+    // Trigger fetch ONLY if we have a selected org, user, and token
+    if (selectedOrgIdFromOrgStore<span class="branch-0 cbranch-no" title="branch not covered" > &amp;&amp; user<span class="branch-0 cbranch-no" title="branch not covered" > </span>&amp;&amp; session?.access_token)</span> <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >      logger.log('[DataIntakeContainer useEffect] Triggering fetchVariables for org:', selectedOrgIdFromOrgStore);</span>
+<span class="cstat-no" title="statement not covered" >      // Let the store handle the logic of whether to actually fetch (based on existing data/loading state)</span>
+<span class="cstat-no" title="statement not covered" >      fetchVariables(user.id, session.access_token);</span>
+    } else {
+       logger.log('[DataIntakeContainer useEffect] Skipping fetchVariables - missing orgId, user, or token.');
+       // Optionally clear variables if no org is selected?
+       // useVariableStore.getState().clearVariables(); // Decide if this is desired behaviour
+    }
+  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore, fetchVariables, user, session?.access_token]);
 &nbsp;
   const dates = useMemo(() =&gt; {
     const allDates = filteredVariables.flatMap(variable =&gt; 
@@ -521,7 +557,7 @@ export const DataIntakeContainer = () =&gt; {
   }, [])
 &nbsp;
   const handleConfirmDelete = useCallback((): void =&gt; {
-<span class="cstat-no" title="statement not covered" >    console.log('[handleConfirmDelete] Org ID being passed:', selectedOrgIdFromOrgStore); </span>
+<span class="cstat-no" title="statement not covered" >    logger.log('[handleConfirmDelete] Org ID being passed:', selectedOrgIdFromOrgStore); </span>
 <span class="cstat-no" title="statement not covered" >    handleDeleteVariable(deleteConfirmation.variableId, selectedOrgIdFromOrgStore) </span>
 <span class="cstat-no" title="statement not covered" >    closeDeleteConfirmation()</span>
   }, [deleteConfirmation.variableId, handleDeleteVariable, closeDeleteConfirmation, selectedOrgIdFromOrgStore])
@@ -572,7 +608,7 @@ export const DataIntakeContainer = () =&gt; {
 <span class="cstat-no" title="statement not covered" >          isOpen={showImportModal}</span>
 <span class="cstat-no" title="statement not covered" >          onClose={<span class="fstat-no" title="function not covered" >() =&gt; setShowImportModal(false)}</span></span>
 <span class="cstat-no" title="statement not covered" >          newVariables={processedVariables}</span>
-<span class="cstat-no" title="statement not covered" >          existingVariables={rawVariables}</span>
+<span class="cstat-no" title="statement not covered" >          existingVariables={variables}</span>
 <span class="cstat-no" title="statement not covered" >          onConfirm={handleImportVariables}</span>
 <span class="cstat-no" title="statement not covered" >        /&gt;</span>
       )}
@@ -592,7 +628,7 @@ export const DataIntakeContainer = () =&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-05-02T16:27:59.227Z
+                at 2025-05-10T13:11:52.975Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

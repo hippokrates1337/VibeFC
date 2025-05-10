@@ -16,16 +16,18 @@ import { useVariableApi, useCsvProcessor } from './api-hooks'
 import { ApiStatus } from './data-status'
 import { LoadingState, ErrorState, EmptyState } from './state-display'
 import { useAuth } from '@/providers/auth-provider'
+import { logger } from '@/lib/utils/logger'
 
 export const DataIntakeContainer = () => {
   const variables = useVariableStore(state => state.variables);
   const selectedOrganizationId = useVariableStore(state => state.selectedOrganizationId);
+  const setVariables = useVariableStore((state) => state.setVariables);
 
   const filteredVariables = useMemo(() => {
     if (!selectedOrganizationId) {
       return variables;
     }
-    console.log('[DataIntakeContainer useMemo] Filtering variables for organization:', selectedOrganizationId);
+    logger.log('[DataIntakeContainer useMemo] Filtering variables for organization:', selectedOrganizationId);
     return (variables || []).filter(variable => variable.organizationId === selectedOrganizationId);
   }, [variables, selectedOrganizationId]);
 
@@ -38,15 +40,12 @@ export const DataIntakeContainer = () => {
   const currentOrganization = useOrganizationStore(state => state.currentOrganization);
   const selectedOrgIdFromOrgStore = currentOrganization?.id || null;
 
-  const rawVariables = useVariableStore((state) => state.variables);
-  const setVariables = useVariableStore((state) => state.setVariables);
-
   const {
     apiStatus,
     handleImportVariables,
     handleDeleteVariable,
     handleUpdateVariable
-  } = useVariableApi(rawVariables, setVariables)
+  } = useVariableApi(variables, setVariables)
   
   const {
     isUploading,
@@ -56,7 +55,7 @@ export const DataIntakeContainer = () => {
     showImportModal,
     setShowImportModal,
     parseCSV
-  } = useCsvProcessor(rawVariables)
+  } = useCsvProcessor(variables)
 
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
@@ -69,21 +68,21 @@ export const DataIntakeContainer = () => {
   })
 
   useEffect(() => {
-    console.log('[DataIntakeContainer useEffect] Org ID from store changed to:', selectedOrgIdFromOrgStore);
+    logger.log('[DataIntakeContainer useEffect] Org ID from store changed to:', selectedOrgIdFromOrgStore);
     // Update the selected ID in the variable store
     setSelectedOrganizationIdInStore(selectedOrgIdFromOrgStore);
     
     // Trigger fetch ONLY if we have a selected org, user, and token
     if (selectedOrgIdFromOrgStore && user && session?.access_token) {
-      console.log('[DataIntakeContainer useEffect] Triggering fetchVariables for org:', selectedOrgIdFromOrgStore);
+      logger.log('[DataIntakeContainer useEffect] Triggering fetchVariables for org:', selectedOrgIdFromOrgStore);
       // Let the store handle the logic of whether to actually fetch (based on existing data/loading state)
       fetchVariables(user.id, session.access_token);
     } else {
-       console.log('[DataIntakeContainer useEffect] Skipping fetchVariables - missing orgId, user, or token.');
+       logger.log('[DataIntakeContainer useEffect] Skipping fetchVariables - missing orgId, user, or token.');
        // Optionally clear variables if no org is selected?
        // useVariableStore.getState().clearVariables(); // Decide if this is desired behaviour
     }
-  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore, fetchVariables, user, session?.access_token]); // Add dependencies
+  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore, fetchVariables, user, session?.access_token]);
 
   const dates = useMemo(() => {
     const allDates = filteredVariables.flatMap(variable => 
@@ -121,7 +120,7 @@ export const DataIntakeContainer = () => {
   }, [])
 
   const handleConfirmDelete = useCallback((): void => {
-    console.log('[handleConfirmDelete] Org ID being passed:', selectedOrgIdFromOrgStore); 
+    logger.log('[handleConfirmDelete] Org ID being passed:', selectedOrgIdFromOrgStore); 
     handleDeleteVariable(deleteConfirmation.variableId, selectedOrgIdFromOrgStore) 
     closeDeleteConfirmation()
   }, [deleteConfirmation.variableId, handleDeleteVariable, closeDeleteConfirmation, selectedOrgIdFromOrgStore])
@@ -172,7 +171,7 @@ export const DataIntakeContainer = () => {
           isOpen={showImportModal}
           onClose={() => setShowImportModal(false)}
           newVariables={processedVariables}
-          existingVariables={rawVariables}
+          existingVariables={variables}
           onConfirm={handleImportVariables}
         />
       )}

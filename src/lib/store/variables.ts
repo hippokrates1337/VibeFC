@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { logger } from '@/lib/utils/logger'
 
 export interface TimeSeriesData {
   date: Date
@@ -59,7 +60,7 @@ const createVariableStore = () => {
           })),
         clearVariables: () => set({ variables: [] }),
         setSelectedOrganizationId: (organizationId: string | null) => {
-          console.log('[VariableStore] setSelectedOrganizationId called with:', organizationId);
+          logger.log('[VariableStore] setSelectedOrganizationId called with:', organizationId);
           set({ selectedOrganizationId: organizationId });
         },
         fetchVariables: async (userId: string, token: string) => {
@@ -67,7 +68,7 @@ const createVariableStore = () => {
 
           // Prevent duplicate fetches if already loading
           if (state.isLoading) {
-            console.log('[fetchVariables] Variables are already being fetched, skipping duplicate fetch.');
+            logger.log('[fetchVariables] Variables are already being fetched, skipping duplicate fetch.');
             return;
           }
 
@@ -79,13 +80,13 @@ const createVariableStore = () => {
             : false; // Only skip if an org is selected and data for it exists
 
           if (relevantVariablesExist) {
-            console.log('[fetchVariables] Variables already exist in store for the selected organization, skipping fetch.');
+            logger.log('[fetchVariables] Variables already exist in store for the selected organization, skipping fetch.');
             return;
           }
 
-          console.log('[fetchVariables] Starting fetch attempt for user:', userId);
+          logger.log('[fetchVariables] Starting fetch attempt for user:', userId);
           
-          console.log('[fetchVariables] Setting loading state to true');
+          logger.log('[fetchVariables] Setting loading state to true');
           set({ isLoading: true, error: null });
           
           try {
@@ -96,7 +97,7 @@ const createVariableStore = () => {
             }
             const fetchUrl = `${backendUrlBase}/data-intake/variables/${userId}`;
             
-            console.log(`[fetchVariables] Fetching variables from Backend API: ${fetchUrl}`);
+            logger.log(`[fetchVariables] Fetching variables from Backend API: ${fetchUrl}`);
             const response = await fetch(fetchUrl, {
               method: 'GET',
               headers: {
@@ -106,11 +107,11 @@ const createVariableStore = () => {
               cache: 'no-store'
             });
             
-            console.log('[fetchVariables] API response status:', response.status);
+            logger.log('[fetchVariables] API response status:', response.status);
             
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('[fetchVariables] API error response:', errorText);
+              logger.error('[fetchVariables] API error response:', errorText);
               let errorMessage;
               try {
                 const errorData = JSON.parse(errorText);
@@ -122,10 +123,10 @@ const createVariableStore = () => {
             }
             
             const responseText = await response.text();
-            console.log('[fetchVariables] API response length:', responseText.length);
+            logger.log('[fetchVariables] API response length:', responseText.length);
             
             if (!responseText || responseText.trim() === '') {
-              console.log('[fetchVariables] Empty response received from API');
+              logger.log('[fetchVariables] Empty response received from API');
               set({ variables: [], isLoading: false });
               return;
             }
@@ -133,13 +134,13 @@ const createVariableStore = () => {
             let data;
             try {
               data = JSON.parse(responseText);
-              console.log('[fetchVariables] Received data from API with structure:', {
+              logger.log('[fetchVariables] Received data from API with structure:', {
                 hasData: !!data,
                 hasVariables: !!(data && data.variables),
                 variablesCount: data?.variables?.length || 0
               });
             } catch (e) {
-              console.error('[fetchVariables] Failed to parse response JSON:', e);
+              logger.error('[fetchVariables] Failed to parse response JSON:', e);
               throw new Error('Failed to parse response data: ' + (e instanceof Error ? e.message : String(e)));
             }
             
@@ -152,7 +153,7 @@ const createVariableStore = () => {
                         : null;
                       
                       if (parsedValue !== null && isNaN(parsedValue)) {
-                        console.warn(`Non-numeric value detected: ${val.value}`);
+                        logger.warn(`Non-numeric value detected: ${val.value}`);
                       }
                       
                       return {
@@ -164,7 +165,7 @@ const createVariableStore = () => {
                 
                 // Ensure organizationId is mapped from the backend response
                 if (!v.organization_id) {
-                  console.warn(`[fetchVariables] Variable ${v.id} (${v.name}) received from backend is missing organization_id.`);
+                  logger.warn(`[fetchVariables] Variable ${v.id} (${v.name}) received from backend is missing organization_id.`);
                 }
 
                 return {
@@ -176,20 +177,20 @@ const createVariableStore = () => {
                 };
               });
               
-              console.log('[fetchVariables] Successfully loaded variables:', transformedVariables.length);
+              logger.log('[fetchVariables] Successfully loaded variables:', transformedVariables.length);
               set({ variables: transformedVariables, isLoading: false });
             } else {
-              console.log('[fetchVariables] No variables array found in the API response');
+              logger.log('[fetchVariables] No variables array found in the API response');
               set({ variables: [], isLoading: false });
             }
           } catch (error) {
-            console.error('[fetchVariables] Error fetching variables:', error);
+            logger.error('[fetchVariables] Error fetching variables:', error);
             set({ 
               error: error instanceof Error ? error.message : 'Failed to load variables from the server.',
             });
           } finally {
             // Ensure isLoading is always reset
-            console.log('[fetchVariables] Fetch attempt finished, setting isLoading to false.');
+            logger.log('[fetchVariables] Fetch attempt finished, setting isLoading to false.');
             set({ isLoading: false }); 
           }
         },
@@ -198,29 +199,24 @@ const createVariableStore = () => {
         name: 'variable-storage',
         storage: createJSONStorage(() => localStorage),
         onRehydrateStorage: () => (state) => {
-          console.log('[onRehydrateStorage] Starting rehydration...');
+          logger.log('[onRehydrateStorage] Starting rehydration...');
           
           if (state) {
-            console.log('[onRehydrateStorage] State found in storage');
+            logger.log('[onRehydrateStorage] State found in storage');
             
             if (state.variables && state.variables.length > 0) {
               // Rehydrate dates first
-              console.log(`[onRehydrateStorage] Found ${state.variables.length} variables, rehydrating dates...`);
+              logger.log(`[onRehydrateStorage] Found ${state.variables.length} variables, rehydrating dates...`);
               state.variables = state.variables.map(rehydrateVariable);
-              console.log(`[onRehydrateStorage] Store rehydrated with ${state.variables.length} variables.`);
+              logger.log(`[onRehydrateStorage] Store rehydrated with ${state.variables.length} variables.`);
             } else {
-              console.log('[onRehydrateStorage] No variables found in storage');
+              logger.log('[onRehydrateStorage] No variables found in storage');
             }
           } else {
-            console.log('[onRehydrateStorage] No state found in storage');
+            logger.log('[onRehydrateStorage] No state found in storage');
           }
           
-          // Always fetch variables after rehydration completes
-          // Use setTimeout to ensure the store is fully initialized
-          console.log('[onRehydrateStorage] Scheduling fetch after rehydration');
-          setTimeout(() => {
-            console.log('[onRehydrateStorage] Rehydration complete.');
-          }, 100);
+          logger.log('[onRehydrateStorage] Rehydration complete.');
         }
       }
     )

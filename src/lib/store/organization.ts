@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase, Organization, OrganizationMember } from '@/lib/supabase';
+import { logger } from '@/lib/utils/logger';
 
 interface OrganizationState {
   organizations: Organization[];
@@ -32,9 +33,9 @@ export const useOrganizationStore = create<OrganizationState>()(
       error: null,
 
       fetchOrganizationData: async (userId, token) => {
-        console.log('[OrganizationStore] Fetching organization data for user:', userId);
+        logger.log('[OrganizationStore] Fetching organization data for user:', userId);
         if (get().isLoading) {
-          console.log('[OrganizationStore] Already loading, skipping fetch.');
+          logger.log('[OrganizationStore] Already loading, skipping fetch.');
           return;
         }
         set({ isLoading: true, error: null });
@@ -50,11 +51,11 @@ export const useOrganizationStore = create<OrganizationState>()(
           if (membershipError) throw membershipError;
 
           if (!memberships || memberships.length === 0) {
-            console.log('[OrganizationStore] No memberships found.');
+            logger.log('[OrganizationStore] No memberships found.');
             set({ organizations: [], currentOrganization: null, userRole: null, members: [], isLoading: false });
             return;
           }
-          console.log(`[OrganizationStore] Found ${memberships.length} memberships.`);
+          logger.log(`[OrganizationStore] Found ${memberships.length} memberships.`);
 
           const orgIds = memberships.map((m: { organization_id: string; role: string }) => m.organization_id);
           const { data: orgs, error: orgsError } = await supabase
@@ -64,31 +65,30 @@ export const useOrganizationStore = create<OrganizationState>()(
 
           if (orgsError) throw orgsError;
           if (!orgs) throw new Error('Failed to fetch organization details.');
-          console.log(`[OrganizationStore] Found ${orgs.length} organization details.`);
+          logger.log(`[OrganizationStore] Found ${orgs.length} organization details.`);
 
           set({ organizations: orgs });
 
-          const savedOrgId = localStorage.getItem('currentOrganizationId');
-          const currentOrg = savedOrgId
-            ? orgs.find((org: Organization) => org.id === savedOrgId) || orgs[0]
+          const state = get();
+          const persistedOrgId = state.currentOrganization?.id;
+          const currentOrg = persistedOrgId
+            ? orgs.find((org: Organization) => org.id === persistedOrgId) || orgs[0]
             : orgs[0];
 
           if (currentOrg) {
-            console.log(`[OrganizationStore] Setting current organization to: ${currentOrg.name} (ID: ${currentOrg.id})`);
+            logger.log(`[OrganizationStore] Setting current organization to: ${currentOrg.name} (ID: ${currentOrg.id})`);
             const membership = memberships.find((m: { organization_id: string; role: string }) => m.organization_id === currentOrg.id);
             const role = membership?.role as 'admin' | 'editor' | 'viewer' || null;
             set({ currentOrganization: currentOrg, userRole: role });
-            localStorage.setItem('currentOrganizationId', currentOrg.id);
             
             await get().loadMembers(currentOrg.id, token);
           } else {
-             console.log('[OrganizationStore] No current organization could be determined.');
+             logger.log('[OrganizationStore] No current organization could be determined.');
              set({ currentOrganization: null, userRole: null, members: [] });
-             localStorage.removeItem('currentOrganizationId');
           }
 
         } catch (err: any) {
-          console.error('[OrganizationStore] Error fetching organization data:', err);
+          logger.error('[OrganizationStore] Error fetching organization data:', err);
           set({ error: err.message || 'Failed to load organization data.', currentOrganization: null, userRole: null, members: [] });
         } finally {
           set({ isLoading: false });
@@ -96,7 +96,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
 
       loadMembers: async (organizationId, token) => {
-        console.log(`[OrganizationStore] Loading members for org ID: ${organizationId}`);
+        logger.log(`[OrganizationStore] Loading members for org ID: ${organizationId}`);
         try {
           await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
@@ -108,7 +108,7 @@ export const useOrganizationStore = create<OrganizationState>()(
           if (error) throw error;
           
           const membersData = data || [];
-          console.log(`[OrganizationStore] Found ${membersData.length} members.`);
+          logger.log(`[OrganizationStore] Found ${membersData.length} members.`);
           const mappedMembers = membersData.map((member: any) => ({
             id: member.id as number, 
             organization_id: member.organization_id as string,
@@ -119,19 +119,18 @@ export const useOrganizationStore = create<OrganizationState>()(
           }));
           set({ members: mappedMembers });
         } catch (err: any) {
-          console.error(`[OrganizationStore] Error loading members for org ${organizationId}:`, err);
+          logger.error(`[OrganizationStore] Error loading members for org ${organizationId}:`, err);
           set({ members: [], error: err.message || 'Failed to load members.' });
-        } finally {
         }
       },
 
       switchOrganization: async (organizationId: string, userId: string, token: string) => {
-        console.log(`[OrganizationStore] Switching to organization ID: ${organizationId}`);
+        logger.log(`[OrganizationStore] Switching to organization ID: ${organizationId}`);
         const state = get();
         const org = state.organizations.find((o: Organization) => o.id === organizationId);
 
         if (!org) {
-          console.error(`[OrganizationStore] Cannot switch to org ${organizationId}: Not found.`);
+          logger.error(`[OrganizationStore] Cannot switch to org ${organizationId}: Not found.`);
           return;
         }
 
@@ -151,13 +150,12 @@ export const useOrganizationStore = create<OrganizationState>()(
           const role = membershipData?.role as 'admin' | 'editor' | 'viewer' || null;
           
           set({ currentOrganization: org, userRole: role });
-          localStorage.setItem('currentOrganizationId', org.id);
           
           await state.loadMembers(org.id, token);
           
-          console.log(`[OrganizationStore] Switched to organization: ${org.name} with role: ${role}`);
+          logger.log(`[OrganizationStore] Switched to organization: ${org.name} with role: ${role}`);
         } catch (err: any) {
-          console.error(`[OrganizationStore] Error switching to org ${organizationId}:`, err);
+          logger.error(`[OrganizationStore] Error switching to org ${organizationId}:`, err);
           set({ error: err.message || 'Failed to switch organization.' });
         } finally {
           set({ isLoading: false });
@@ -165,7 +163,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
 
       clearOrganizationData: () => {
-        console.log('[OrganizationStore] Clearing organization data.');
+        logger.log('[OrganizationStore] Clearing organization data.');
         set({
           organizations: [],
           currentOrganization: null,
@@ -177,7 +175,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
       
       createOrganization: async (name: string, userId: string, token: string) => {
-        console.log(`[OrganizationStore] Creating new organization: ${name}`);
+        logger.log(`[OrganizationStore] Creating new organization: ${name}`);
         set({ isLoading: true, error: null });
         
         try {
@@ -199,8 +197,8 @@ export const useOrganizationStore = create<OrganizationState>()(
               user_id: userId,
               role: 'admin'
             }, {
-              onConflict: 'organization_id,user_id', // ✅ Correct: comma-separated string
-              ignoreDuplicates: true // optional
+              onConflict: 'organization_id,user_id',
+              ignoreDuplicates: true
             });
 
           if (memberError) throw memberError;
@@ -212,14 +210,12 @@ export const useOrganizationStore = create<OrganizationState>()(
             userRole: 'admin'
           });
           
-          localStorage.setItem('currentOrganizationId', newOrg.id);
-          
           await get().loadMembers(newOrg.id, token);
           
-          console.log(`[OrganizationStore] Created organization: ${newOrg.name} (ID: ${newOrg.id})`);
+          logger.log(`[OrganizationStore] Created organization: ${newOrg.name} (ID: ${newOrg.id})`);
           return newOrg;
         } catch (err: any) {
-          console.error('[OrganizationStore] Error creating organization:', err);
+          logger.error('[OrganizationStore] Error creating organization:', err);
           set({ error: err.message || 'Failed to create organization.' });
           return null;
         } finally {
@@ -228,7 +224,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
       
       updateOrganization: async (id: string, name: string, token: string) => {
-        console.log(`[OrganizationStore] Updating organization ${id} to: ${name}`);
+        logger.log(`[OrganizationStore] Updating organization ${id} to: ${name}`);
         set({ isLoading: true, error: null });
         
         try {
@@ -255,10 +251,10 @@ export const useOrganizationStore = create<OrganizationState>()(
             set({ currentOrganization: updatedOrg });
           }
           
-          console.log(`[OrganizationStore] Updated organization: ${updatedOrg.name}`);
+          logger.log(`[OrganizationStore] Updated organization: ${updatedOrg.name}`);
           return updatedOrg;
         } catch (err: any) {
-          console.error(`[OrganizationStore] Error updating organization ${id}:`, err);
+          logger.error(`[OrganizationStore] Error updating organization ${id}:`, err);
           set({ error: err.message || 'Failed to update organization.' });
           return null;
         } finally {
@@ -267,7 +263,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
       
       deleteOrganization: async (id: string, token: string) => {
-        console.log(`[OrganizationStore] Deleting organization: ${id}`);
+        logger.log(`[OrganizationStore] Deleting organization: ${id}`);
         set({ isLoading: true, error: null });
         
         try {
@@ -280,12 +276,12 @@ export const useOrganizationStore = create<OrganizationState>()(
             .eq('organization_id', id);
             
           if (memberDeleteError) {
-            console.error(`[OrganizationStore] Error deleting members for org ${id}:`, memberDeleteError);
+            logger.error(`[OrganizationStore] Error deleting members for org ${id}:`, memberDeleteError);
             // Optionally, decide if you want to proceed with organization deletion even if members fail to delete
             // For now, we'll throw the error to stop the process
             throw memberDeleteError;
           }
-          console.log(`[OrganizationStore] Successfully deleted members for org ${id}.`);
+          logger.log(`[OrganizationStore] Successfully deleted members for org ${id}.`);
           
           // Now, delete the organization itself
           const { error } = await supabase
@@ -306,21 +302,19 @@ export const useOrganizationStore = create<OrganizationState>()(
                 userRole: null,
                 members: []
               });
-              localStorage.setItem('currentOrganizationId', nextOrg.id);
             } else {
               set({ 
                 currentOrganization: null,
                 userRole: null,
                 members: []
               });
-              localStorage.removeItem('currentOrganizationId');
             }
           }
           
-          console.log(`[OrganizationStore] Deleted organization: ${id}`);
+          logger.log(`[OrganizationStore] Deleted organization: ${id}`);
           return true;
         } catch (err: any) {
-          console.error(`[OrganizationStore] Error deleting organization ${id}:`, err);
+          logger.error(`[OrganizationStore] Error deleting organization ${id}:`, err);
           set({ error: err.message || 'Failed to delete organization.' });
           return false;
         } finally {
@@ -329,7 +323,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
       
       inviteMember: async (email: string, role: string, currentOrgId: string, token: string) => {
-        console.log(`[OrganizationStore] Inviting ${email} to organization ${currentOrgId} with role: ${role}`);
+        logger.log(`[OrganizationStore] Inviting ${email} to organization ${currentOrgId} with role: ${role}`);
         set({ isLoading: true, error: null });
         
         try {
@@ -367,10 +361,10 @@ export const useOrganizationStore = create<OrganizationState>()(
           
           await get().loadMembers(currentOrgId, token);
           
-          console.log(`[OrganizationStore] Successfully invited ${email} to organization ${currentOrgId}`);
+          logger.log(`[OrganizationStore] Successfully invited ${email} to organization ${currentOrgId}`);
           return true;
         } catch (err: any) {
-          console.error(`[OrganizationStore] Error inviting member to org ${currentOrgId}:`, err);
+          logger.error(`[OrganizationStore] Error inviting member to org ${currentOrgId}:`, err);
           set({ error: err.message || 'Failed to invite member.' });
           return false;
         } finally {
@@ -379,7 +373,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
       
       updateMemberRole: async (userId: string, role: string, currentOrgId: string, token: string) => {
-        console.log(`[OrganizationStore] Updating role for user ${userId} to ${role} in org ${currentOrgId}`);
+        logger.log(`[OrganizationStore] Updating role for user ${userId} to ${role} in org ${currentOrgId}`);
         set({ isLoading: true, error: null });
         
         try {
@@ -407,10 +401,10 @@ export const useOrganizationStore = create<OrganizationState>()(
               set({ userRole: role as 'admin' | 'editor' | 'viewer' });
           }
           
-          console.log(`[OrganizationStore] Updated role for user ${userId} to ${role}`);
+          logger.log(`[OrganizationStore] Updated role for user ${userId} to ${role}`);
           return true;
         } catch (err: any) {
-          console.error(`[OrganizationStore] Error updating member role in org ${currentOrgId}:`, err);
+          logger.error(`[OrganizationStore] Error updating member role in org ${currentOrgId}:`, err);
           set({ error: err.message || 'Failed to update member role.' });
           return false;
         } finally {
@@ -419,7 +413,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
       
       removeMember: async (userId: string, currentOrgId: string, token: string) => {
-        console.log(`[OrganizationStore] Removing user ${userId} from org ${currentOrgId}`);
+        logger.log(`[OrganizationStore] Removing user ${userId} from org ${currentOrgId}`);
         set({ isLoading: true, error: null });
         
         try {
@@ -439,10 +433,10 @@ export const useOrganizationStore = create<OrganizationState>()(
           
           set({ members: updatedMembers });
           
-          console.log(`[OrganizationStore] Removed user ${userId} from org ${currentOrgId}`);
+          logger.log(`[OrganizationStore] Removed user ${userId} from org ${currentOrgId}`);
           return true;
         } catch (err: any) {
-          console.error(`[OrganizationStore] Error removing member from org ${currentOrgId}:`, err);
+          logger.error(`[OrganizationStore] Error removing member from org ${currentOrgId}:`, err);
           set({ error: err.message || 'Failed to remove member.' });
           return false;
         } finally {
@@ -454,13 +448,13 @@ export const useOrganizationStore = create<OrganizationState>()(
       name: 'organization-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ 
-         __persistedState: null 
-      }), 
+        currentOrganization: state.currentOrganization ? { id: state.currentOrganization.id } : null 
+      }),
       onRehydrateStorage: () => (state, error) => {
         if (error) {
-          console.error('[OrganizationStore] Failed to rehydrate', error)
+          logger.error('[OrganizationStore] Failed to rehydrate', error)
         } else {
-          console.log('[OrganizationStore] Rehydration successful (or nothing to rehydrate).')
+          logger.log('[OrganizationStore] Rehydration successful')
         }
       },
     }

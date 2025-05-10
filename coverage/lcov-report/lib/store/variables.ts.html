@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">91.06% </span>
+                <span class="strong">91.34% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>214/235</span>
+                <span class='fraction'>211/231</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">91.06% </span>
+                <span class="strong">91.34% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>214/235</span>
+                <span class='fraction'>211/231</span>
             </div>
         
             
@@ -293,11 +293,8 @@
 <a name='L228'></a><a href='#L228'>228</a>
 <a name='L229'></a><a href='#L229'>229</a>
 <a name='L230'></a><a href='#L230'>230</a>
-<a name='L231'></a><a href='#L231'>231</a>
-<a name='L232'></a><a href='#L232'>232</a>
-<a name='L233'></a><a href='#L233'>233</a>
-<a name='L234'></a><a href='#L234'>234</a>
-<a name='L235'></a><a href='#L235'>235</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L231'></a><a href='#L231'>231</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -514,11 +511,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -533,6 +525,7 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { logger } from '@/lib/utils/logger'
 &nbsp;
 export interface TimeSeriesData {
   date: Date
@@ -592,7 +585,7 @@ const createVariableStore = () =&gt; {
           })),
         clearVariables: () =&gt; set({ variables: [] }),
         setSelectedOrganizationId: (<span class="fstat-no" title="function not covered" >organizationId: string | null) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >          console.log('[VariableStore] setSelectedOrganizationId called with:', organizationId);</span>
+<span class="cstat-no" title="statement not covered" >          logger.log('[VariableStore] setSelectedOrganizationId called with:', organizationId);</span>
 <span class="cstat-no" title="statement not covered" >          set({ selectedOrganizationId: organizationId });</span>
         },
         fetchVariables: async (userId: string, token: string) =&gt; {
@@ -600,7 +593,7 @@ const createVariableStore = () =&gt; {
 &nbsp;
           // Prevent duplicate fetches if already loading
           if (state.isLoading) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
-<span class="cstat-no" title="statement not covered" >            console.log('[fetchVariables] Variables are already being fetched, skipping duplicate fetch.');</span>
+<span class="cstat-no" title="statement not covered" >            logger.log('[fetchVariables] Variables are already being fetched, skipping duplicate fetch.');</span>
 <span class="cstat-no" title="statement not covered" >            return;</span>
 <span class="cstat-no" title="statement not covered" >          }</span>
 &nbsp;
@@ -612,13 +605,13 @@ const createVariableStore = () =&gt; {
             : false; // Only skip if an org is selected and data for it exists
 &nbsp;
           if (relevantVariablesExist) {
-            console.log('[fetchVariables] Variables already exist in store for the selected organization, skipping fetch.');
+            logger.log('[fetchVariables] Variables already exist in store for the selected organization, skipping fetch.');
             return;
           }
 &nbsp;
-          console.log('[fetchVariables] Starting fetch attempt for user:', userId);
+          logger.log('[fetchVariables] Starting fetch attempt for user:', userId);
           
-          console.log('[fetchVariables] Setting loading state to true');
+          logger.log('[fetchVariables] Setting loading state to true');
           set({ isLoading: true, error: null });
           
           try {
@@ -629,7 +622,7 @@ const createVariableStore = () =&gt; {
 <span class="cstat-no" title="statement not covered" >            }</span>
             const fetchUrl = `${backendUrlBase}/data-intake/variables/${userId}`;
             
-            console.log(`[fetchVariables] Fetching variables from Backend API: ${fetchUrl}`);
+            logger.log(`[fetchVariables] Fetching variables from Backend API: ${fetchUrl}`);
             const response = await fetch(fetchUrl, {
               method: 'GET',
               headers: {
@@ -639,11 +632,11 @@ const createVariableStore = () =&gt; {
               cache: 'no-store'
             });
             
-            console.log('[fetchVariables] API response status:', response.status);
+            logger.log('[fetchVariables] API response status:', response.status);
             
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('[fetchVariables] API error response:', errorText);
+              logger.error('[fetchVariables] API error response:', errorText);
               let errorMessage;
               try {
                 const errorData = JSON.parse(errorText);
@@ -655,10 +648,10 @@ const createVariableStore = () =&gt; {
             }
             
             const responseText = await response.text();
-            console.log('[fetchVariables] API response length:', responseText.length);
+            logger.log('[fetchVariables] API response length:', responseText.length);
             
             if (!responseText || responseText.trim() === '') <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
-<span class="cstat-no" title="statement not covered" >              console.log('[fetchVariables] Empty response received from API');</span>
+<span class="cstat-no" title="statement not covered" >              logger.log('[fetchVariables] Empty response received from API');</span>
 <span class="cstat-no" title="statement not covered" >              set({ variables: [], isLoading: false });</span>
 <span class="cstat-no" title="statement not covered" >              return;</span>
 <span class="cstat-no" title="statement not covered" >            }</span>
@@ -666,13 +659,13 @@ const createVariableStore = () =&gt; {
             let data;
             try {
               data = JSON.parse(responseText);
-              console.log('[fetchVariables] Received data from API with structure:', {
+              logger.log('[fetchVariables] Received data from API with structure:', {
                 hasData: !!data,
                 hasVariables: !!(data &amp;&amp; data.variables),
                 variablesCount: data?.variables?.length || 0
               });
             } <span class="branch-0 cbranch-no" title="branch not covered" >catch (e) {</span>
-<span class="cstat-no" title="statement not covered" >              console.error('[fetchVariables] Failed to parse response JSON:', e);</span>
+<span class="cstat-no" title="statement not covered" >              logger.error('[fetchVariables] Failed to parse response JSON:', e);</span>
 <span class="cstat-no" title="statement not covered" >              throw new Error('Failed to parse response data: ' + (e instanceof Error ? e.message : String(e)));</span>
 <span class="cstat-no" title="statement not covered" >            }</span>
             
@@ -685,7 +678,7 @@ const createVariableStore = () =&gt; {
                         : null;
                       
                       if (parsedValue !== null &amp;&amp; isNaN(parsedValue)) {
-                        console.warn(`Non-numeric value detected: ${val.value}`);
+                        logger.warn(`Non-numeric value detected: ${val.value}`);
                       }
                       
                       return {
@@ -697,7 +690,7 @@ const createVariableStore = () =&gt; {
                 
                 // Ensure organizationId is mapped from the backend response
                 if (!v.organization_id) {
-                  console.warn(`[fetchVariables] Variable ${v.id} (${v.name}) received from backend is missing organization_id.`);
+                  logger.warn(`[fetchVariables] Variable ${v.id} (${v.name}) received from backend is missing organization_id.`);
                 }
 &nbsp;
                 return {
@@ -709,20 +702,20 @@ const createVariableStore = () =&gt; {
                 };
               });
               
-              console.log('[fetchVariables] Successfully loaded variables:', transformedVariables.length);
+              logger.log('[fetchVariables] Successfully loaded variables:', transformedVariables.length);
               set({ variables: transformedVariables, isLoading: false });
             } else {
-              console.log('[fetchVariables] No variables array found in the API response');
+              logger.log('[fetchVariables] No variables array found in the API response');
               set({ variables: [], isLoading: false });
             }
           } catch (error) {
-            console.error('[fetchVariables] Error fetching variables:', error);
+            logger.error('[fetchVariables] Error fetching variables:', error);
             set({ 
               error: error instanceof Error ? error.message<span class="branch-0 cbranch-no" title="branch not covered" > : 'Failed to load variables from the server.',</span>
             });
           } finally {
             // Ensure isLoading is always reset
-            console.log('[fetchVariables] Fetch attempt finished, setting isLoading to false.');
+            logger.log('[fetchVariables] Fetch attempt finished, setting isLoading to false.');
             set({ isLoading: false }); 
           }
         },
@@ -731,29 +724,24 @@ const createVariableStore = () =&gt; {
         name: 'variable-storage',
         storage: createJSONStorage(() =&gt; localStorage),
         onRehydrateStorage: () =&gt; (state) =&gt; {
-          console.log('[onRehydrateStorage] Starting rehydration...');
+          logger.log('[onRehydrateStorage] Starting rehydration...');
           
           if (state) {
-            console.log('[onRehydrateStorage] State found in storage');
+            logger.log('[onRehydrateStorage] State found in storage');
             
             if (state.variables &amp;&amp; state.variables.length &gt; 0) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >              // Rehydrate dates first</span>
-<span class="cstat-no" title="statement not covered" >              console.log(`[onRehydrateStorage] Found ${state.variables.length} variables, rehydrating dates...`);</span>
+<span class="cstat-no" title="statement not covered" >              logger.log(`[onRehydrateStorage] Found ${state.variables.length} variables, rehydrating dates...`);</span>
 <span class="cstat-no" title="statement not covered" >              state.variables = state.variables.map(rehydrateVariable);</span>
-<span class="cstat-no" title="statement not covered" >              console.log(`[onRehydrateStorage] Store rehydrated with ${state.variables.length} variables.`);</span>
+<span class="cstat-no" title="statement not covered" >              logger.log(`[onRehydrateStorage] Store rehydrated with ${state.variables.length} variables.`);</span>
             } else {
-              console.log('[onRehydrateStorage] No variables found in storage');
+              logger.log('[onRehydrateStorage] No variables found in storage');
             }
           }<span class="branch-0 cbranch-no" title="branch not covered" > else {</span>
-<span class="cstat-no" title="statement not covered" >            console.log('[onRehydrateStorage] No state found in storage');</span>
+<span class="cstat-no" title="statement not covered" >            logger.log('[onRehydrateStorage] No state found in storage');</span>
 <span class="cstat-no" title="statement not covered" >          }</span>
           
-          // Always fetch variables after rehydration completes
-          // Use setTimeout to ensure the store is fully initialized
-          console.log('[onRehydrateStorage] Scheduling fetch after rehydration');
-          setTimeout(() =&gt; {
-<span class="cstat-no" title="statement not covered" >            console.log('[onRehydrateStorage] Rehydration complete.');</span>
-          }, 100);
+          logger.log('[onRehydrateStorage] Rehydration complete.');
         }
       }
     )
@@ -772,7 +760,7 @@ export const useVariableError = <span class="fstat-no" title="function not cover
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-05-02T16:27:59.227Z
+                at 2025-05-10T13:11:52.975Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
