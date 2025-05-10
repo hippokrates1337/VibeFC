@@ -39,7 +39,14 @@ export class DataIntakeService {
           const id = variable.id; // Use the provided ID from the client
           const name = variable.name || 'Unnamed Variable';
           const type = variable.type || VariableType.UNKNOWN;
-          const userId = variable.userId || 'anonymous';
+          const userId = variable.user_id; // Read user_id from DTO
+          const organizationId = variable.organization_id; // Read organization_id from DTO
+          
+          // Validate required fields
+          if (!userId || !organizationId) {
+            this.logger.error(`Missing userId (${userId}) or organizationId (${organizationId}) for variable ${name}`);
+            throw new Error(`User ID and Organization ID are required for variable ${name}`);
+          }
           
           // Validate type
           const validType = Object.values(VariableType).includes(type as VariableType) 
@@ -58,6 +65,7 @@ export class DataIntakeService {
               type: validType,
               values: normalizedValues,
               user_id: userId,
+              organization_id: organizationId, // Add organization_id to insert
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
@@ -92,37 +100,65 @@ export class DataIntakeService {
   // READ - Get variables by user ID
   async getVariablesByUser(userId: string) {
     try {
-      this.logger.log(`Fetching variables for user: ${userId}`);
+      this.logger.log(`Fetching organizations for user: ${userId}`);
       
-      const { data, error } = await this.supabase.client
-        .from('variables')
-        .select('*')
+      // Step 1: Get organization IDs for the user
+      const { data: orgMembers, error: orgError } = await this.supabase.client
+        .from('organization_members') // ASSUMPTION: Table linking users and orgs
+        .select('organization_id')
         .eq('user_id', userId);
-      
-      if (error) {
-        this.logger.error(`Failed to fetch variables for user ${userId}: ${error.message}`);
-        throw new Error(`Failed to fetch variables: ${error.message}`);
+
+      if (orgError) {
+        this.logger.error(`Failed to fetch organizations for user ${userId}: ${orgError.message}`);
+        throw new Error(`Failed to fetch organizations: ${orgError.message}`);
       }
-      
-      if (!data || data.length === 0) {
-        this.logger.warn(`No variables found for user ${userId}`);
+
+      if (!orgMembers || orgMembers.length === 0) {
+        this.logger.warn(`User ${userId} is not a member of any organization.`);
         return {
-          message: 'No variables found',
+          message: 'User not found in any organization or no variables available for their organizations',
           count: 0,
           variables: [],
         };
       }
-      
-      this.logger.log(`Found ${data.length} variables for user ${userId}`);
-      
+
+      const organizationIds = orgMembers.map(member => member.organization_id);
+      this.logger.log(`User ${userId} belongs to organizations: ${organizationIds.join(', ')}`);
+
+      // Step 2: Fetch variables belonging to those organizations
+      this.logger.log(`Fetching variables for organizations: ${organizationIds.join(', ')}`);
+      const { data, error } = await this.supabase.client
+        .from('variables')
+        .select('*')
+        .in('organization_id', organizationIds); // ASSUMPTION: 'variables' table has 'organization_id'
+
+      if (error) {
+        this.logger.error(`Failed to fetch variables for organizations ${organizationIds.join(', ')}: ${error.message}`);
+        throw new Error(`Failed to fetch variables: ${error.message}`);
+      }
+
+      if (!data || data.length === 0) {
+        this.logger.warn(`No variables found for organizations ${organizationIds.join(', ')}`);
+        // It's possible the user is in orgs, but those orgs have no variables
+        return {
+          message: 'No variables found for the user\'s organizations',
+          count: 0,
+          variables: [],
+        };
+      }
+
+      this.logger.log(`Found ${data.length} variables for organizations associated with user ${userId}`);
+
       return {
         message: 'Variables retrieved successfully',
         count: data.length,
         variables: data,
       };
     } catch (error) {
-      this.logger.error(`Error fetching variables for user ${userId}: ${error.message}`);
-      throw new Error(`Error fetching variables: ${error.message}`);
+      // Catch potential errors from the revised logic or re-thrown errors
+      this.logger.error(`Error in getVariablesByUser for user ${userId}: ${error.message}`);
+      // Ensure a consistent error response structure if desired, or rethrow
+      throw new Error(`Error fetching variables by user's organizations: ${error.message}`);
     }
   }
 
@@ -212,7 +248,11 @@ export class DataIntakeService {
   }
 
   // DELETE - Delete variables
-  async deleteVariables(deleteVariablesDto: DeleteVariablesDto) {
+  async deleteVariables(
+    deleteVariablesDto: DeleteVariablesDto, 
+    requestingUserId: string, // Added user ID from controller
+    requestingOrgId: string // Added organization ID from controller
+  ) {
     const { ids } = deleteVariablesDto;
     
     if (!ids || ids.length === 0) {
@@ -226,14 +266,23 @@ export class DataIntakeService {
     try {
       this.logger.log(`Deleting ${ids.length} variables`);
       
-      // First verify which variables exist
+      // === Security Enhancement: We need user context here ===
+      // The current implementation doesn't receive the user ID or organization ID.
+      // To securely delete, the service method needs access to the requesting user's ID
+      // and their associated organization(s).
+      // This requires modifying the controller to pass the user context (e.g., req.user.userId)
+      // and potentially the organization context to this service method.
+      
+      // First verify which variables exist AND belong to the user/org
       const { data: existingData, error: existingError } = await this.supabase.client
         .from('variables')
         .select('id')
-        .in('id', ids);
-      
+        .in('id', ids)
+        .eq('user_id', requestingUserId) // Check ownership
+        .eq('organization_id', requestingOrgId); // Check organization membership
+        
       if (existingError) {
-        this.logger.error(`Failed to verify existing variables: ${existingError.message}`);
+        this.logger.error(`Failed to verify existing variables for user ${requestingUserId} in org ${requestingOrgId}: ${existingError.message}`);
         throw new Error(`Failed to verify existing variables: ${existingError.message}`);
       }
       
@@ -257,10 +306,12 @@ export class DataIntakeService {
       const { error: deleteError } = await this.supabase.client
         .from('variables')
         .delete()
-        .in('id', existingIds);
+        .in('id', existingIds)
+        .eq('user_id', requestingUserId) // Ensure user owns the records
+        .eq('organization_id', requestingOrgId); // Ensure records belong to the org
       
       if (deleteError) {
-        this.logger.error(`Failed to delete variables: ${deleteError.message}`);
+        this.logger.error(`Failed to delete variables for user ${requestingUserId} in org ${requestingOrgId}: ${deleteError.message}`);
         throw new Error(`Failed to delete variables: ${deleteError.message}`);
       }
       
@@ -283,40 +334,54 @@ export class DataIntakeService {
     }
     
     return values
-      .filter(item => item && typeof item === 'object')
-      .map(item => {
-        // Ensure date is a string
+      .filter(item => item && typeof item === 'object') // Keep initial filter for null/non-object entries
+      .map((item: any) => { // Explicitly type item as any for flexible processing
+        // Ensure date is a valid YYYY-MM-DD string
         const dateValue = item.date;
         let dateStr: string | null = null;
         
         if (typeof dateValue === 'string') {
-          dateStr = dateValue;
-        } else if (typeof dateValue === 'object' && dateValue !== null && 'toISOString' in dateValue) {
-          try {
-            const dateObj = dateValue as { toISOString(): string };
-            dateStr = dateObj.toISOString().split('T')[0];
-          } catch (e) {
-            this.logger.warn(`Error converting date object: ${e.message}`);
+          // Very basic check, consider a regex or date library for stricter validation
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) { 
+            dateStr = dateValue;
           }
+        } else if (dateValue instanceof Date && !isNaN(dateValue.getTime())) { // Check if it's a Date object
+           try {
+             dateStr = dateValue.toISOString().split('T')[0];
+           } catch (e) {
+             // already handled by isNaN check, but keep for safety
+           }
+        }
+
+        // If date is invalid, skip this entry entirely
+        if (!dateStr) {
+          this.logger.warn(`Skipping entry with invalid or missing date format for variable ${variableName}: ${JSON.stringify(item)}`);
+          return null;
         }
         
-        // Ensure value is a number or null
-        let numValue: number | null = null;
+        // Ensure value is a finite number or null
+        let numValue: number | null = null; // Default to null
         if (item.value === null) {
           numValue = null;
         } else if (typeof item.value === 'number') {
-          numValue = item.value;
-        } else if (item.value !== undefined && !isNaN(Number(item.value))) {
-          numValue = Number(item.value);
-        }
-        
-        if (!dateStr) {
-          this.logger.warn(`Skipping entry with invalid date format for variable ${variableName}`);
-          return null;
+          if (isFinite(item.value)) {
+            numValue = item.value;
+          } else {
+            this.logger.warn(`Converting non-finite number value (${item.value}) to null for variable ${variableName}`);
+          } // else stays null (handles Infinity, -Infinity, NaN)
+        } else if (item.value !== undefined) { // Handle strings etc.
+          const parsed = Number(item.value);
+          if (!isNaN(parsed) && isFinite(parsed)) {
+            numValue = parsed;
+          } else {
+             this.logger.warn(`Could not parse value (${item.value}) to finite number, setting to null for variable ${variableName}`);
+          }// else stays null
+        } else {
+           this.logger.warn(`Missing value, setting to null for variable ${variableName}: ${JSON.stringify(item)}`);
         }
         
         return { date: dateStr, value: numValue };
       })
-      .filter((item): item is TimeSeriesPoint => item !== null);
+      .filter((item): item is TimeSeriesPoint => item !== null); // Filter out entries that returned null
   }
 } 

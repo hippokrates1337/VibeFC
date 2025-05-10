@@ -16,6 +16,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DataIntakeController = void 0;
 const common_1 = require("@nestjs/common");
 const data_intake_service_1 = require("./data-intake.service");
+const jwt_auth_guard_1 = require("../common/guards/jwt-auth.guard");
 const add_variables_dto_1 = require("./dto/add-variables.dto");
 const update_variables_dto_1 = require("./dto/update-variables.dto");
 const delete_variables_dto_1 = require("./dto/delete-variables.dto");
@@ -24,11 +25,22 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
         this.dataIntakeService = dataIntakeService;
         this.logger = new common_1.Logger(DataIntakeController_1.name);
     }
-    async addVariables(addVariablesDto) {
+    async addVariables(req, addVariablesDto) {
         try {
+            this.logger.log(`Received add variables request with ${addVariablesDto?.variables?.length || 0} variables`);
             if (!addVariablesDto.variables || addVariablesDto.variables.length === 0) {
                 this.logger.warn('Empty variables array in request');
                 throw new common_1.HttpException('No variables provided in request', common_1.HttpStatus.BAD_REQUEST);
+            }
+            if (req.user) {
+                addVariablesDto.variables.forEach(variable => {
+                    if (!variable.user_id) {
+                        variable.user_id = req.user.userId;
+                    }
+                    if (!variable.organization_id && req.user.organizationId) {
+                        variable.organization_id = req.user.organizationId;
+                    }
+                });
             }
             const result = await this.dataIntakeService.addVariables(addVariablesDto);
             return result;
@@ -47,6 +59,7 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
     }
     async getVariablesByUser(userId) {
         try {
+            this.logger.log(`Fetching variables for user: ${userId}`);
             if (!userId) {
                 this.logger.warn('No user ID provided in request');
                 throw new common_1.HttpException('User ID is required', common_1.HttpStatus.BAD_REQUEST);
@@ -66,8 +79,9 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
             }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-    async updateVariables(updateVariablesDto) {
+    async updateVariables(req, updateVariablesDto) {
         try {
+            this.logger.log(`Received update variables request with ${updateVariablesDto?.variables?.length || 0} variables`);
             if (!updateVariablesDto.variables || updateVariablesDto.variables.length === 0) {
                 this.logger.warn('Empty variables array in update request');
                 throw new common_1.HttpException('No variables provided for update', common_1.HttpStatus.BAD_REQUEST);
@@ -87,13 +101,23 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
             }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-    async deleteVariables(deleteVariablesDto) {
+    async deleteVariables(req, deleteVariablesDto) {
         try {
-            if (!deleteVariablesDto.ids || deleteVariablesDto.ids.length === 0) {
+            this.logger.log(`Received delete variables request with ${deleteVariablesDto?.ids?.length || 0} variables from user ${req.user?.userId}`);
+            const { ids, organizationId } = deleteVariablesDto;
+            if (!ids || ids.length === 0) {
                 this.logger.warn('Empty IDs array in delete request');
                 throw new common_1.HttpException('No variable IDs provided for deletion', common_1.HttpStatus.BAD_REQUEST);
             }
-            const result = await this.dataIntakeService.deleteVariables(deleteVariablesDto);
+            if (!organizationId) {
+                this.logger.warn('Organization ID missing in delete request body');
+                throw new common_1.HttpException('Organization ID must be provided in the request body', common_1.HttpStatus.BAD_REQUEST);
+            }
+            if (!req.user || !req.user.userId) {
+                this.logger.error('User ID missing in request context for deletion');
+                throw new common_1.HttpException('Authentication context is missing', common_1.HttpStatus.UNAUTHORIZED);
+            }
+            const result = await this.dataIntakeService.deleteVariables({ ids }, req.user.userId, organizationId);
             return result;
         }
         catch (error) {
@@ -112,9 +136,11 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
 exports.DataIntakeController = DataIntakeController;
 __decorate([
     (0, common_1.Post)('variables'),
-    __param(0, (0, common_1.Body)()),
+    (0, common_1.HttpCode)(201),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [add_variables_dto_1.AddVariablesDto]),
+    __metadata("design:paramtypes", [Object, add_variables_dto_1.AddVariablesDto]),
     __metadata("design:returntype", Promise)
 ], DataIntakeController.prototype, "addVariables", null);
 __decorate([
@@ -126,20 +152,23 @@ __decorate([
 ], DataIntakeController.prototype, "getVariablesByUser", null);
 __decorate([
     (0, common_1.Put)('variables'),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [update_variables_dto_1.UpdateVariablesDto]),
+    __metadata("design:paramtypes", [Object, update_variables_dto_1.UpdateVariablesDto]),
     __metadata("design:returntype", Promise)
 ], DataIntakeController.prototype, "updateVariables", null);
 __decorate([
     (0, common_1.Delete)('variables'),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [delete_variables_dto_1.DeleteVariablesDto]),
+    __metadata("design:paramtypes", [Object, delete_variables_dto_1.DeleteVariablesDto]),
     __metadata("design:returntype", Promise)
 ], DataIntakeController.prototype, "deleteVariables", null);
 exports.DataIntakeController = DataIntakeController = DataIntakeController_1 = __decorate([
     (0, common_1.Controller)('data-intake'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __metadata("design:paramtypes", [data_intake_service_1.DataIntakeService])
 ], DataIntakeController);
 //# sourceMappingURL=data-intake.controller.js.map

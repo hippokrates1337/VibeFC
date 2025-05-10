@@ -29,11 +29,7 @@ alwaysApply: false
 - **Server Components**: Default to Server Components; use Client Components only when necessary.
 - **Client Components**:
   - Mark with `'use client'` directive at the top.
-  - Wrap in `<Suspense>` with a fallback UI.
-- **Naming Conventions**:
-  - Use `PascalCase` for component filenames.
-  - Use `camelCase` for utility functions and variables.
-  - Use `kebab-case` for directory names.
+  - Wrap in `<Suspense>` with a fallback UI. 
 
 ## 🎨 Styling with Tailwind CSS and shadcn/ui
 
@@ -65,11 +61,6 @@ alwaysApply: false
 - Include Open Graph and Twitter Card metadata.
 - Generate `sitemap.xml` and `robots.txt` for search engine indexing.
 
-## 🧪 Testing
-
-- Write unit tests for components using the React Testing Library.
-- Use snapshot testing for UI components.
-
 ## ♿ Accessibility
 
 - Use semantic HTML elements.
@@ -86,7 +77,6 @@ alwaysApply: false
 
 - Use `error.tsx` files for route-level error boundaries.
 - Implement global error boundaries for Client Components.
-- Validate inputs using `zod` or `yup`.
 
 ---
 

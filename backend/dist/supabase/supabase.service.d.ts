@@ -1,12 +1,19 @@
-import { OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
-export declare class SupabaseService implements OnModuleInit {
+import { Request } from 'express';
+interface RequestWithUser extends Request {
+    user?: {
+        userId: string;
+        organizationId?: string;
+        [key: string]: any;
+    };
+}
+export declare class SupabaseService {
     private configService;
+    private request;
     private supabaseClient;
     private readonly logger;
-    constructor(configService: ConfigService);
-    onModuleInit(): Promise<void>;
+    constructor(configService: ConfigService, request: RequestWithUser);
     get client(): SupabaseClient;
-    testConnection(): Promise<boolean>;
 }
+export {};

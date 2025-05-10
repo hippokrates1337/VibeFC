@@ -21,7 +21,7 @@ export declare class DataIntakeService {
         count: number;
         variables: any[];
     }>;
-    deleteVariables(deleteVariablesDto: DeleteVariablesDto): Promise<{
+    deleteVariables(deleteVariablesDto: DeleteVariablesDto, requestingUserId: string, requestingOrgId: string): Promise<{
         message: string;
         count: number;
     }>;

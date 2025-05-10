@@ -72,7 +72,14 @@ src/
 ├── lib/                   # Utility functions and shared logic
 │   └── store/             # Zustand state management
 └── providers/             # React context providers
+├── middleware.ts          # Handles request processing, primarily for authentication
+└── setupTests.ts          # Jest setup file for test environment configuration
 ```
+
+The `src/middleware.ts` file is crucial for handling authentication and authorization. It intercepts incoming requests to:
+- Skip middleware for API routes and static files.
+- Prevent redirect loops.
+- Protect routes by verifying user authentication (via Supabase) and redirecting users to login if unauthenticated, or to the homepage if an authenticated user tries to access auth pages.
 
 ## Development
 
@@ -91,6 +98,8 @@ The application uses Jest and React Testing Library for testing:
 - **Unit Tests**: Located alongside source files in `__tests__` folders
 - **Component Tests**: Testing UI components in isolation
 - **Coverage Goals**: Aiming for 80%+ code coverage
+
+The `src/setupTests.ts` file is used to configure the Jest testing environment. Its main role is to ensure that browser-specific APIs, like `fetch`, are available and correctly polyfilled or mocked when tests run in the Node.js environment. This helps in testing components that make HTTP requests.
 
 ## Data Model
 

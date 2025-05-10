@@ -37,7 +37,12 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
                     const id = variable.id;
                     const name = variable.name || 'Unnamed Variable';
                     const type = variable.type || variable_dto_1.VariableType.UNKNOWN;
-                    const userId = variable.userId || 'anonymous';
+                    const userId = variable.user_id;
+                    const organizationId = variable.organization_id;
+                    if (!userId || !organizationId) {
+                        this.logger.error(`Missing userId (${userId}) or organizationId (${organizationId}) for variable ${name}`);
+                        throw new Error(`User ID and Organization ID are required for variable ${name}`);
+                    }
                     const validType = Object.values(variable_dto_1.VariableType).includes(type)
                         ? type
                         : variable_dto_1.VariableType.UNKNOWN;
@@ -50,6 +55,7 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
                         type: validType,
                         values: normalizedValues,
                         user_id: userId,
+                        organization_id: organizationId,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     })
@@ -80,24 +86,43 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
     }
     async getVariablesByUser(userId) {
         try {
-            this.logger.log(`Fetching variables for user: ${userId}`);
-            const { data, error } = await this.supabase.client
-                .from('variables')
-                .select('*')
+            this.logger.log(`Fetching organizations for user: ${userId}`);
+            const { data: orgMembers, error: orgError } = await this.supabase.client
+                .from('organization_members')
+                .select('organization_id')
                 .eq('user_id', userId);
-            if (error) {
-                this.logger.error(`Failed to fetch variables for user ${userId}: ${error.message}`);
-                throw new Error(`Failed to fetch variables: ${error.message}`);
+            if (orgError) {
+                this.logger.error(`Failed to fetch organizations for user ${userId}: ${orgError.message}`);
+                throw new Error(`Failed to fetch organizations: ${orgError.message}`);
             }
-            if (!data || data.length === 0) {
-                this.logger.warn(`No variables found for user ${userId}`);
+            if (!orgMembers || orgMembers.length === 0) {
+                this.logger.warn(`User ${userId} is not a member of any organization.`);
                 return {
-                    message: 'No variables found',
+                    message: 'User not found in any organization or no variables available for their organizations',
                     count: 0,
                     variables: [],
                 };
             }
-            this.logger.log(`Found ${data.length} variables for user ${userId}`);
+            const organizationIds = orgMembers.map(member => member.organization_id);
+            this.logger.log(`User ${userId} belongs to organizations: ${organizationIds.join(', ')}`);
+            this.logger.log(`Fetching variables for organizations: ${organizationIds.join(', ')}`);
+            const { data, error } = await this.supabase.client
+                .from('variables')
+                .select('*')
+                .in('organization_id', organizationIds);
+            if (error) {
+                this.logger.error(`Failed to fetch variables for organizations ${organizationIds.join(', ')}: ${error.message}`);
+                throw new Error(`Failed to fetch variables: ${error.message}`);
+            }
+            if (!data || data.length === 0) {
+                this.logger.warn(`No variables found for organizations ${organizationIds.join(', ')}`);
+                return {
+                    message: 'No variables found for the user\'s organizations',
+                    count: 0,
+                    variables: [],
+                };
+            }
+            this.logger.log(`Found ${data.length} variables for organizations associated with user ${userId}`);
             return {
                 message: 'Variables retrieved successfully',
                 count: data.length,
@@ -105,8 +130,8 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             };
         }
         catch (error) {
-            this.logger.error(`Error fetching variables for user ${userId}: ${error.message}`);
-            throw new Error(`Error fetching variables: ${error.message}`);
+            this.logger.error(`Error in getVariablesByUser for user ${userId}: ${error.message}`);
+            throw new Error(`Error fetching variables by user's organizations: ${error.message}`);
         }
     }
     async updateVariables(updateVariablesDto) {
@@ -175,7 +200,7 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             throw error;
         }
     }
-    async deleteVariables(deleteVariablesDto) {
+    async deleteVariables(deleteVariablesDto, requestingUserId, requestingOrgId) {
         const { ids } = deleteVariablesDto;
         if (!ids || ids.length === 0) {
             this.logger.warn('No variable IDs received for deletion');
@@ -189,9 +214,11 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             const { data: existingData, error: existingError } = await this.supabase.client
                 .from('variables')
                 .select('id')
-                .in('id', ids);
+                .in('id', ids)
+                .eq('user_id', requestingUserId)
+                .eq('organization_id', requestingOrgId);
             if (existingError) {
-                this.logger.error(`Failed to verify existing variables: ${existingError.message}`);
+                this.logger.error(`Failed to verify existing variables for user ${requestingUserId} in org ${requestingOrgId}: ${existingError.message}`);
                 throw new Error(`Failed to verify existing variables: ${existingError.message}`);
             }
             const existingIds = existingData.map(item => item.id);
@@ -209,9 +236,11 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             const { error: deleteError } = await this.supabase.client
                 .from('variables')
                 .delete()
-                .in('id', existingIds);
+                .in('id', existingIds)
+                .eq('user_id', requestingUserId)
+                .eq('organization_id', requestingOrgId);
             if (deleteError) {
-                this.logger.error(`Failed to delete variables: ${deleteError.message}`);
+                this.logger.error(`Failed to delete variables for user ${requestingUserId} in org ${requestingOrgId}: ${deleteError.message}`);
                 throw new Error(`Failed to delete variables: ${deleteError.message}`);
             }
             this.logger.log(`Successfully deleted ${existingIds.length} variables`);
@@ -231,34 +260,48 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
         }
         return values
             .filter(item => item && typeof item === 'object')
-            .map(item => {
+            .map((item) => {
             const dateValue = item.date;
             let dateStr = null;
             if (typeof dateValue === 'string') {
-                dateStr = dateValue;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                    dateStr = dateValue;
+                }
             }
-            else if (typeof dateValue === 'object' && dateValue !== null && 'toISOString' in dateValue) {
+            else if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
                 try {
-                    const dateObj = dateValue;
-                    dateStr = dateObj.toISOString().split('T')[0];
+                    dateStr = dateValue.toISOString().split('T')[0];
                 }
                 catch (e) {
-                    this.logger.warn(`Error converting date object: ${e.message}`);
                 }
+            }
+            if (!dateStr) {
+                this.logger.warn(`Skipping entry with invalid or missing date format for variable ${variableName}: ${JSON.stringify(item)}`);
+                return null;
             }
             let numValue = null;
             if (item.value === null) {
                 numValue = null;
             }
             else if (typeof item.value === 'number') {
-                numValue = item.value;
+                if (isFinite(item.value)) {
+                    numValue = item.value;
+                }
+                else {
+                    this.logger.warn(`Converting non-finite number value (${item.value}) to null for variable ${variableName}`);
+                }
             }
-            else if (item.value !== undefined && !isNaN(Number(item.value))) {
-                numValue = Number(item.value);
+            else if (item.value !== undefined) {
+                const parsed = Number(item.value);
+                if (!isNaN(parsed) && isFinite(parsed)) {
+                    numValue = parsed;
+                }
+                else {
+                    this.logger.warn(`Could not parse value (${item.value}) to finite number, setting to null for variable ${variableName}`);
+                }
             }
-            if (!dateStr) {
-                this.logger.warn(`Skipping entry with invalid date format for variable ${variableName}`);
-                return null;
+            else {
+                this.logger.warn(`Missing value, setting to null for variable ${variableName}: ${JSON.stringify(item)}`);
             }
             return { date: dateStr, value: numValue };
         })

@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 ---
 description: Global rules for all projects. Defines AI behavior and universal coding standards.
@@ -28,8 +28,8 @@ alwaysApply: true
   - `camelCase` for variables and functions
   - `PascalCase` for classes and components
   - `UPPER_CASE` for constants
+  - `kebab-case` for directory names.
 - **Code Structure:** Write small, focused modules with single responsibilities.
-- **Dependencies**: When introducing new functionality, review whether all required dependencies are installed
 - **Formatting:**
   - 2-space indentation
   - Semicolons
@@ -37,8 +37,8 @@ alwaysApply: true
 
 ## 🧪 Testing Practices
 
-- **Unit Testing:** Use Jest for unit tests.
-- **Test Coverage:** Minimum 80% test coverage.
+- **Unit Testing:** Use Jest for unit tests, React Testing Library for components, and snapshot testing for UI components.
+- **Test Coverage:** Minimum 80% test coverage. Always first consider whether the actual functionality can be tested before mocking something.
 - **Test Structure:** Place tests alongside source files in `__tests__` folders or `*.test.ts` files.
 
 ## 📝 Documentation and Comments

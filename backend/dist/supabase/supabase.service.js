@@ -8,63 +8,56 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 var SupabaseService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SupabaseService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const supabase_js_1 = require("@supabase/supabase-js");
+const core_1 = require("@nestjs/core");
 let SupabaseService = SupabaseService_1 = class SupabaseService {
-    constructor(configService) {
+    constructor(configService, request) {
         this.configService = configService;
+        this.request = request;
+        this.supabaseClient = null;
         this.logger = new common_1.Logger(SupabaseService_1.name);
     }
-    async onModuleInit() {
-        const supabaseUrl = this.configService.get('SUPABASE_URL');
-        const supabaseKey = this.configService.get('SUPABASE_KEY');
-        if (!supabaseUrl || !supabaseKey) {
-            throw new Error('Supabase credentials are not provided in environment variables');
+    get client() {
+        if (this.supabaseClient) {
+            return this.supabaseClient;
         }
-        this.supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey, {
+        const supabaseUrl = this.configService.get('SUPABASE_URL');
+        const supabaseAnonKey = this.configService.get('SUPABASE_ANON_KEY');
+        if (!supabaseUrl || !supabaseAnonKey) {
+            this.logger.error('Supabase URL or Anon Key not configured');
+            throw new Error('Supabase credentials are not properly configured.');
+        }
+        const authHeader = this.request.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            this.logger.warn('Attempted to create Supabase client without Authorization header.');
+            throw new common_1.UnauthorizedException('Authorization token is missing or invalid.');
+        }
+        const token = authHeader.split(' ')[1];
+        this.supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, supabaseAnonKey, {
+            global: {
+                headers: { Authorization: `Bearer ${token}` },
+            },
             auth: {
                 autoRefreshToken: false,
-                persistSession: false
+                persistSession: false,
             }
         });
-        this.logger.log('Supabase client initialized with service_role key (bypasses RLS)');
-        try {
-            await this.testConnection();
-            this.logger.log('Successfully connected to Supabase');
-        }
-        catch (error) {
-            this.logger.error(`Failed to connect to Supabase: ${error.message}`);
-            throw error;
-        }
-    }
-    get client() {
+        this.logger.log('Request-scoped Supabase client initialized for user.');
         return this.supabaseClient;
-    }
-    async testConnection() {
-        try {
-            const { error } = await this.supabaseClient
-                .from('variables')
-                .select('id')
-                .limit(1);
-            if (error) {
-                this.logger.error(`Database connection test failed: ${error.message}`);
-                throw new Error(`Database connection test failed: ${error.message}`);
-            }
-            return true;
-        }
-        catch (error) {
-            this.logger.error(`Connection test failed: ${error.message}`);
-            throw error;
-        }
     }
 };
 exports.SupabaseService = SupabaseService;
 exports.SupabaseService = SupabaseService = SupabaseService_1 = __decorate([
-    (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    (0, common_1.Injectable)({ scope: common_1.Scope.REQUEST }),
+    __param(1, (0, common_1.Inject)(core_1.REQUEST)),
+    __metadata("design:paramtypes", [config_1.ConfigService, Object])
 ], SupabaseService);
 //# sourceMappingURL=supabase.service.js.map

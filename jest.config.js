@@ -81,10 +81,11 @@ const config = {
   // An array of regexp pattern strings that are matched against all source file paths before transformation.
   // If the file path matches any of the patterns, it will not be transformed.
   transformIgnorePatterns: [
-    // Process undici and msw modules despite being in node_modules
-    '/node_modules/(?!(undici|msw|@mswjs)/)',
-    // Add other patterns here if needed, e.g., for CSS modules if not handled by moduleNameMapper
-    // '^.+\\.module\\.(css|sass|scss)$' 
+    // Allow transformations for all files outside node_modules
+    // and specific ones inside node_modules like undici and msw
+    '/node_modules/(?!(undici|msw|@mswjs)/).+\\.[jt]sx?$',
+    // If you have CSS modules handled by identity-obj-proxy, ensure they are ignored here too:
+    // '\\.module\\.(css|sass|scss)$',
   ],
   // Since babel-jest is in devDependencies, Jest might pick it up automatically
   // If you have specific Babel config (.babelrc, babel.config.js), ensure it's compatible with Jest
