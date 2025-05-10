@@ -18,7 +18,7 @@ export default function ProtectedLayout({
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push('/login');
+      router.push('/landing');
     }
   }, [user, isLoading, router]);
   
@@ -53,9 +53,6 @@ export default function ProtectedLayout({
               </Link>
               <Link href="/data-intake" className="text-sm font-medium">
                 Data Intake
-              </Link>
-              <Link href="/variables" className="text-sm font-medium">
-                Variables
               </Link>
             </nav>
           </div>

@@ -64,9 +64,9 @@ When importing data, users can:
 
 The main data intake page consists of:
 - File upload area for selecting CSV files (with drag-and-drop support)
-- Table view showing currently imported variables with their time series data, including inline editing for names, types, and values.
+- Card-based view displaying imported variables using `VariableCard` components. Clicking a card opens the `VariableDetailsModal` for editing.
 - Import button to initiate the CSV import process
-- Delete functionality for individual variables
+- Delete functionality for individual variables (accessible via variable cards and details modal)
 
 ### Import Modal
 
@@ -82,6 +82,14 @@ The delete confirmation modal provides a safety check before removing variables:
 - Displays the name of the variable to be deleted
 - Requires explicit confirmation before deletion
 - Prevents accidental data loss
+
+### Variable Details Modal
+
+The variable details modal allows users to:
+- View and edit the variable's name
+- View and edit the variable's type (ACTUAL, BUDGET, INPUT, UNKNOWN)
+- View and edit individual time series data points (date and value)
+- Save changes or cancel editing
 
 ## Implementation Details
 
@@ -118,18 +126,18 @@ Variable data management combines local state with backend synchronization:
 ## Component Structure
 
 The Data Intake module is organized as follows:
-- `page.tsx`: Client component that renders the main container
-- `import-modal.tsx`: Modal for reviewing and confirming data imports
-- `delete-confirmation-modal.tsx`: Modal for confirming variable deletion
+- `page.tsx`: Client component that renders the main container and variable cards.
+- `import-modal.tsx`: Modal for reviewing and confirming data imports.
+- `delete-confirmation-modal.tsx`: Modal for confirming variable deletion.
 - `_components/`: Directory containing private components used only within this module
-  - `data-intake-container.tsx`: Main container component with the overall state management and layout
-  - `api-hooks.ts`: Custom hooks for API operations and CSV processing
-  - `data-status.tsx`: Component for displaying API operation status notifications
-  - `state-display.tsx`: Components for handling loading, error, and empty states
-  - `data-table.tsx`: Table component for displaying variables and their time series data
-  - `upload-section.tsx`: Component for handling file uploads
-  - `utils.ts`: Utility functions for date parsing, formatting, and validation
-  - `table.module.css`: CSS module for table styling
+  - `data-intake-container.tsx`: Main container component that manages state, API interactions, and provides data/handlers to `page.tsx` via a render prop.
+  - `variable-card.tsx`: Displays a summary of a single variable in a card format and provides actions like viewing details or deleting the variable.
+  - `variable-details-modal.tsx`: A modal dialog for viewing and editing the comprehensive details of a variable, including its name, type, and time-series data points.
+  - `api-hooks.ts`: Custom hooks for API operations and CSV processing.
+  - `data-status.tsx`: Component for displaying API operation status notifications.
+  - `state-display.tsx`: Components for handling loading, error, and empty states.
+  - `upload-section.tsx`: Component for handling file uploads.
+  - `utils.ts`: Utility functions for date parsing, formatting, and validation.
 
 ## Usage Example
 
@@ -150,6 +158,7 @@ The Data Intake module is organized as follows:
 4. Apply the changes to complete the import
 
 5. View the imported data in the data table
+6. Click on a variable card to view or edit its details in a modal.
 
 ## Error Handling
 
