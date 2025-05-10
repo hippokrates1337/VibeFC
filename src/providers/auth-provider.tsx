@@ -167,11 +167,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
-      window.location.href = '/login';
+      window.location.href = '/landing';
     } catch (err) {
       console.error('Sign out error:', err);
       clearAllAppData(); 
-      window.location.href = '/login';
+      window.location.href = '/landing';
     }
   };
 

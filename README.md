@@ -9,7 +9,8 @@ A collaborative platform for creating and maintaining financial forecasts.
   - Preview and manage imported variables with add/update/skip options
   - Support for different number formats (German and English)
   - Variable types: ACTUAL, BUDGET, and INPUT
-- **Variables Management:** Browse and view all imported variables with their time series data
+  - Browse, view, edit and delete all imported variables with their time series data
+  - Card-based view of variables with detailed modal for editing
 - **Forecast Definition:** Define and configure forecast calculations
 - **Forecast Analysis:** View and analyze forecast results
 
@@ -66,8 +67,7 @@ The application will be available at http://localhost:3000.
 ```
 src/
 ├── app/                   # Next.js app router pages
-│   ├── data-intake/       # Data import functionality
-│   └── variables/         # Variables overview
+│   └── data-intake/       # Data import, variable management functionality
 ├── components/            # Reusable React components
 ├── lib/                   # Utility functions and shared logic
 │   └── store/             # Zustand state management

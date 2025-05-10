@@ -36,6 +36,7 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-toast": "^1.2.11",
     "@supabase/supabase-js": "^2.49.4",
+    "@testing-library/user-event": "^14.6.1",
     "class-variance-authority": "^0.7.1",
     "cloc": "^2.4.0-cloc",
     "clsx": "^2.1.1",

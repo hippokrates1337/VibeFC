@@ -64,6 +64,7 @@ export function UploadSection({ isUploading, error, onProcessCSV }: UploadSectio
             accept=".csv"
             onChange={handleFileChange}
             disabled={isUploading}
+            data-testid="csv-upload-input"
           />
         </label>
         {isUploading && <span className="text-muted-foreground">Uploading...</span>}

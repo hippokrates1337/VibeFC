@@ -29,10 +29,35 @@ export async function DELETE(
       // Continue anyway, but log the warning
     }
     
+    // Parse the request body to get organizationId
+    let organizationId;
+    try {
+      const requestData = await request.json();
+      organizationId = requestData.organizationId;
+      console.log('Received organizationId from request:', organizationId);
+      
+      if (!organizationId) {
+        console.error('Missing organizationId in request body');
+        return NextResponse.json(
+          { message: 'organizationId is required in request body' },
+          { status: 400 }
+        );
+      }
+    } catch (bodyError) {
+      console.error('Failed to parse request body:', bodyError);
+      return NextResponse.json(
+        { message: 'Invalid request body format. Expected JSON with organizationId.' },
+        { status: 400 }
+      );
+    }
+    
     // Forward delete request to backend
     try {
-      // The backend expects a POST body with an array of IDs, not a path parameter
-      const requestPayload = { ids: [id] };
+      // The backend expects a body with ids array and organizationId
+      const requestPayload = { 
+        ids: [id],
+        organizationId 
+      };
       console.log('Sending delete request to backend:', JSON.stringify(requestPayload));
       console.log('Backend URL:', `${backendUrl}/data-intake/variables`);
       

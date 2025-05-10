@@ -268,7 +268,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
 
   const handleUpdateVariable = useCallback(async (
     variableId: string, 
-    updateData: { name?: string; timeSeries?: TimeSeriesData[] },
+    updateData: { name?: string; timeSeries?: TimeSeriesData[]; type?: Variable['type'] },
     organizationId: string | null
   ): Promise<void> => {
     // Add validation for organizationId if service layer requires it for PUT
@@ -312,7 +312,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           {
             id: variableId,
             name: updateData.name || variableToUpdate.name,
-            type: variableToUpdate.type,
+            type: updateData.type || variableToUpdate.type,
             user_id: user.id,
             organization_id: organizationId,
             values: updateData.timeSeries 
@@ -356,6 +356,11 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           // Update name if provided
           if (updateData.name !== undefined) {
             updatedVariable.name = updateData.name
+          }
+          
+          // Update type if provided
+          if (updateData.type !== undefined) {
+            updatedVariable.type = updateData.type
           }
           
           // Update time series if provided

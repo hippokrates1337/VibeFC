@@ -7,8 +7,8 @@ import { AuthProvider } from '@/providers/auth-provider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'VibeFC - Financial Forecasting',
-  description: 'Collaborative financial forecasting platform',
+  title: 'VibeFC - Financial Forecasting Platform',
+  description: 'Create and maintain financial forecasts with ease',
 }
 
 export default function RootLayout({

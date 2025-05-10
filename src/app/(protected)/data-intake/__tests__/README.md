@@ -1,6 +1,6 @@
 # Data Intake Tests
 
-This directory contains unit tests for the Data Intake section of the application. The tests were created to ensure that the core functionality works correctly, especially when integrating with the backend.
+This directory contains unit and integration tests for the Data Intake section of the application. The tests are created to ensure that core functionalities, component rendering, state management, and API interactions work correctly.
 
 ## Running Tests
 
@@ -43,14 +43,11 @@ The coverage report will be available in the `coverage` directory after running 
 When running tests, the test results will be displayed in the terminal. For example:
 
 ```
- PASS  src/app/data-intake/__tests__/page.test.tsx
-  DataIntake Page
-    ✓ displays loading state when isLoading is true (23 ms)
-    ✓ displays error state when there is an error (5 ms)
-    ✓ displays empty state when there are no variables (5 ms)
-    ✓ displays data table when variables exist (7 ms)
-    ✓ displays success notification when API operation succeeds (5 ms)
-    ✓ displays error notification when API operation fails (5 ms)
+ PASS  src/app/data-intake/__tests__/some-component.test.tsx
+  SomeComponent
+    ✓ renders correctly with given props (15 ms)
+    ✓ handles user interaction as expected (10 ms)
+    ✓ displays error state when data is invalid (8 ms)
 ```
 
 ### Understanding Test Coverage
@@ -84,24 +81,24 @@ open coverage/lcov-report/index.html  # For macOS
 start coverage/lcov-report/index.html
 ```
 
-## Tests Implemented
+## Test Suite Overview
 
-The following tests have been implemented for the Data Intake page component:
+The following test files ensure the reliability of the Data Intake module:
 
-1. **Loading State Test**:
-   - Verifies that a loading indicator is shown while data is being fetched
+- **`page.test.tsx`**: Tests the main Data Intake page component (`src/app/(protected)/data-intake/page.tsx`), primarily ensuring that it correctly renders its main child container.
 
-2. **Error State Test**:
-   - Verifies that error messages are properly displayed when the API encounters issues
+- **`data-intake-container.test.tsx`**: Contains tests for the `DataIntakeContainer` component, which manages the overall state, data fetching, and logic for the data intake feature. This includes testing different states like loading, error, empty, and when data is present, as well as interactions with modals and API hooks.
 
-3. **Empty State Test**:
-   - Ensures the empty state UI is correctly shown when no variables exist
+- **`import-modal.test.tsx`**: Focuses on the `ImportModal` component, verifying its behavior during the CSV import process, including variable preview, action selection (add, update, skip), and confirmation logic.
 
-4. **Successful Data Rendering Test**:
-   - Tests that variables are correctly displayed in the data table
+- **`delete-confirmation-modal.test.tsx`**: Tests the `DeleteConfirmationModal`, ensuring it displays correctly and handles user confirmation or cancellation for deleting variables.
 
-5. **API Success Notification Test**:
-   - Verifies that success notifications appear after successful API operations
+- **`variable-details-modal.test.tsx`**: (Assuming this file exists or will be added based on previous context) Tests the `VariableDetailsModal` for viewing and editing variable name, type, and time-series data.
 
-6. **API Error Notification Test**:
-   - Ensures that error notifications display when API operations fail
+- **`state-display.test.tsx`**: Covers the components responsible for rendering various UI states, such as loading indicators, error messages, and empty state messages (`LoadingState`, `ErrorState`, `EmptyState`).
+
+- **`api-status.test.tsx`**: Tests the `ApiStatus` component (likely related to `data-status.tsx`) which displays notifications for API operation success or failure.
+
+- **`api.integration.test.ts`**: Contains integration tests that likely focus on the interactions between different parts of the data intake system, possibly including API hook integrations or end-to-end flows within the module.
+
+(Note: Specific test cases within each file verify various aspects of component behavior, state changes, and interaction logic.)

@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect, ReactNode } from 'react'
 import { 
   useVariableStore,
   useSetSelectedOrganizationId,
@@ -10,7 +10,6 @@ import {
 import { useOrganizationStore } from '@/lib/store/organization';
 import { ImportModal } from '../import-modal'
 import { DeleteConfirmationModal } from '../delete-confirmation-modal'
-import { DataTable } from './data-table'
 import { UploadSection } from './upload-section'
 import { useVariableApi, useCsvProcessor } from './api-hooks'
 import { ApiStatus } from './data-status'
@@ -18,7 +17,29 @@ import { LoadingState, ErrorState, EmptyState } from './state-display'
 import { useAuth } from '@/providers/auth-provider'
 import { logger } from '@/lib/utils/logger'
 
-export const DataIntakeContainer = () => {
+// Define the container props type to be passed to render prop
+interface ContainerProps {
+  filteredVariables: Variable[];
+  handleDeleteClick: (id: string, name: string) => void;
+  handleOpenDetailsModal: (variable: Variable) => void;
+  isDetailsModalOpen: boolean;
+  selectedVariableForModal: Variable | null;
+  closeDetailsModal: () => void;
+  handleUpdateVariable: (variableId: string, updateData: any) => Promise<void>;
+  selectedOrgIdFromOrgStore: string | null;
+  apiStatus: { success: boolean; error: string | null };
+  storeIsLoading: boolean;
+}
+
+interface DataIntakeContainerProps {
+  children?: ((props: ContainerProps) => ReactNode) | ReactNode;
+  onVariablesUpdated?: (variables: Variable[]) => void;
+}
+
+export const DataIntakeContainer = ({ 
+  children,
+  onVariablesUpdated
+}: DataIntakeContainerProps) => {
   const variables = useVariableStore(state => state.variables);
   const selectedOrganizationId = useVariableStore(state => state.selectedOrganizationId);
   const setVariables = useVariableStore((state) => state.setVariables);
@@ -30,6 +51,13 @@ export const DataIntakeContainer = () => {
     logger.log('[DataIntakeContainer useMemo] Filtering variables for organization:', selectedOrganizationId);
     return (variables || []).filter(variable => variable.organizationId === selectedOrganizationId);
   }, [variables, selectedOrganizationId]);
+
+  // Call onVariablesUpdated when filtered variables change
+  useEffect(() => {
+    if (onVariablesUpdated) {
+      onVariablesUpdated(filteredVariables);
+    }
+  }, [filteredVariables, onVariablesUpdated]);
 
   const setSelectedOrganizationIdInStore = useSetSelectedOrganizationId();
   const storeIsLoading = useIsVariablesLoading();
@@ -57,6 +85,7 @@ export const DataIntakeContainer = () => {
     parseCSV
   } = useCsvProcessor(variables)
 
+  // State for delete confirmation modal
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     variableId: string;
@@ -66,6 +95,10 @@ export const DataIntakeContainer = () => {
     variableId: '',
     variableName: ''
   })
+
+  // New states for variable details modal
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState<boolean>(false);
+  const [selectedVariableForModal, setSelectedVariableForModal] = useState<Variable | null>(null);
 
   useEffect(() => {
     logger.log('[DataIntakeContainer useEffect] Org ID from store changed to:', selectedOrgIdFromOrgStore);
@@ -125,6 +158,19 @@ export const DataIntakeContainer = () => {
     closeDeleteConfirmation()
   }, [deleteConfirmation.variableId, handleDeleteVariable, closeDeleteConfirmation, selectedOrgIdFromOrgStore])
 
+  // New function to open the details modal for a variable
+  const handleOpenDetailsModal = useCallback((variable: Variable): void => {
+    // Create a deep copy of the variable to isolate edits
+    setSelectedVariableForModal(variable);
+    setIsDetailsModalOpen(true);
+  }, []);
+
+  // Function to close the details modal
+  const closeDetailsModal = useCallback((): void => {
+    setIsDetailsModalOpen(false);
+    setSelectedVariableForModal(null);
+  }, []);
+
   if (storeIsLoading || authIsLoading) {
     return <LoadingState pageTitle="Data Intake" />
   }
@@ -141,6 +187,21 @@ export const DataIntakeContainer = () => {
     )
   }
 
+  // Create an object with all the props needed by the page component
+  const containerProps: ContainerProps = {
+    filteredVariables,
+    handleDeleteClick,
+    handleOpenDetailsModal,
+    isDetailsModalOpen,
+    selectedVariableForModal,
+    closeDetailsModal,
+    handleUpdateVariable: (variableId: string, updateData: any) => 
+      handleUpdateVariable(variableId, updateData, selectedOrgIdFromOrgStore),
+    selectedOrgIdFromOrgStore,
+    apiStatus,
+    storeIsLoading
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Data Intake</h1>
@@ -153,17 +214,16 @@ export const DataIntakeContainer = () => {
         error={error}
       />
 
-      {!filteredVariables.length && !storeIsLoading ? (
-        <EmptyState message="No variables found for the selected organization, or no organization selected. Upload a CSV file or select an organization." />
+      {/* Render cards/children using the containerProps */}
+      {children ? (
+        typeof children === 'function' ? 
+          (children as (props: ContainerProps) => ReactNode)(containerProps) : 
+          children
       ) : (
-        <div className="mt-8">
-          <DataTable
-            variables={filteredVariables}
-            dates={dates}
-            onDeleteClick={handleDeleteClick}
-            onUpdateVariable={(variableId, updateData) => handleUpdateVariable(variableId, updateData, selectedOrgIdFromOrgStore)}
-          />
-        </div>
+        // Default fallback if no children provided
+        filteredVariables.length === 0 && !storeIsLoading && (
+          <EmptyState message="No variables found for the selected organization, or no organization selected. Upload a CSV file or select an organization." />
+        )
       )}
 
       {showImportModal && (
