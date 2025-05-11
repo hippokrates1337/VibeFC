@@ -20,27 +20,25 @@ jest.setTimeout(30000);
 describe('Forecast Module Integration Tests (RLS Focused)', () => {
   let app: INestApplication;
   let moduleFixture: TestingModule;
+
+  // Dynamically generated IDs for test entities
+  let dynamicAliceId: string;
+  let dynamicCharlieId: string;
+  let dynamicOrgAId: string;
   
-  // --- Test User Credentials and Tokens (Manual Step: Replace placeholders) ---
-  // User Alice: Belongs to OrgA, should have permissions within OrgA
+  // Test User Credentials
   const aliceCredentials = {
-    email: 'testuseralice@example.com', // Corrected email
-    password: 'password123',          // Replace with your actual test user password
+    email: `testuser.alice.${uuidv4()}@example.com`, // Ensure unique email for each run
+    password: 'password123',
   };
-  let aliceAuthToken: string = ''; // Will be populated by authenticateTestUser
+  let aliceAuthToken: string = '';
 
-  // User Charlie: Does NOT belong to OrgA, should NOT have permissions within OrgA
   const charlieCredentials = {
-    email: 'testusercharlie@example.com', // Corrected email
-    password: 'password123',           // Replace with your actual test user password
+    email: `testuser.charlie.${uuidv4()}@example.com`, // Ensure unique email for each run
+    password: 'password123',
   };
-  let charlieAuthToken: string = ''; // Will be populated by authenticateTestUser
+  let charlieAuthToken: string = '';
   // --- End Test User Credentials ---
-
-  // Test Organization ID (Manual Step: Ensure this organization exists and Alice is a member)
-  const orgA_id = '7bd90373-b2e0-42e9-a691-3b864ab59a64';
-  const userAliceId = 'ff8f8a82-a487-40b7-8747-cbda45c1f02e';
-  const userCharlieId = '59d28d20-31ab-4b2b-84ce-e9933e1ca454';
   
   // Store created IDs for cleanup
   const createdForecastIds: string[] = [];
@@ -93,10 +91,37 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
   beforeAll(async () => {
     const dotenv = require('dotenv');
     dotenv.config({ path: 'backend/.env' });
+    
+    const adminClient = getSupabaseAdminClient();
 
-    // Obtain JWTs for test users
-    // Note: If placeholders are not replaced, these will throw errors or use the placeholder string.
+    // Generate dynamic IDs
+    dynamicOrgAId = uuidv4();
+
     try {
+      // 1. Create Users
+      console.log(`Creating test user Alice (${aliceCredentials.email})...`);
+      const { data: aliceUser, error: aliceErr } = await adminClient.auth.admin.createUser({
+        email: aliceCredentials.email,
+        password: aliceCredentials.password,
+        email_confirm: true, // Auto-confirm email for testing
+      });
+      if (aliceErr) throw new Error(`Failed to create Alice: ${aliceErr.message}`);
+      if (!aliceUser || !aliceUser.user) throw new Error('Alice user data not returned after creation.');
+      dynamicAliceId = aliceUser.user.id;
+      console.log(`Alice (ID: ${dynamicAliceId}) created successfully.`);
+
+      console.log(`Creating test user Charlie (${charlieCredentials.email})...`);
+      const { data: charlieUser, error: charlieErr } = await adminClient.auth.admin.createUser({
+        email: charlieCredentials.email,
+        password: charlieCredentials.password,
+        email_confirm: true, // Auto-confirm email for testing
+      });
+      if (charlieErr) throw new Error(`Failed to create Charlie: ${charlieErr.message}`);
+      if (!charlieUser || !charlieUser.user) throw new Error('Charlie user data not returned after creation.');
+      dynamicCharlieId = charlieUser.user.id;
+      console.log(`Charlie (ID: ${dynamicCharlieId}) created successfully.`);
+
+      // 2. Authenticate Users to get JWTs
       console.log('Attempting to authenticate Alice...');
       aliceAuthToken = await authenticateTestUser(aliceCredentials.email, aliceCredentials.password);
       console.log('Alice authenticated, token obtained.');
@@ -109,61 +134,57 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         throw new Error('Failed to obtain JWTs for test users.');
       }
 
-    } catch (error) {
-      console.error('Failed to authenticate test users for token acquisition:', error);
-      throw error;
-    }
-    
-    // Database setup using admin client
-    const adminClient = getSupabaseAdminClient();
-    try {
-      console.log(`Ensuring Test Organization OrgA (ID: ${orgA_id}) exists with owner ${userAliceId}...`);
+      // 3. Create Organization and Membership
+      console.log(`Creating Test Organization OrgA (ID: ${dynamicOrgAId}) with owner ${dynamicAliceId}...`);
       const { data: orgData, error: orgErr } = await adminClient
         .from('organizations')
-        .upsert({ id: orgA_id, name: 'Test Org A for RLS', owner_id: userAliceId }, 
-                { onConflict: 'id' }) // Added onConflict to handle existing org gracefully
+        .insert({ id: dynamicOrgAId, name: 'Test Org A for RLS', owner_id: dynamicAliceId })
         .select();
 
-      if (orgErr) throw new Error(`Failed to setup OrgA: ${orgErr.message}`);
-      console.log('Test Organization OrgA ensured/created:', orgData);
+      if (orgErr) throw new Error(`Failed to create OrgA: ${orgErr.message}`);
+      console.log('Test Organization OrgA created:', orgData);
 
-      console.log(`Ensuring Alice (User ID: ${userAliceId}) is an admin member of OrgA (ID: ${orgA_id})...`);
+      console.log(`Ensuring Alice (User ID: ${dynamicAliceId}) is an admin member of OrgA (ID: ${dynamicOrgAId})...`);
       const { error: memberErr } = await adminClient
         .from('organization_members')
-        .upsert({ organization_id: orgA_id, user_id: userAliceId, role: 'admin' }, 
-                { onConflict: 'organization_id, user_id' }) // Added onConflict for membership
-        .select(); // Select to see the result or error details if needed
+        .upsert({ organization_id: dynamicOrgAId, user_id: dynamicAliceId, role: 'admin' }, 
+                { onConflict: 'organization_id, user_id' })
+        .select(); 
 
-      if (memberErr) console.warn(`Could not ensure Alice as admin in OrgA members (maybe already owner or RLS/policy issue): ${memberErr.message}`);
-      else console.log('Alice ensured as admin member of OrgA.');
-
-      // Robustness check for Alice's membership
+      if (memberErr) throw new Error(`Could not make Alice admin in OrgA: ${memberErr.message}`);
+      console.log('Alice ensured as admin member of OrgA.');
+      
+      // Verify membership (optional but good for sanity check)
       const { data: memberCheck, error: memberCheckErr } = await adminClient
         .from('organization_members')
         .select('user_id')
-        .eq('user_id', userAliceId)
-        .eq('organization_id', orgA_id)
+        .eq('user_id', dynamicAliceId)
+        .eq('organization_id', dynamicOrgAId)
         .maybeSingle();
 
       if (memberCheckErr || !memberCheck) {
-        console.warn(`WARN: Post-upsert check for Alice in OrgA members failed or returned no data. Error: ${memberCheckErr?.message}. Data: ${JSON.stringify(memberCheck)}. Retrying once...`);
-        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
-        const { data: retryData, error: retryErr } = await adminClient
-          .from('organization_members')
-          .select('user_id')
-          .eq('user_id', userAliceId)
-          .eq('organization_id', orgA_id)
-          .maybeSingle();
-        if (retryErr || !retryData) {
-          throw new Error(`FATAL: Alice's membership in OrgA could not be confirmed even after retry. Setup cannot continue. Error: ${retryErr?.message}`);
-        }
-        console.log('Alice membership in OrgA confirmed after retry.');
-      } else {
-        console.log('Alice membership in OrgA immediately confirmed post-upsert.');
+        throw new Error(`FATAL: Alice's membership in OrgA could not be confirmed. Setup cannot continue. Error: ${memberCheckErr?.message}`);
       }
+      console.log('Alice membership in OrgA confirmed.');
 
     } catch (error) {
       console.error('Error in beforeAll DB setup:', error);
+      // Attempt cleanup of created users if setup fails partially
+      if (dynamicAliceId) {
+        const { error: aliceDelErr } = await adminClient.auth.admin.deleteUser(dynamicAliceId);
+        if (aliceDelErr) console.error('Cleanup error for Alice during beforeAll catch:', aliceDelErr.message);
+      }
+      if (dynamicCharlieId) {
+        const { error: charlieDelErr } = await adminClient.auth.admin.deleteUser(dynamicCharlieId);
+        if (charlieDelErr) console.error('Cleanup error for Charlie during beforeAll catch:', charlieDelErr.message);
+      }
+      if (dynamicOrgAId) { // if org was created, try to delete members and org
+        const { error: memberDelErr } = await adminClient.from('organization_members').delete().eq('organization_id', dynamicOrgAId);
+        if (memberDelErr) console.error('Cleanup error for org members during beforeAll catch:', memberDelErr.message);
+        
+        const { error: orgDelErr } = await adminClient.from('organizations').delete().eq('id', dynamicOrgAId);
+        if (orgDelErr) console.error('Cleanup error for org during beforeAll catch:', orgDelErr.message);
+      }
       throw error;
     }
     
@@ -185,22 +206,49 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
   afterAll(async () => {
     const adminClient = getSupabaseAdminClient();
     try {
+      // 1. Clean up forecasts
       if (createdForecastIds.length > 0) {
         console.log(`Cleaning up ${createdForecastIds.length} forecasts`);
         const { error } = await adminClient
           .from('forecasts')
             .delete()
           .in('id', createdForecastIds);
-        if (error) console.error('Error cleaning up forecasts:', error);
+        if (error) console.error('Error cleaning up forecasts:', error.message);
       }
       
-      // Clean up organization and memberships
-      // Be careful with cascading deletes or ensure order of operations.
-      console.log(`Cleaning up OrgA (${orgA_id}) and its memberships`);
-      await adminClient.from('organization_members').delete().eq('organization_id', orgA_id);
-      // Only delete the org if it was dynamically created or if you intend to clean it up post-tests
-      // await adminClient.from('organizations').delete().eq('id', orgA_id); 
-      console.log('OrgA memberships cleaned. OrgA itself is left intact as per current script.')
+      // 2. Clean up organization memberships (related to dynamicOrgAId)
+      if (dynamicOrgAId) {
+        console.log(`Cleaning up memberships for OrgA (${dynamicOrgAId})`);
+        const { error: memberDelErr } = await adminClient
+          .from('organization_members')
+          .delete()
+          .eq('organization_id', dynamicOrgAId);
+        if (memberDelErr) console.error('Error cleaning up organization members:', memberDelErr.message);
+      }
+
+      // 3. Clean up the organization
+      if (dynamicOrgAId) {
+        console.log(`Cleaning up OrgA (${dynamicOrgAId})`);
+        const { error: orgDelErr } = await adminClient
+          .from('organizations')
+          .delete()
+          .eq('id', dynamicOrgAId);
+        if (orgDelErr) console.error('Error cleaning up organization:', orgDelErr.message);
+      }
+
+      // 4. Clean up users
+      if (dynamicAliceId) {
+        console.log(`Cleaning up user Alice (ID: ${dynamicAliceId})`);
+        const { error: aliceDelErr } = await adminClient.auth.admin.deleteUser(dynamicAliceId);
+        if (aliceDelErr) console.error('Error cleaning up Alice:', aliceDelErr.message);
+      }
+      if (dynamicCharlieId) {
+        console.log(`Cleaning up user Charlie (ID: ${dynamicCharlieId})`);
+        const { error: charlieDelErr } = await adminClient.auth.admin.deleteUser(dynamicCharlieId);
+        if (charlieDelErr) console.error('Error cleaning up Charlie:', charlieDelErr.message);
+      }
+
+      console.log('DB cleanup in afterAll completed.');
 
       } catch (error) {
       console.error('Error in afterAll DB cleanup:', error);
@@ -214,7 +262,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Alice's RLS Test Forecast ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
       };
       
       console.log('Payload for Alice in specific test:', JSON.stringify(createForecastDto));
@@ -234,11 +282,11 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
 
       expect(response.body).toHaveProperty('id');
       expect(response.body.name).toBe(createForecastDto.name);
-      expect(response.body.organizationId).toBe(orgA_id);
+      expect(response.body.organizationId).toBe(dynamicOrgAId); // Use dynamic OrgA ID
       // Check if the service populates userId from the token
       // This is a strong expectation for an RLS-enabled system.
       expect(response.body).toHaveProperty('userId');
-      expect(response.body.userId).toBe(userAliceId);
+      expect(response.body.userId).toBe(dynamicAliceId); // Use dynamic Alice ID
 
       createdForecastIds.push(response.body.id);
     });
@@ -248,7 +296,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Charlie's Unauthorized RLS Test Forecast ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
       };
 
       const response = await request(app.getHttpServer())
@@ -277,7 +325,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Alice's Readable Forecast ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
         // userId should NOT be in DTO, it must be derived from token by backend
       };
 
@@ -315,10 +363,10 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         .expect(200);
 
       expect(response.body.id).toBe(aliceForecastId);
-      expect(response.body.organizationId).toBe(orgA_id);
+      expect(response.body.organizationId).toBe(dynamicOrgAId); // Use dynamic OrgA ID
       // This is a strong expectation for an RLS-enabled system.
       expect(response.body).toHaveProperty('userId');
-      expect(response.body.userId).toBe(userAliceId);
+      expect(response.body.userId).toBe(dynamicAliceId); // Use dynamic Alice ID
     });
 
     it('Charlie (NOT a member of OrgA) should NOT be able to read Alice\'s forecast from OrgA', async () => {
@@ -339,7 +387,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
     it('Alice (member of OrgA) should be able to list forecasts for OrgA (and see hers)', async () => {
       await request(app.getHttpServer())
         .get('/forecasts')
-        .query({ organizationId: orgA_id })
+        .query({ organizationId: dynamicOrgAId }) // Use dynamic OrgA ID
         .set('Authorization', `Bearer ${aliceAuthToken}`)
         .expect(200)
         .then((response: Response) => { // Added Response type
@@ -358,7 +406,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
       // A common RLS pattern is to return an empty list if the user can't see any items.
       const response = await request(app.getHttpServer())
         .get('/forecasts')
-        .query({ organizationId: orgA_id })
+        .query({ organizationId: dynamicOrgAId }) // Use dynamic OrgA ID
         .set('Authorization', `Bearer ${charlieAuthToken}`);
         
       // Check for 200 with empty array OR 403/404 depending on RLS implementation
@@ -380,7 +428,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Forecast For Update Test - ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
       };
       const response = await request(app.getHttpServer())
         .post('/forecasts')
@@ -435,7 +483,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Forecast To Be Deleted - ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
       };
       const createResponse = await request(app.getHttpServer())
         .post('/forecasts')
@@ -469,7 +517,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Alice\'s Forecast For Charlie Delete Attempt - ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
       };
       const createResponse = await request(app.getHttpServer())
         .post('/forecasts')
@@ -495,7 +543,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Node Test Forecast - ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
       };
       const response = await request(app.getHttpServer())
         .post('/forecasts')
@@ -755,7 +803,7 @@ describe('Forecast Module Integration Tests (RLS Focused)', () => {
         name: `Edge Test Forecast - ${new Date().toISOString()}`,
         forecastStartDate: '2024-01-01',
         forecastEndDate: '2024-12-31',
-        organizationId: orgA_id,
+        organizationId: dynamicOrgAId, // Use dynamic OrgA ID
       };
       let response = await request(app.getHttpServer())
         .post('/forecasts')

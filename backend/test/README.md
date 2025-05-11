@@ -34,22 +34,31 @@ npm run test:e2e -- forecast.e2e-spec.ts
 
 ### Environment Setup
 
-The integration tests require the following environment variables to be set:
+The integration tests require a `.env` file in the `backend` directory with the following environment variables set:
 
+```env
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key # For admin operations during test setup/teardown
+SUPABASE_ANON_KEY=your_supabase_anon_key # For test user authentication
 ```
-SUPABASE_URL=https://rfjcfypsaixxenafuxky.supabase.co
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmamNmeXBzYWl4eGVuYWZ1eGt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4NjE0MTgsImV4cCI6MjA1OTQzNzQxOH0.cnobscjeKf-5RgaZQFBJ9GdzOh9fi9HotO9AyKQUupU
-```
+The Jest configuration (`jest-e2e.json`) uses `dotenv/config` to automatically load these variables.
 
-However, the tests are also set up to configure these environment variables automatically if they're not already set.
+### Test Setup and Cleanup
 
-### Test Cleanup
+The `forecast.e2e-spec.ts` integration tests are designed to be self-contained:
 
-The integration tests include cleanup logic that:
-
-1. Removes all test data after each test run
-2. Uses fixed test user and organization IDs to make cleanup easier
-3. Tracks all created resources for proper cleanup even if tests fail
+1.  **Dynamic Setup**: Before the tests run, the suite dynamically creates:
+    *   Two test users (e.g., "Alice" and "Charlie") with unique email addresses for each test run.
+    *   A test organization (e.g., "OrgA").
+    *   Alice is automatically made an admin member of OrgA.
+    These entities are created using the Supabase admin client (via `SUPABASE_SERVICE_ROLE_KEY`).
+2.  **RLS Testing**: Test users (Alice and Charlie) then authenticate to obtain JWTs, which are used for API requests to test Row Level Security policies against the dynamically created resources.
+3.  **Comprehensive Cleanup**: After all tests in the suite complete, an `afterAll` hook ensures that:
+    *   All forecasts created during the tests are deleted.
+    *   The test organization's memberships are deleted.
+    *   The test organization itself is deleted.
+    *   The test users (Alice and Charlie) are deleted.
+    This cleanup uses the Supabase admin client to ensure all test-generated data is removed, making the tests independent of pre-existing database state (beyond the schema itself).
 
 ### Notes for Production
 
