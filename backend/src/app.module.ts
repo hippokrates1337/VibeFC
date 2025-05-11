@@ -4,6 +4,8 @@ import { DataIntakeModule } from './data-intake/data-intake.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { HealthModule } from './health/health.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { ForecastModule } from './forecast/forecast.module';
+import { TestAuthModule } from './test-auth/test-auth.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { OrganizationsModule } from './organizations/organizations.module';
     DataIntakeModule,
     HealthModule,
     OrganizationsModule,
+    ForecastModule,
+    TestAuthModule,
   ],
 })
 export class AppModule {} 

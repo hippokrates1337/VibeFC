@@ -16,7 +16,7 @@ This guide will help you verify that your backend is correctly connected to Supa
 
 If you encounter execution policy issues on Windows, you can use the provided PowerShell script:
 
-1. Edit the `install-deps.ps1` script if needed
+1. Edit the `install-deps.ps1` script if needed (typically not required for just installing dependencies).
 2. Right-click on the script in File Explorer and select "Run with PowerShell"
 3. Alternatively, open PowerShell as Administrator and run:
    ```powershell
@@ -26,9 +26,10 @@ If you encounter execution policy issues on Windows, you can use the provided Po
 
 ## Running the Application with PowerShell Script
 
-1. Edit the `run-app.ps1` script to set your Supabase environment variables
-2. Right-click on the script in File Explorer and select "Run with PowerShell"
-3. Alternatively, open PowerShell as Administrator and run:
+The `run-app.ps1` script can be used to start the backend application. Ensure your Supabase environment variables are correctly set in the `.env` file, as the application will load them from there.
+
+1. To use the script, right-click on `run-app.ps1` in File Explorer and select "Run with PowerShell".
+2. Alternatively, open PowerShell as Administrator and run:
    ```powershell
    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
    .\run-app.ps1
@@ -59,34 +60,11 @@ This will return:
 }
 ```
 
-### Supabase-specific Health Check
-```
-GET http://localhost:3001/health/supabase
-```
-
-Success response:
-```json
-{
-  "status": "ok",
-  "message": "Supabase connection successful",
-  "timestamp": "2023-08-01T12:34:56.789Z"
-}
-```
-
-Error response:
-```json
-{
-  "status": "error",
-  "message": "Supabase connection failed: [error details]",
-  "timestamp": "2023-08-01T12:34:56.789Z"
-}
-```
-
 ## Common Connection Issues
 
 1. **PowerShell Execution Policy**: If you see errors about script execution being disabled, use the provided PowerShell scripts with the appropriate execution policy settings.
 
-2. **Invalid Credentials**: Double-check your Supabase URL and key in the `.env` file or in the `run-app.ps1` script.
+2. **Invalid Credentials**: Double-check your Supabase URL and key in the `.env` file. Ensure the application is configured to read these variables (e.g., via NestJS `ConfigModule`).
 
 3. **Table Not Found Error**: Ensure you've run the SQL script to create the necessary tables.
 

@@ -149,6 +149,9 @@ describe('SupabaseService', () => {
     });
 
     it('should throw UnauthorizedException if Authorization header is missing', async () => {
+      // Need to disable test environment for this specific test
+      process.env.IS_TEST_ENVIRONMENT = 'false';
+      
       // Modify the request mock for this specific test case
       const moduleRef = await Test.createTestingModule({
          providers: [
@@ -165,9 +168,15 @@ describe('SupabaseService', () => {
       expect(() => serviceWithNoAuth.client).toThrow('Authorization token is missing or invalid.');
       expect(Logger.prototype.warn).toHaveBeenCalledWith('Attempted to create Supabase client without Authorization header.');
       expect(createClient).not.toHaveBeenCalled();
+      
+      // Re-enable test environment for other tests
+      process.env.IS_TEST_ENVIRONMENT = 'true';
     });
 
     it('should throw UnauthorizedException if Authorization header is not Bearer', async () => {
+       // Need to disable test environment for this specific test
+       process.env.IS_TEST_ENVIRONMENT = 'false';
+       
        // Modify the request mock for this specific test case
        const moduleRef = await Test.createTestingModule({
          providers: [
@@ -183,6 +192,42 @@ describe('SupabaseService', () => {
        expect(() => serviceWithWrongAuth.client).toThrow('Authorization token is missing or invalid.');
        expect(Logger.prototype.warn).toHaveBeenCalledWith('Attempted to create Supabase client without Authorization header.');
        expect(createClient).not.toHaveBeenCalled();
+       
+       // Re-enable test environment for other tests
+       process.env.IS_TEST_ENVIRONMENT = 'true';
+    });
+    
+    it('should create a test client in test environment', async () => {
+      // Ensure test environment is enabled
+      process.env.IS_TEST_ENVIRONMENT = 'true';
+      
+      // Modify the request mock for this specific test case - no auth header needed in test mode
+      const moduleRef = await Test.createTestingModule({
+        providers: [
+          SupabaseService,
+          { provide: ConfigService, useValue: configService }, // Use the existing mocked config
+          { provide: REQUEST, useValue: { headers: {} } }, // Empty headers is fine in test mode
+        ],
+      }).compile();
+      
+      // Use resolve for the scoped service within this custom context
+      const testService = await moduleRef.resolve<SupabaseService>(SupabaseService);
+      
+      // This should not throw in test environment
+      const client = testService.client;
+      expect(client).toBeDefined();
+      expect(createClient).toHaveBeenCalledWith(
+        mockSupabaseUrl,
+        mockSupabaseAnonKey,
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            autoRefreshToken: false,
+            persistSession: false,
+          }),
+        })
+      );
+      expect(Logger.prototype.log).toHaveBeenCalledWith('Test environment detected - creating admin client');
+      expect(Logger.prototype.log).toHaveBeenCalledWith('Test-mode Supabase client initialized with admin privileges');
     });
   });
 
