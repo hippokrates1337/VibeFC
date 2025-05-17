@@ -54,69 +54,56 @@
     *   **Integration Tests (Supertest & Jest):**
         *   For `ForecastController`: Test API endpoints thoroughly (request/response, status codes, error handling) for creating, reading, updating, and deleting forecasts, including their nodes and edges.
 
-### Phase 2: Frontend - Core UI & State (Next.js, Zustand, React Flow)
+### Phase 2: Frontend - Core UI & State (Next.js, Zustand, React Flow) ✅
 
-1.  **New Zustand Store (`src/lib/store/forecast-graph-store.ts`):**
+1.  **New Zustand Store (`src/lib/store/forecast-graph-store.ts`):** ✅
     *   **State:** `forecastId`, `forecastName`, `forecastStartDate`, `forecastEndDate`, `nodes` (Array of `ForecastNodeClient` - interface for node data, including client-side state like `isSelected`, and reflecting `ConstantNode` attribute change), `edges` (Array of `ForecastEdgeClient`), `isDirty`.
     *   **Actions:** `loadForecast`, `setForecastPeriod`, `addNode`, `updateNode`, `deleteNode`, `addEdge`, `deleteEdge`, `setDirty`, `resetStore`.
 
-2.  **Routing & Page Structure:**
+2.  **Routing & Page Structure:** ✅
     *   `src/app/(protected)/forecast-definition/page.tsx`: For listing/creating forecasts.
     *   `src/app/(protected)/forecast-definition/[forecastId]/page.tsx`: For the canvas editor.
     *   Ensure that navigation gets updated in the bar at the top of each page in the (protected) route and there is a new card on `src\app\landing\page.tsx` 
 
-3.  **Canvas Library Integration (React Flow):**
+3.  **Canvas Library Integration (React Flow):** ✅
     *   Set up React Flow provider (`ReactFlowProvider`) around the canvas area.
     *   Basic configuration for zoom, pan.
 
-4.  **Frontend Store & Core Logic Testing (Unit):**
+4.  **Frontend Store & Core Logic Testing (Unit):** ✅
     *   **Unit Tests (Jest):**
         *   For `forecastGraphStore`: Test actions (e.g., adding a node correctly initializes its attributes based on kind, deleting a node also removes connected edges) and selectors. Test client-side validation logic within the store if any (e.g., for node attributes before an update action).
 
-### Phase 3: Frontend - Canvas & Node Implementation
+### Phase 3: Graphical Editor Components (DONE) ✅
 
-1.  **Main Canvas Component (`src/components/forecast/forecast-canvas.tsx`):**
-    *   Use React Flow components (`<ReactFlow nodes={...} edges={...} onNodesChange={...} onEdgesChange={...} />`).
-    *   Connect to `forecastGraphStore` for `nodes` and `edges`.
-    *   Dispatch store actions on React Flow events (`onNodesChange`, `onEdgesChange`, `onConnect`, etc.).
+- Implemented main canvas (`forecast-canvas.tsx`) using React Flow
+- Created custom node components for all node types
+- Integrated canvas into forecast definition page
+- Updated documentation and READMEs
+- Added comprehensive test suite for all components (custom nodes and canvas)
 
-2.  **Custom Node Components (`src/components/forecast/nodes/`):**
-    *   Develop React components for each node kind: `DataNode.tsx`, `ConstantNode.tsx` (reflecting attribute change), `OperatorNode.tsx`, `MetricNode.tsx`, `SeedNode.tsx`.
-    *   Style with Tailwind CSS / Shadcn UI, color-coded by kind.
-    *   Pass these as `nodeTypes` to React Flow.
+### Phase 4: Frontend - UI Controls & Interactions (DONE) ✅
 
-3.  **Edge Rendering & Interaction:**
-    *   Configure React Flow for edge drawing and custom edge types if needed (e.g., with arrowheads).
-    *   Handle `onConnect` to add edges to the store.
+1.  **Node Configuration Panel (`src/components/forecast/node-config-panel.tsx`):** ✅
+    *   Use Shadcn `Sheet` component for a sliding panel
+    *   Dynamically render input fields based on selected node kind
+    *   Implement attribute editing for all node types
+    *   Add node deletion functionality with confirmation dialog
 
-4.  **Frontend Canvas & Node Component Testing (Unit & Snapshot):**
-    *   **Unit/Snapshot Tests (React Testing Library, Jest):**
-        *   For each custom node component: Test rendering based on props, display of key attributes.
-    *   **Component Tests (React Testing Library, Jest):**
-        *   For `ForecastCanvas`: Test that nodes and edges from the store are correctly passed to React Flow. Mock React Flow internals if necessary to test interactions like node selection dispatching store actions.
+2.  **Toolbar/Sidebar Controls (`src/components/forecast/forecast-toolbar.tsx`):** ✅
+    *   Implement forecast metadata controls (name, date range)
+    *   Add node creation buttons with icons for each node type
+    *   Create save functionality with validation
+    *   Add unsaved changes warning dialog
 
-### Phase 4: Frontend - UI Controls & Interactions
+3.  **Client-Side Validation & User Feedback:** ✅
+    *   Implement UI-level validation for required fields
+    *   Add toast notifications for user actions
+    *   Create alert dialog for unsaved changes warning
 
-1.  **Node Configuration Panel (`src/components/forecast/node-config-panel.tsx`):**
-    *   Use Shadcn `Sheet` or `Dialog`.
-    *   Dynamically render input fields (Shadcn `Input`, `Select`, etc.) based on selected `node.kind` and its attributes (reflecting `ConstantNode` change).
-    *   Update Zustand store on attribute changes.
-
-2.  **Toolbar/Sidebar Controls (`src/components/forecast/forecast-toolbar.tsx`):**
-    *   Shadcn `Button`, `DropdownMenu` for adding nodes.
-    *   Shadcn `DatePicker` for "Forecast Start" / "End".
-    *   "Save" button.
-    *   Controls for "Delete Node/Edge", "Duplicate with Edges".
-
-3.  **Client-Side Validation & User Feedback:**
-    *   Implement UI-level validation (e.g., required fields in config panel).
-    *   DAG cycle detection (consider a library or a simplified approach initially).
-    *   Shadcn `Toast` or `Alert` for messages, `AlertDialog` for "unsaved changes" warning.
-
-4.  **Frontend UI Controls & Interaction Testing (Component):**
-    *   **Component Tests (React Testing Library, Jest):**
-        *   For `NodeConfigPanel`: Test dynamic rendering of forms for each node type. Test that changes in the form update the Zustand store correctly.
-        *   For `ForecastToolbar`: Test that button clicks (add node, save, delete) and period selections dispatch the correct Zustand store actions or trigger API calls (mocked).
+4.  **Frontend UI Controls & Interaction Testing:** ✅
+    *   Unit tests for `NodeConfigPanel`
+    *   Unit tests for `ForecastToolbar`
+    *   Test validation and error handling
 
 ### Phase 5: Full Integration, API Hookup & Refinement
 
@@ -131,8 +118,8 @@
 3.  **"Duplicate with Edges" Functionality:**
     *   Implement logic in Zustand store to clone a selected node and its connected edges, generating new IDs and adjusting positions.
 
-4.  **End-to-End Flow & Final Integration Testing:**
-    *   **Manual E2E Testing:** Test the complete user flow:
+### Phase 6: End-to-End Flow & Final Integration Testing:
+    *   Test the complete user flow:
         *   Creating a new forecast.
         *   Adding/configuring all types of nodes.
         *   Connecting/disconnecting nodes.
@@ -141,6 +128,5 @@
         *   Updating and re-saving.
         *   Deleting nodes/edges.
         *   Testing "unsaved changes" warning.
-    *   **Automated E2E Tests (Optional, e.g., Playwright/Cypress):** If time permits, automate key user scenarios.
     *   Verify client-server communication, data integrity, and error handling across the full stack.
     *   Ensure adherence to all styling and project structure rules. 

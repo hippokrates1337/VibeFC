@@ -54,6 +54,9 @@ export default function ProtectedLayout({
               <Link href="/data-intake" className="text-sm font-medium">
                 Data Intake
               </Link>
+              <Link href="/forecast-definition" className="text-sm font-medium">
+                Forecast Definition
+              </Link>
             </nav>
           </div>
           

@@ -27,3 +27,13 @@ When adding new components:
 2. Use existing UI components when possible
 3. Follow naming and structure conventions
 4. Write tests for your component in the `/__tests__` directory 
+
+## Forecast Components
+
+The `forecast` directory contains all components related to the graphical forecast definition feature, including:
+- `forecast-canvas.tsx`: Main React Flow canvas for editing forecast graphs.
+- `nodes/`: Custom node components for each forecast node kind.
+- `node-config-panel.tsx`: Panel for editing node attributes.
+- `forecast-toolbar.tsx`: Toolbar for canvas actions.
+
+These components are used in the forecast definition editor and are tightly integrated with the Zustand store and React Flow. 

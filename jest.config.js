@@ -55,8 +55,8 @@ const config = {
     "**/?(*.)+(spec|test).[tj]s?(x)"
   ],
 
-  // A list of paths to modules that run some code to configure or set up the testing environment before each test
-  setupFiles: ['<rootDir>/src/setupTests.ts'],
+  // A list of paths to modules that run some code to configure or set up the testing environment
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
 
   // Module name mapper for handling CSS Modules, assets, etc.
   moduleNameMapper: {

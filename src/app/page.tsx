@@ -41,6 +41,9 @@ export default function RootPage() {
                 <Link href="/data-intake" className="text-sm font-medium">
                   Data Intake
                 </Link>
+                <Link href="/forecast-definition" className="text-sm font-medium">
+                  Forecast Definition
+                </Link>
               </nav>
             )}
           </div>
@@ -115,6 +118,19 @@ export default function RootPage() {
                   className="text-primary hover:text-primary/80 transition-colors"
                 >
                   Manage Organizations
+                </Link>
+              </div>
+
+              <div className="rounded-lg border bg-card p-6">
+                <h2 className="text-xl font-semibold mb-4">Forecast Definition</h2>
+                <p className="text-muted-foreground mb-4">
+                  Create and edit forecasts using a visual node-based editor.
+                </p>
+                <Link
+                  href="/forecast-definition"
+                  className="text-primary hover:text-primary/80 transition-colors"
+                >
+                  Manage Forecasts
                 </Link>
               </div>
             </div>
