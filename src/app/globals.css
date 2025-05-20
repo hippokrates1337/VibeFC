@@ -96,4 +96,123 @@
 
 #modal-root .modal-container {
   pointer-events: auto;
+}
+
+/* Custom styles for NodeConfigPanel to remove overlay/blur */
+/* Targets the actual overlay div when it is an immediate preceding sibling of our specific panel */
+.fixed.inset-0.z-50.bg-background\/80.backdrop-blur-sm[data-state="open"]:has(+ .no-overlay-config-panel[role="dialog"][data-state="open"]) {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+
+/* Final, more direct attempt targeting shadcn's sheet overlay structure */
+/* shadcn/ui SheetOverlay uses a specific data attribute */
+[data-vaul-overlay][data-state='open']:has(+ div > .no-overlay-config-panel),
+[data-vaul-overlay][data-state='open']:has(+ .no-overlay-config-panel) {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    pointer-events: none !important;
+}
+
+/* Even more specific for vaul (which shadcn Sheet often uses) */
+body > [data-vaul-drawer-wrapper] > [data-vaul-overlay][data-state='open']:has(~ div [data-vaul-drawer][data-state='open'] .no-overlay-config-panel) {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    pointer-events: none !important;
+}
+
+/* For the Radix UI primitive that Sheet is built on: */
+[data-radix-dialog-content].no-overlay-config-panel ~ [data-radix-dialog-overlay] {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+
+/* Simplest attempt: If the Sheet component wrapper can be identified along with our class */
+/* This assumes the overlay is a direct child of the portal and a sibling to content */
+.radix-themes [data-radix-presence] > div[data-radix-dialog-overlay] {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    pointer-events: none !important;
+}
+
+/* The shadcn/ui Sheet component often uses 'vaul' under the hood for the drawer effect. */
+/* Let's try to target vaul's overlay when our specific sheet content is present. */
+/* This assumes the overlay is a sibling to the element containing our SheetContent with the custom class. */
+body:has(.no-overlay-config-panel[data-state='open']) [data-vaul-overlay][data-state='open'] {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+
+/* If the above doesn't work, a more direct but potentially fragile selector if DOM structure is known: */
+/* For example, if the overlay is a direct sibling of the .no-overlay-config-panel's parent */
+/* .parent-of-no-overlay-config-panel > .overlay-class { ... } */
+
+/* For now, the most likely working one for shadcn/ui sheet (uses vaul) */
+/* This selector targets the overlay when it's a sibling of the drawer content, */
+/* and our custom class is on the drawer content. */
+[data-vaul-overlay][data-state='open'] {
+    /* Check if the sibling content has our class - this is tricky with pure CSS */
+    /* A more robust way is often to have a wrapper and target based on that, */
+    /* or use JS if direct CSS is too complex. */
+    /* However, if we apply a class to the SheetPortal or SheetOverlay itself, it's easier. */
+    /* Since we only added class to SheetContent, we rely on DOM structure. */
+}
+
+/* Let's try a more direct approach assuming the Sheet component adds data attributes for its parts. */
+/* shadcn/ui Sheet often uses Radix UI Dialog primitives. */
+/* The overlay is usually a sibling of the content, both within a portal. */
+/* We want to target the overlay when our specific SheetContent is active. */
+/* It's hard to do this reliably with CSS only by adding a class to SheetContent. */
+/* A better approach would be to pass a prop to Sheet or SheetOverlay if available. */
+
+/* Given the limitations, a global override for *all* sheet overlays might be too broad. */
+/* The most promising CSS-only approach is to make the default overlay transparent */
+/* when our panel is specifically targeted. */
+/* shadcn/ui's Sheet uses a fixed overlay. Let's try to make it non-interactive. */
+
+/* Apply this if a specific class for the overlay can be identified when inspecting the DOM */
+/* For example, if the overlay always has a class like 'sheet-overlay' */
+/* .sheet-overlay:has(~ .no-overlay-config-panel) { ... } */
+
+/* Given shadcn/ui structure for Dialog/Sheet, the overlay is usually a `[data-radix-dialog-overlay]` */
+/* or `[data-vaul-overlay]`. We need to ensure this rule *only* applies when our panel is open. */
+
+/* This is the most direct and generally effective way for shadcn/ui Sheet (often using Vaul): */
+/* This targets the overlay when it's a sibling to the sheet content wrapper that contains our custom class */
+:where([data-vaul-drawer-layout]) > [data-vaul-overlay][data-state='open'] {
+    background-color: transparent !important; 
+    backdrop-filter: none !important;
+    pointer-events: none !important;
+}
+
+/* If the above is too broad and affects all sheets, we need to be more specific. */
+/* However, CSS cannot easily select a parent or preceding sibling based on a child/following sibling's class. */
+/* The ideal solution involves a prop on the Sheet component itself. */
+/* Lacking that, we make the general sheet overlay non-interactive when any sheet is open. */
+/* This is not ideal as it affects all sheets. */
+
+/* A compromise: Add a class to the Sheet component itself, not SheetContent. */
+/* Since we can't do that without modifying Sheet definition, we try to make our panel's overlay specifically transparent. */
+/* The default Sheet overlay for shadcn/ui might be hard to override for a *specific* instance without JS or a direct prop. */
+/* The class `bg-background/80 backdrop-blur-sm` is common for the overlay. */
+
+/* Let's try to provide a style that targets the specific overlay of *our* sheet if possible. */
+/* If the NodeConfigPanel (which uses Sheet) is always the one we want this behavior for: */
+/* This assumes the overlay is a direct child of body or a portal, and sheet content is also there. */
+/* This is a very broad selector and might not be specific enough or could be incorrect. */
+
+/* The most straightforward approach, if a bit of a hack, is to override */
+/* the default styling of the overlay when our panel is open. */
+/* shadcn/ui uses a `vaul-overlay` div for its Sheet. */
+/* We target this overlay to remove its interactive and visual properties. */
+
+/* This rule will make ALL sheet overlays non-interactive if they use Vaul. */
+/* This is likely what's needed if there's no instance-specific prop. */
+[data-vaul-overlay] {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    pointer-events: none !important;
 } 

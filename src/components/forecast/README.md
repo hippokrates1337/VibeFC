@@ -1,43 +1,40 @@
 # Forecast Components
 
-This directory contains all components for the graphical forecast definition feature, including:
+This directory contains the UI components for the Graphical Forecast Definition feature.
 
-- `forecast-canvas.tsx`: Main React Flow canvas for editing forecast graphs.
-- `nodes/`: Custom node components for each forecast node kind (Data, Constant, Operator, Metric, Seed).
-- `node-config-panel.tsx`: Panel for editing node attributes based on node type.
-- `forecast-toolbar.tsx`: Toolbar for canvas actions like adding nodes, setting forecast metadata, and saving changes.
-- `__tests__/`: Tests for all forecast components.
+## Main Components
 
-## Component Structure
+- `forecast-canvas.tsx` - The main canvas component that displays and manages the forecast graph
+- `forecast-toolbar.tsx` - Toolbar for controlling the forecast graph and its metadata
+- `node-config-panel.tsx` - Configuration panel for editing node properties. For Data, Metric, and Seed nodes, variable/metric selection dropdowns are dynamically populated from the global `useVariableStore`, filtered by the currently selected organization in that store.
 
-### ForecastCanvas
-The main canvas component that wraps React Flow and handles the rendering of nodes and edges. It connects to the Zustand store for state management.
+## Node Components
 
-### NodeConfigPanel
-A side panel that appears when a node is selected, allowing configuration of node-specific attributes. It dynamically renders different forms based on the type of the selected node.
+Custom node components for different node types are found in the `nodes/` subdirectory:
 
-### ForecastToolbar
-Controls for the forecast graph editor, including:
-- Forecast metadata (name, date range)
-- Node creation buttons for each node type
-- Save and other action buttons
-- Validation for user inputs
+- `constant-node.tsx` - Node for constant values
+- `data-node.tsx` - Node for variable data references with optional time offset and custom name
+- `metric-node.tsx` - Node for budget and historical metrics
+- `operator-node.tsx` - Node for mathematical operations
+- `seed-node.tsx` - Node for seeding forecast metrics from sources
 
-### Custom Node Components
-Located in the `nodes/` directory, these components define the visual appearance and behavior of each node type in the graph:
-- `DataNode.tsx`: For data source nodes
-- `ConstantNode.tsx`: For constant value nodes
-- `OperatorNode.tsx`: For mathematical operation nodes
-- `MetricNode.tsx`: For business metric definition nodes
-- `SeedNode.tsx`: For seed value nodes
+## Functionality
 
-## State Management
+The forecast editor provides the following functionality:
 
-All components interact with a central Zustand store (`forecast-graph-store.ts`) that handles:
-- Nodes and edges data
-- Node selection state
-- Dirty state tracking
-- Loading and error states
-- CRUD operations for the graph elements
+- Create and connect different types of nodes to build a forecast graph
+- Configure node properties via the configuration panel, with dynamic variable lists for relevant nodes.
+- Save and load forecast definitions from the API
+- Duplicate nodes with their connected edges
+- Visual design with drag-and-drop for building forecast relationships
+- Name and label nodes for better identification
 
-The components follow a unidirectional data flow pattern where UI events trigger store actions, and components subscribe to relevant parts of the store state. 
+## API Integration
+
+The components integrate with the backend API through the services defined in `src/lib/api/forecast.ts`. The graph state is managed through the Zustand store in `src/lib/store/forecast-graph-store.ts`. Variable data for dropdowns is sourced from `src/lib/store/variables.ts`.
+
+For full implementation details of loading, saving, and manipulating forecast data, see:
+
+- `src/app/(protected)/forecast-definition/[forecastId]/page.tsx` - Editor page with API integration
+- `src/lib/store/forecast-graph-store.ts` - Graph state management including the "Duplicate with Edges" functionality
+- `src/lib/store/variables.ts` - Global variable state management. 

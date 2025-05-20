@@ -23,6 +23,7 @@ import {
   SeedNodeAttributes,
   ForecastNodeClient
 } from '@/lib/store/forecast-graph-store';
+import { useVariableStore } from '@/lib/store/variables';
 import { X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -39,9 +40,16 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const nodes = useForecastGraphStore(state => state.nodes);
   const updateNodeData = useForecastGraphStore(state => state.updateNodeData);
   const deleteNode = useForecastGraphStore(state => state.deleteNode);
-  const setSelectedNodeId = useForecastGraphStore(state => state.setSelectedNodeId);
+  const setSelectedGraphNodeId = useForecastGraphStore(state => state.setSelectedNodeId);
   
   const selectedNode = nodes.find(node => node.id === selectedNodeId);
+  
+  // Get variables and selectedOrgId from the variable store
+  const allVariables = useVariableStore(state => state.variables);
+  const selectedOrgIdForVariables = useVariableStore(state => state.selectedOrganizationId);
+  
+  // Filter variables for the currently selected organization context of the variable store
+  const organizationVariables = allVariables.filter(variable => variable.organizationId === selectedOrgIdForVariables);
   
   // Close panel when no node is selected
   useEffect(() => {
@@ -56,7 +64,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const handleDeleteNode = () => {
     if (selectedNodeId) {
       deleteNode(selectedNodeId);
-      setSelectedNodeId(null);
+      setSelectedGraphNodeId(null);
       onOpenChange(false);
       setShowDeleteConfirm(false);
     }
@@ -93,6 +101,16 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     return (
       <>
         <div className="space-y-1">
+          <label htmlFor="name" className="text-sm font-medium">Name</label>
+          <Input 
+            id="name"
+            value={data.name || ''}
+            onChange={(e) => updateNodeData(node.id, { name: e.target.value })}
+            placeholder="Node name"
+          />
+        </div>
+        
+        <div className="space-y-1">
           <label htmlFor="variableId" className="text-sm font-medium">Variable</label>
           <Select 
             value={data.variableId || ''} 
@@ -102,9 +120,17 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               <SelectValue placeholder="Select variable" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="var1">Revenue</SelectItem>
-              <SelectItem value="var2">Expenses</SelectItem>
-              <SelectItem value="var3">Profit</SelectItem>
+              {organizationVariables.length > 0 ? (
+                organizationVariables.map(variable => (
+                  <SelectItem key={variable.id} value={variable.id}>
+                    {variable.name}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="no-vars" disabled>
+                  {selectedOrgIdForVariables ? 'No variables for this organization' : 'Please select an organization first'}
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -183,9 +209,11 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               <SelectValue placeholder="Select budget variable" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="var1">Revenue</SelectItem>
-              <SelectItem value="var2">Expenses</SelectItem>
-              <SelectItem value="var3">Profit</SelectItem>
+              {organizationVariables.map(variable => (
+                <SelectItem key={variable.id} value={variable.id}>
+                  {variable.name} (Budget)
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -200,9 +228,11 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               <SelectValue placeholder="Select historical variable" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="var1">Revenue</SelectItem>
-              <SelectItem value="var2">Expenses</SelectItem>
-              <SelectItem value="var3">Profit</SelectItem>
+              {organizationVariables.map(variable => (
+                <SelectItem key={variable.id} value={variable.id}>
+                  {variable.name} (Historical)
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -223,9 +253,16 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             <SelectValue placeholder="Select source metric" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="metric1">Revenue Metric</SelectItem>
-            <SelectItem value="metric2">Expense Metric</SelectItem>
-            <SelectItem value="metric3">Profit Metric</SelectItem>
+            {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').map(metric => (
+              <SelectItem key={metric.id} value={metric.id}>
+                {metric.name}
+              </SelectItem>
+            ))}
+            {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').length === 0 && (
+                <SelectItem value="no-metrics" disabled>
+                  No metrics available for this organization
+                </SelectItem>
+            )}
           </SelectContent>
         </Select>
       </div>
@@ -234,7 +271,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md">
+      <SheetContent className="sm:max-w-md no-overlay-config-panel">
         <SheetHeader>
           <SheetTitle>Configure {selectedNode.type} Node</SheetTitle>
           <SheetDescription>

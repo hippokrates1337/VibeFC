@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
@@ -73,7 +73,6 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
         <Calendar
           mode="single"
           selected={selectedDate}
-          month={selectedDate}
           onSelect={(d: Date | undefined) => {
             if (d) {
               // Format to YYYY-MM-DD using local date parts to avoid timezone issues
@@ -126,6 +125,15 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
       setSelectedNodeId: state.setSelectedNodeId
     }))
   );
+  
+  // Effect to open/close panel based on selectedNodeId from store
+  useEffect(() => {
+    if (selectedNodeId) {
+      setConfigPanelOpen(true);
+    } else {
+      setConfigPanelOpen(false);
+    }
+  }, [selectedNodeId]);
   
   // Handle save with validation
   const handleSave = async () => {
@@ -194,8 +202,8 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
     });
     
     // Open configuration panel for the new node
-    setSelectedNodeId(nodeId);
-    setConfigPanelOpen(true);
+    // setSelectedNodeId(nodeId); // This is already done by onNodesChange
+    // setConfigPanelOpen(true); // This will be handled by the useEffect
     
     toast({
       title: 'Node Added',
@@ -206,7 +214,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
   // Handle node selection for configuration
   const handleOpenNodeConfig = () => {
     if (selectedNodeId) {
-      setConfigPanelOpen(true);
+      setConfigPanelOpen(true); // This is fine for the button click
     } else {
       toast({
         title: 'No Node Selected',
@@ -350,9 +358,14 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
       </div>
       
       {/* Node configuration panel */}
-      <NodeConfigPanel
-        open={configPanelOpen}
-        onOpenChange={setConfigPanelOpen}
+      <NodeConfigPanel 
+        open={configPanelOpen} 
+        onOpenChange={(isOpen) => {
+          setConfigPanelOpen(isOpen);
+          if (!isOpen) {
+            setSelectedNodeId(null); // Deselect node when panel is closed by user
+          }
+        }}
       />
       
       {/* Unsaved changes dialog */}

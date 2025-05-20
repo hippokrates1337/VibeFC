@@ -105,17 +105,17 @@
     *   Unit tests for `ForecastToolbar`
     *   Test validation and error handling
 
-### Phase 5: Full Integration, API Hookup & Refinement
+### Phase 5: Full Integration, API Hookup & Refinement ✅
 
-1.  **API Integration Services (`src/lib/api/forecast.ts`):**
+1.  **API Integration Services (`src/lib/api/forecast.ts`):** ✅
     *   Functions using `fetch` to call NestJS backend endpoints for CRUD operations on forecasts.
     *   Integrate these services with Zustand store actions (e.g., `saveForecast` action calls the API).
 
-2.  **Loading/Saving Forecasts:**
+2.  **Loading/Saving Forecasts:** ✅
     *   Implement logic to load forecast data into Zustand store when `[forecastId]/page.tsx` mounts.
     *   Implement the "Save" button functionality to persist the current state from Zustand to the backend. Clear `isDirty` on success.
 
-3.  **"Duplicate with Edges" Functionality:**
+3.  **"Duplicate with Edges" Functionality:** ✅
     *   Implement logic in Zustand store to clone a selected node and its connected edges, generating new IDs and adjusting positions.
 
 ### Phase 6: End-to-End Flow & Final Integration Testing:

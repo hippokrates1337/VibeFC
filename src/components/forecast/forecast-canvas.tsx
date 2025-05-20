@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, MouseEvent } from 'react';
 import ReactFlow, {
   Controls,
   Background,
@@ -9,7 +9,8 @@ import ReactFlow, {
   OnEdgesChange,
   OnConnect,
   Connection,
-  BackgroundVariant
+  BackgroundVariant,
+  NodeMouseHandler
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
@@ -22,11 +23,11 @@ import SeedNode from './nodes/SeedNode';
 
 // Moved nodeTypes outside the component for stable reference
 const nodeTypes = {
-  data: DataNode,
-  constant: ConstantNode,
-  operator: OperatorNode,
-  metric: MetricNode,
-  seed: SeedNode
+  DATA: DataNode,
+  CONSTANT: ConstantNode,
+  OPERATOR: OperatorNode,
+  METRIC: MetricNode,
+  SEED: SeedNode
 };
 
 /**
@@ -40,6 +41,7 @@ const ForecastCanvas: React.FC = () => {
   const onNodesChangeFromStore = useForecastGraphStore((state) => state.onNodesChange);
   const onEdgesChangeFromStore = useForecastGraphStore((state) => state.onEdgesChange);
   const addEdgeStore = useForecastGraphStore((state) => state.addEdge);
+  const setSelectedNodeId = useForecastGraphStore((state) => state.setSelectedNodeId);
 
   const handleNodesChange: OnNodesChange = useCallback((changes) => {
     onNodesChangeFromStore(changes);
@@ -55,6 +57,10 @@ const ForecastCanvas: React.FC = () => {
     }
   }, [addEdgeStore]);
 
+  const handleNodeDoubleClick: NodeMouseHandler = useCallback((event: MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+  }, [setSelectedNodeId]);
+
   return (
     <ReactFlowProvider>
       <ReactFlow
@@ -65,9 +71,11 @@ const ForecastCanvas: React.FC = () => {
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={onConnect}
+        onNodeDoubleClick={handleNodeDoubleClick}
         
         nodeTypes={nodeTypes}
         fitView
+        selectNodesOnDrag={false}
       >
         <Controls />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />

@@ -1,82 +1,120 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import ForecastCanvas from '@/components/forecast/forecast-canvas';
 import ForecastToolbar from '@/components/forecast/forecast-toolbar';
 import { useToast } from '@/components/ui/use-toast';
-import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
+import { 
+  useForecastGraphStore, 
+  useForecastNodes, 
+  useForecastEdges, 
+  useForecastMetadata, 
+  useIsForecastDirty,
+  useLoadForecast,
+  useForecastOrganizationId,
+  useForecastError
+} from '@/lib/store/forecast-graph-store';
 import { Toaster } from '@/components/ui/toaster';
+import { forecastApi, mapForecastToClientFormat } from '@/lib/api/forecast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { useOrganizationStore } from '@/lib/store/organization';
 
 export default function ForecastEditorPage() {
   const { forecastId } = useParams<{ forecastId: string }>();
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isPageComponentLoading, setIsPageComponentLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [navigationTarget, setNavigationTarget] = useState('');
   
-  // Get store actions
-  const loadForecast = useForecastGraphStore(state => state.loadForecast);
-  const setDirty = useForecastGraphStore(state => state.setDirty);
-  const setError = useForecastGraphStore(state => state.setError);
+  const loadForecastToStore = useLoadForecast();
+  const setDirtyState = useForecastGraphStore(state => state.setDirty);
+  const setStoreError = useForecastGraphStore(state => state.setError);
+  const resetStore = useForecastGraphStore.getState().resetStore;
+  const isStoreDirty = useIsForecastDirty();
+  const { name, startDate, endDate } = useForecastMetadata();
+  const nodes = useForecastNodes();
+  const edges = useForecastEdges();
+  const currentForecastOrgId = useForecastOrganizationId();
+  const currentActiveOrg = useOrganizationStore((state) => state.currentOrganization);
+  const storeError = useForecastError();
   
-  // Load forecast data on mount
   useEffect(() => {
-    const fetchForecast = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Example data - in a real implementation, this would come from the API
-        const forecastData = {
-          id: forecastId,
-          name: 'Sample Forecast',
-          startDate: '2023-01-01',
-          endDate: '2023-12-31',
-          nodes: [],
-          edges: []
-        };
-        
-        loadForecast(forecastData); // This action already sets isDirty to false in the store
-      } catch (error) {
-        console.error('Error loading forecast:', error);
-        setError('Failed to load forecast data');
-        toast({
-          title: 'Error',
-          description: 'Failed to load forecast data',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
+    if (currentActiveOrg && currentForecastOrgId && currentActiveOrg.id !== currentForecastOrgId) {
+      toast({
+        title: 'Organization Changed',
+        description: `The active organization has changed. You are being redirected as this forecast belongs to a different organization.`,
+        variant: 'default',
+      });
+      router.push('/forecast-definition');
+    }
+  }, [currentActiveOrg, currentForecastOrgId, router, toast]);
+  
+  const fetchForecastData = useCallback(async () => {
+    if (!forecastId) return;
+    setIsPageComponentLoading(true);
+    setStoreError(null);
+
+    try {
+      const response = await forecastApi.getForecast(forecastId);
+      if (response.error || !response.data) {
+        throw new Error(response.error?.message || 'Failed to load forecast details.');
       }
+      const clientData = mapForecastToClientFormat(response.data);
+      loadForecastToStore(clientData);
+    } catch (err: any) {
+      console.error('Error loading forecast:', err);
+      setStoreError(err.message);
+      toast({
+        title: 'Error Loading Forecast',
+        description: err.message || 'Could not load the specified forecast.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPageComponentLoading(false);
+    }
+  }, [forecastId, loadForecastToStore, setStoreError, toast]);
+
+  useEffect(() => {
+    fetchForecastData();
+    return () => {
+      resetStore();
     };
-    
-    fetchForecast();
-    // console.log('ForecastEditorPage useEffect temporarily disabled for diagnostics');
-    // setIsLoading(false); // You might want to set this to false if the effect is disabled
-  }, [forecastId, loadForecast, setError]);
+  }, [fetchForecastData, resetStore]);
   
-  
-  // Save forecast data
   const handleSave = async () => {
+    if (!forecastId) return;
     try {
       setIsSaving(true);
       
-      // In a real implementation, this would call the API to save the forecast
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { data, error: saveError } = await forecastApi.saveForecastGraph(
+        forecastId,
+        name,
+        startDate || '',
+        endDate || '',
+        nodes,
+        edges
+      );
       
-      setDirty(false);
+      if (saveError) {
+        throw new Error(saveError.message);
+      }
+      
+      setDirtyState(false);
       toast({
         title: 'Success',
         description: 'Forecast saved successfully',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving forecast:', error);
       toast({
         title: 'Error',
-        description: 'Failed to save forecast',
+        description: 'Failed to save forecast: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     } finally {
@@ -84,10 +122,43 @@ export default function ForecastEditorPage() {
     }
   };
   
-  const handleBack = () => {
-    router.push('/forecast-definition');
+  const handleNavigation = (target: string) => {
+    if (isStoreDirty) {
+      setNavigationTarget(target);
+      setShowUnsavedDialog(true);
+    } else {
+      router.push(target);
+    }
   };
   
+  const handleBack = () => {
+    handleNavigation('/forecast-definition');
+  };
+  
+  const handleConfirmNavigation = () => {
+    setShowUnsavedDialog(false);
+    router.push(navigationTarget);
+  };
+  
+  if (isPageComponentLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (storeError) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center">
+        <p className="mb-4 text-lg text-destructive">Error: {storeError}</p>
+        <button onClick={() => router.push('/forecast-definition')} className="text-primary hover:underline">
+          Return to Forecast List
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -103,7 +174,7 @@ export default function ForecastEditorPage() {
         
         <Button 
           onClick={handleSave} 
-          disabled={isSaving || isLoading}
+          disabled={isSaving || isPageComponentLoading}
           className="flex items-center gap-1"
         >
           <Save className="h-4 w-4" />
@@ -122,6 +193,23 @@ export default function ForecastEditorPage() {
       </div>
       
       <Toaster />
+      
+      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to leave without saving?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmNavigation}>
+              Leave Without Saving
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 } 
