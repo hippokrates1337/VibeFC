@@ -142,69 +142,94 @@ export default function ForecastEditorPage() {
   
   if (isPageComponentLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <div className="flex h-screen w-full items-center justify-center bg-slate-900">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
+          <p className="text-sm text-slate-400">Loading forecast...</p>
+        </div>
       </div>
     );
   }
 
   if (storeError) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center">
-        <p className="mb-4 text-lg text-destructive">Error: {storeError}</p>
-        <button onClick={() => router.push('/forecast-definition')} className="text-primary hover:underline">
-          Return to Forecast List
-        </button>
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-900">
+        <div className="text-center space-y-4">
+          <p className="text-lg text-red-400 font-medium">Error: {storeError}</p>
+          <button onClick={() => router.push('/forecast-definition')} className="text-blue-400 hover:text-blue-300 hover:underline">
+            Return to Forecast List
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <Button 
-          onClick={handleBack} 
-          variant="ghost" 
-          size="sm" 
-          className="flex items-center gap-1"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Forecasts
-        </Button>
+    <div className="h-screen flex flex-col bg-slate-900">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 bg-slate-800 border-b border-slate-700 shadow-sm">
+        <div className="flex items-center space-x-4">
+          <Button 
+            onClick={handleBack} 
+            variant="ghost" 
+            size="sm" 
+            className="flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Forecasts
+          </Button>
+          <div className="text-sm text-slate-400">
+            {name && (
+              <span className="font-medium text-slate-200">{name}</span>
+            )}
+          </div>
+        </div>
         
         <Button 
           onClick={handleSave} 
           disabled={isSaving || isPageComponentLoading}
-          className="flex items-center gap-1"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
         >
-          <Save className="h-4 w-4" />
+          {isSaving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           {isSaving ? 'Saving...' : 'Save Forecast'}
         </Button>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_3fr] gap-4">
-        <Card className="p-4">
-          <ForecastToolbar onSave={handleSave} />
-        </Card>
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        <div className="w-80 border-r border-slate-700 bg-slate-800 shadow-sm">
+          <div className="h-full overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-slate-200 mb-4">Forecast Builder</h2>
+              <ForecastToolbar onSave={handleSave} />
+            </div>
+          </div>
+        </div>
         
-        <Card className="h-[600px] overflow-hidden">
+        {/* Canvas */}
+        <div className="flex-1 relative bg-slate-900">
           <ForecastCanvas />
-        </Card>
+        </div>
       </div>
       
       <Toaster />
       
       <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-slate-800 border-slate-700">
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-slate-200">Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
               You have unsaved changes. Are you sure you want to leave without saving?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmNavigation}>
+            <AlertDialogCancel className="bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-600">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmNavigation} className="bg-red-600 hover:bg-red-700 text-white">
               Leave Without Saving
             </AlertDialogAction>
           </AlertDialogFooter>

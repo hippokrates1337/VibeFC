@@ -60,8 +60,8 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
           id={id}
           variant="outline"
           className={cn(
-            "w-full justify-start text-left font-normal",
-            !date && "text-muted-foreground"
+            "w-full justify-start text-left font-normal bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700",
+            !date && "text-slate-400"
           )}
           aria-label={date || placeholder || "Pick a date"}
         >
@@ -69,7 +69,7 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
           {date || placeholder || "Pick a date"}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" role="dialog">
+      <PopoverContent className="w-auto p-0 bg-slate-800 border-slate-600" role="dialog">
         <Calendar
           mode="single"
           selected={selectedDate}
@@ -85,6 +85,7 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
             }
           }}
           initialFocus
+          className="bg-slate-800 text-slate-200"
         />
       </PopoverContent>
     </Popover>
@@ -224,120 +225,134 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
   };
   
   return (
-    <div className="space-y-4">
-      {/* Forecast metadata */}
-      <div className="space-y-3">
-        <div>
-          <label htmlFor="forecastName" className="text-sm font-medium mb-1 block">Forecast Name</label>
-          <Input
-            id="forecastName"
-            value={forecastName}
-            onChange={(e) => setForecastMetadata({ name: e.target.value })}
-            placeholder="Enter forecast name"
-          />
-        </div>
-        
-        <div className="grid grid-cols-2 gap-2">
+    <div className="space-y-6">
+      {/* Forecast Metadata Section */}
+      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+          <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+          Forecast Details
+        </h3>
+        <div className="space-y-3">
           <div>
-            <label htmlFor="forecastStartDate" className="text-sm font-medium mb-1 block">Start Date</label>
-            <SimpleDatePicker
-              id="forecastStartDate"
-              date={forecastStartDate}
-              setDate={(date) => setForecastMetadata({ startDate: date })}
-              placeholder="Select start date"
+            <label htmlFor="forecastName" className="text-sm font-medium text-slate-300 mb-1 block">Name</label>
+            <Input
+              id="forecastName"
+              value={forecastName}
+              onChange={(e) => setForecastMetadata({ name: e.target.value })}
+              placeholder="Enter forecast name"
+              className="bg-slate-800 border-slate-600 text-slate-200 placeholder:text-slate-400"
             />
           </div>
           
-          <div>
-            <label htmlFor="forecastEndDate" className="text-sm font-medium mb-1 block">End Date</label>
-            <SimpleDatePicker
-              id="forecastEndDate"
-              date={forecastEndDate}
-              setDate={(date) => setForecastMetadata({ endDate: date })}
-              placeholder="Select end date"
-            />
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label htmlFor="forecastStartDate" className="text-sm font-medium text-slate-300 mb-1 block">Start Date</label>
+              <SimpleDatePicker
+                id="forecastStartDate"
+                date={forecastStartDate}
+                setDate={(date) => setForecastMetadata({ startDate: date })}
+                placeholder="Select start date"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="forecastEndDate" className="text-sm font-medium text-slate-300 mb-1 block">End Date</label>
+              <SimpleDatePicker
+                id="forecastEndDate"
+                date={forecastEndDate}
+                setDate={(date) => setForecastMetadata({ endDate: date })}
+                placeholder="Select end date"
+              />
+            </div>
           </div>
         </div>
       </div>
       
-      {/* Node operations */}
-      <div className="pt-3 border-t">
-        <h3 className="text-sm font-medium mb-2">Add Node</h3>
-        <div className="flex flex-wrap gap-2">
+      {/* Node Creation Section */}
+      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+          <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+          Add Nodes
+        </h3>
+        <div className="grid grid-cols-1 gap-2">
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => handleAddNode('DATA')}
-            className="flex items-center gap-1"
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-blue-700 border-blue-500 text-blue-400 hover:text-white"
           >
             <Database className="h-4 w-4" />
-            Data
+            Data Node
           </Button>
           
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => handleAddNode('CONSTANT')}
-            className="flex items-center gap-1"
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-green-700 border-green-500 text-green-400 hover:text-white"
           >
             <Pencil className="h-4 w-4" />
-            Constant
+            Constant Node
           </Button>
           
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => handleAddNode('OPERATOR')}
-            className="flex items-center gap-1"
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-yellow-700 border-yellow-500 text-yellow-400 hover:text-white"
           >
             <Calculator className="h-4 w-4" />
-            Operator
+            Operator Node
           </Button>
           
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => handleAddNode('METRIC')}
-            className="flex items-center gap-1"
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-purple-700 border-purple-500 text-purple-400 hover:text-white"
           >
             <BarChart3 className="h-4 w-4" />
-            Metric
+            Metric Node
           </Button>
           
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => handleAddNode('SEED')}
-            className="flex items-center gap-1"
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-pink-700 border-pink-500 text-pink-400 hover:text-white"
           >
             <Flame className="h-4 w-4" />
-            Seed
+            Seed Node
           </Button>
         </div>
       </div>
       
-      {/* Actions */}
-      <div className="pt-3 border-t">
-        <h3 className="text-sm font-medium mb-2">Actions</h3>
-        <div className="flex flex-wrap gap-2">
+      {/* Actions Section */}
+      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+          <span className="w-2 h-2 bg-orange-400 rounded-full"></span>
+          Actions
+        </h3>
+        <div className="space-y-2">
           <Button 
             variant="default" 
             size="sm"
             onClick={handleSave}
-            className="flex items-center gap-1"
+            className="w-full flex items-center gap-2 justify-center bg-blue-600 hover:bg-blue-700 text-white"
             disabled={!isDirty}
           >
             <Save className="h-4 w-4" />
-            Save
+            Save Forecast
           </Button>
           
           {selectedNodeId && (
-            <>
+            <div className="pt-2 border-t border-slate-600 space-y-2">
+              <p className="text-xs text-slate-400 font-medium">Selected Node Actions:</p>
               <Button 
                 variant="secondary" 
                 size="sm"
                 onClick={handleOpenNodeConfig}
-                className="flex items-center gap-1"
+                className="w-full flex items-center gap-2 justify-center bg-slate-600 hover:bg-slate-500 text-slate-200"
               >
                 <PlusCircle className="h-4 w-4" />
                 Configure Node
@@ -347,15 +362,39 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
                 variant="outline" 
                 size="sm"
                 onClick={() => {/* Implement duplicate with edges */}}
-                className="flex items-center gap-1"
+                className="w-full flex items-center gap-2 justify-center bg-slate-800 hover:bg-slate-600 border-slate-600 text-slate-300"
               >
                 <Copy className="h-4 w-4" />
-                Duplicate
+                Duplicate Node
               </Button>
-            </>
+            </div>
           )}
         </div>
       </div>
+      
+      {/* Status Section */}
+      {(isDirty || selectedNodeId) && (
+        <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+          <h3 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
+            <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+            Status
+          </h3>
+          <div className="space-y-1">
+            {isDirty && (
+              <div className="flex items-center gap-2 text-xs text-amber-400">
+                <span className="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
+                Unsaved changes
+              </div>
+            )}
+            {selectedNodeId && (
+              <div className="flex items-center gap-2 text-xs text-blue-400">
+                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                Node selected
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       
       {/* Node configuration panel */}
       <NodeConfigPanel 
@@ -370,21 +409,21 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
       
       {/* Unsaved changes dialog */}
       <AlertDialog open={unsavedDialogOpen} onOpenChange={setUnsavedDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-slate-800 border-slate-700">
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-slate-200">Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
               You have unsaved changes that will be lost. Do you want to save them first?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setUnsavedDialogOpen(false)}>
+            <AlertDialogCancel onClick={() => setUnsavedDialogOpen(false)} className="bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-600">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={handleSave}>
+            <AlertDialogAction onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white">
               Save Changes
             </AlertDialogAction>
-            <AlertDialogAction onClick={executePendingAction}>
+            <AlertDialogAction onClick={executePendingAction} className="bg-red-600 hover:bg-red-700 text-white">
               Discard Changes
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -65,37 +65,37 @@ export function OrganizationSettings() {
   };
 
   if (!currentOrganization) {
-    return <p className="text-muted-foreground">Select an organization to manage settings.</p>;
+    return <p className="text-slate-400">Select an organization to manage settings.</p>;
   }
 
   return (
     <AdminOnly>
       <div className="space-y-8">
         <div>
-          <h2 className="text-xl font-semibold">Organization Settings</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-xl font-semibold text-slate-100">Organization Settings</h2>
+          <p className="text-slate-400">
             Manage your organization's settings and members.
           </p>
         </div>
         
         <div className="space-y-4">
-          <h3 className="text-lg font-medium">General Settings</h3>
+          <h3 className="text-lg font-medium text-slate-200">General Settings</h3>
           
           <form onSubmit={handleUpdate} className="space-y-4">
             {error && (
-              <div className="bg-red-100 text-red-800 p-3 rounded-md text-sm">
+              <div className="bg-red-900/20 text-red-300 p-3 rounded-md text-sm border border-red-800">
                 {error}
               </div>
             )}
             
             <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium">
+              <label htmlFor="name" className="text-sm font-medium text-slate-200">
                 Organization Name
               </label>
               <input
                 id="name"
                 type="text"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="flex h-10 w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter organization name"
@@ -103,15 +103,19 @@ export function OrganizationSettings() {
               />
             </div>
             
-            <Button type="submit" disabled={isUpdating || name === currentOrganization.name}>
+            <Button 
+              type="submit" 
+              disabled={isUpdating || name === currentOrganization.name}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               {isUpdating ? 'Updating...' : 'Update Organization'}
             </Button>
           </form>
         </div>
         
-        <div className="border-t pt-6 space-y-4">
-          <h3 className="text-lg font-medium text-red-600">Danger Zone</h3>
-          <p className="text-sm text-muted-foreground">
+        <div className="border-t border-slate-700 pt-6 space-y-4">
+          <h3 className="text-lg font-medium text-red-400">Danger Zone</h3>
+          <p className="text-sm text-slate-400">
             Once you delete an organization, there is no going back. Please be certain.
           </p>
           
@@ -119,6 +123,7 @@ export function OrganizationSettings() {
             variant="destructive" 
             onClick={handleDelete}
             disabled={isDeleting}
+            className="bg-red-600 hover:bg-red-700 text-white"
           >
             {isDeleting ? 'Deleting...' : 'Delete Organization'}
           </Button>

@@ -12,10 +12,10 @@ export default function RootPage() {
   // Show loading state while checking authentication
   if (isLoading) {
     return (
-      <div className="container py-16 flex items-center justify-center">
+      <div className="container py-16 flex items-center justify-center bg-slate-900 min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-slate-400">Loading...</p>
         </div>
       </div>
     );
@@ -24,24 +24,24 @@ export default function RootPage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Common header for both authenticated and unauthenticated users */}
-      <header className="border-b bg-background">
+      <header className="border-b border-slate-700 bg-slate-800">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/" className="font-semibold text-lg">
+            <Link href="/" className="font-semibold text-lg text-slate-100 hover:text-blue-400 transition-colors">
               VibeFC
             </Link>
             {user && (
               <nav className="hidden md:flex gap-6">
-                <Link href="/" className="text-sm font-medium">
+                <Link href="/" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                   Home
                 </Link>
-                <Link href="/organizations" className="text-sm font-medium">
+                <Link href="/organizations" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                   Organizations
                 </Link>
-                <Link href="/data-intake" className="text-sm font-medium">
+                <Link href="/data-intake" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                   Data Intake
                 </Link>
-                <Link href="/forecast-definition" className="text-sm font-medium">
+                <Link href="/forecast-definition" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                   Forecast Definition
                 </Link>
               </nav>
@@ -55,16 +55,17 @@ export default function RootPage() {
                 onClick={async () => {
                   await signOut();
                 }}
+                className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
               >
                 Sign Out
               </Button>
             ) : (
               <div className="flex items-center gap-2">
                 <Link href="/login">
-                  <Button variant="ghost">Sign In</Button>
+                  <Button variant="ghost" className="text-slate-300 hover:text-slate-100 hover:bg-slate-700">Sign In</Button>
                 </Link>
                 <Link href="/signup">
-                  <Button variant="default">Create Account</Button>
+                  <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white">Create Account</Button>
                 </Link>
               </div>
             )}
@@ -72,16 +73,16 @@ export default function RootPage() {
         </div>
       </header>
       
-      <main className="flex-1">
+      <main className="flex-1 bg-slate-900">
         {/* If not authenticated, show a message with link to landing */}
         {!user ? (
           <div className="container py-16 flex items-center justify-center">
             <div className="text-center">
-              <h1 className="text-2xl font-bold mb-4">Welcome to VibeFC</h1>
-              <p className="mb-6">Please sign in to continue.</p>
+              <h1 className="text-2xl font-bold mb-4 text-slate-100">Welcome to VibeFC</h1>
+              <p className="mb-6 text-slate-400">Please sign in to continue.</p>
               <Link
                 href="/landing"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 py-3 rounded-md font-medium"
+                className="bg-blue-600 text-white hover:bg-blue-700 px-8 py-3 rounded-md font-medium transition-colors"
               >
                 Go to Landing Page
               </Link>
@@ -90,47 +91,47 @@ export default function RootPage() {
         ) : (
           /* Protected dashboard content for authenticated users */
           <div className="container mx-auto px-4 py-8">
-            <h1 className="text-4xl font-bold tracking-tight mb-8">
+            <h1 className="text-4xl font-bold tracking-tight mb-8 text-slate-100">
               Welcome to VibeFC
             </h1>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-lg border bg-card p-6">
-                <h2 className="text-xl font-semibold mb-4">Variables</h2>
-                <p className="text-muted-foreground mb-4">
+              <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 hover:bg-slate-750 transition-colors">
+                <h2 className="text-xl font-semibold mb-4 text-slate-100">Variables</h2>
+                <p className="text-slate-400 mb-4">
                   Import, view, and manage your financial data from various sources.
                 </p>
                 <Link
                   href="/data-intake"
-                  className="text-primary hover:text-primary/80 transition-colors"
+                  className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
                 >
-                  View Variables
+                  View Variables →
                 </Link>
               </div>
 
-              <div className="rounded-lg border bg-card p-6">
-                <h2 className="text-xl font-semibold mb-4">Organizations</h2>
-                <p className="text-muted-foreground mb-4">
+              <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 hover:bg-slate-750 transition-colors">
+                <h2 className="text-xl font-semibold mb-4 text-slate-100">Organizations</h2>
+                <p className="text-slate-400 mb-4">
                   Manage your organizations and team members.
                 </p>
                 <Link
                   href="/organizations"
-                  className="text-primary hover:text-primary/80 transition-colors"
+                  className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
                 >
-                  Manage Organizations
+                  Manage Organizations →
                 </Link>
               </div>
 
-              <div className="rounded-lg border bg-card p-6">
-                <h2 className="text-xl font-semibold mb-4">Forecast Definition</h2>
-                <p className="text-muted-foreground mb-4">
+              <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 hover:bg-slate-750 transition-colors">
+                <h2 className="text-xl font-semibold mb-4 text-slate-100">Forecast Definition</h2>
+                <p className="text-slate-400 mb-4">
                   Create and edit forecasts using a visual node-based editor.
                 </p>
                 <Link
                   href="/forecast-definition"
-                  className="text-primary hover:text-primary/80 transition-colors"
+                  className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
                 >
-                  Manage Forecasts
+                  Manage Forecasts →
                 </Link>
               </div>
             </div>

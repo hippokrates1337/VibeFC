@@ -27,32 +27,32 @@ export function VariableCard({ variable, onDelete, onViewDetails }: VariableCard
 
   return (
     <div 
-      className="rounded-lg border bg-card p-6 transition-colors hover:bg-accent/5 cursor-pointer relative" 
+      className="rounded-lg border border-slate-700 bg-slate-800 p-6 transition-colors hover:bg-slate-750 cursor-pointer relative" 
       onClick={handleCardClick}
     >
       <div className="flex justify-between items-start">
-        <h3 className="text-lg font-semibold mb-2">{variable.name}</h3>
+        <h3 className="text-lg font-semibold mb-2 text-slate-100">{variable.name}</h3>
         <Button
           variant="ghost"
           size="sm"
-          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
+          className="text-red-400 hover:text-red-300 hover:bg-red-900/20 h-8 w-8 p-0"
           onClick={handleDeleteClick}
           aria-label={`Delete variable ${variable.name}`}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground mb-4">Type: {variable.type}</p>
+      <p className="text-sm text-slate-400 mb-4">Type: {variable.type}</p>
       <div className="space-y-2">
-        <p className="text-sm font-medium">Time Series Range:</p>
+        <p className="text-sm font-medium text-slate-200">Time Series Range:</p>
         {hasTimeSeriesData ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-400">
             {format(sortedTimeSeries[0].date, 'MM/yyyy')} - {format(sortedTimeSeries[sortedTimeSeries.length - 1].date, 'MM/yyyy')}
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground">No time series data</p>
+          <p className="text-sm text-slate-400">No time series data</p>
         )}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-slate-400">
           {variable.timeSeries.length} data points
         </p>
       </div>

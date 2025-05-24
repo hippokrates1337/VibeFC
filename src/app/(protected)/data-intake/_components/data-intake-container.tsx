@@ -203,45 +203,47 @@ export const DataIntakeContainer = ({
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Data Intake</h1>
-      
-      <ApiStatus success={apiStatus.success} error={apiStatus.error} />
+    <div className="min-h-screen bg-slate-900">
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4 text-slate-100">Data Intake</h1>
+        
+        <ApiStatus success={apiStatus.success} error={apiStatus.error} />
 
-      <UploadSection
-        onProcessCSV={parseCSV}
-        isUploading={isUploading}
-        error={error}
-      />
-
-      {/* Render cards/children using the containerProps */}
-      {children ? (
-        typeof children === 'function' ? 
-          (children as (props: ContainerProps) => ReactNode)(containerProps) : 
-          children
-      ) : (
-        // Default fallback if no children provided
-        filteredVariables.length === 0 && !storeIsLoading && (
-          <EmptyState message="No variables found for the selected organization, or no organization selected. Upload a CSV file or select an organization." />
-        )
-      )}
-
-      {showImportModal && (
-        <ImportModal
-          isOpen={showImportModal}
-          onClose={() => setShowImportModal(false)}
-          newVariables={processedVariables}
-          existingVariables={variables}
-          onConfirm={handleImportVariables}
+        <UploadSection
+          onProcessCSV={parseCSV}
+          isUploading={isUploading}
+          error={error}
         />
-      )}
 
-      <DeleteConfirmationModal
-        isOpen={deleteConfirmation.isOpen}
-        variableName={deleteConfirmation.variableName}
-        onClose={closeDeleteConfirmation}
-        onConfirm={handleConfirmDelete}
-      />
+        {/* Render cards/children using the containerProps */}
+        {children ? (
+          typeof children === 'function' ? 
+            (children as (props: ContainerProps) => ReactNode)(containerProps) : 
+            children
+        ) : (
+          // Default fallback if no children provided
+          filteredVariables.length === 0 && !storeIsLoading && (
+            <EmptyState message="No variables found for the selected organization, or no organization selected. Upload a CSV file or select an organization." />
+          )
+        )}
+
+        {showImportModal && (
+          <ImportModal
+            isOpen={showImportModal}
+            onClose={() => setShowImportModal(false)}
+            newVariables={processedVariables}
+            existingVariables={variables}
+            onConfirm={handleImportVariables}
+          />
+        )}
+
+        <DeleteConfirmationModal
+          isOpen={deleteConfirmation.isOpen}
+          variableName={deleteConfirmation.variableName}
+          onClose={closeDeleteConfirmation}
+          onConfirm={handleConfirmDelete}
+        />
+      </div>
     </div>
   )
 } 

@@ -10,7 +10,8 @@ import ReactFlow, {
   OnConnect,
   Connection,
   BackgroundVariant,
-  NodeMouseHandler
+  NodeMouseHandler,
+  MarkerType
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
@@ -62,25 +63,133 @@ const ForecastCanvas: React.FC = () => {
   }, [setSelectedNodeId]);
 
   return (
-    <ReactFlowProvider>
-      <ReactFlow
-        nodes={nodes as Node[]}
-        edges={edges as Edge[]}
+    <div className="h-full w-full bg-slate-900 relative">
+      <ReactFlowProvider>
+        <ReactFlow
+          nodes={nodes as Node[]}
+          edges={edges as Edge[]}
+          
+          // Restored original handlers
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
+          onConnect={onConnect}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          
+          nodeTypes={nodeTypes}
+          fitView
+          selectNodesOnDrag={false}
+          
+          // Enhanced styling
+          className="forecast-canvas"
+          
+          // Default edge style with arrow
+          defaultEdgeOptions={{
+            style: {
+              strokeWidth: 2,
+              stroke: '#94a3b8',
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#94a3b8',
+              width: 20,
+              height: 20,
+            },
+            animated: false,
+          }}
+          
+          // Connection line style
+          connectionLineStyle={{
+            strokeWidth: 2,
+            stroke: '#60a5fa',
+            strokeDasharray: '5,5',
+          }}
+        >
+          <Controls 
+            className="bg-slate-800 border border-slate-600 shadow-md rounded-lg"
+            showZoom={true}
+            showFitView={true}
+            showInteractive={false}
+          />
+          <Background 
+            variant={BackgroundVariant.Dots} 
+            gap={20} 
+            size={1.5} 
+            color="#475569"
+            className="bg-slate-900"
+          />
+        </ReactFlow>
+      </ReactFlowProvider>
+      
+      {/* Custom CSS for additional styling */}
+      <style jsx>{`
+        .forecast-canvas .react-flow__node {
+          cursor: pointer;
+        }
         
-        // Restored original handlers
-        onNodesChange={handleNodesChange}
-        onEdgesChange={handleEdgesChange}
-        onConnect={onConnect}
-        onNodeDoubleClick={handleNodeDoubleClick}
+        .forecast-canvas .react-flow__node.selected {
+          box-shadow: 0 0 0 2px #60a5fa;
+        }
         
-        nodeTypes={nodeTypes}
-        fitView
-        selectNodesOnDrag={false}
-      >
-        <Controls />
-        <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-      </ReactFlow>
-    </ReactFlowProvider>
+        .forecast-canvas .react-flow__edge {
+          cursor: pointer;
+        }
+        
+        .forecast-canvas .react-flow__edge.selected .react-flow__edge-path {
+          stroke: #60a5fa;
+          stroke-width: 3;
+        }
+        
+        .forecast-canvas .react-flow__edge.selected .react-flow__edge-path[marker-end] {
+          marker-end: url(#react-flow__arrowclosed);
+        }
+        
+        .forecast-canvas .react-flow__connection-line {
+          stroke: #60a5fa;
+          stroke-width: 2;
+          stroke-dasharray: 5,5;
+        }
+        
+        .forecast-canvas .react-flow__handle {
+          width: 8px;
+          height: 8px;
+          border: 2px solid #1e293b;
+          background: #64748b;
+        }
+        
+        .forecast-canvas .react-flow__handle-connecting,
+        .forecast-canvas .react-flow__handle-valid {
+          background: #22c55e;
+        }
+        
+        .forecast-canvas .react-flow__handle-invalid {
+          background: #ef4444;
+        }
+        
+        .forecast-canvas .react-flow__controls {
+          background: #1e293b !important;
+          border: 1px solid #475569 !important;
+        }
+        
+        .forecast-canvas .react-flow__controls button {
+          background: #334155 !important;
+          border: 1px solid #475569 !important;
+          color: #e2e8f0 !important;
+        }
+        
+        .forecast-canvas .react-flow__controls button:hover {
+          background: #475569 !important;
+        }
+        
+        /* Custom arrow marker styling */
+        .forecast-canvas .react-flow__edge-path[marker-end*="arrowclosed"] {
+          stroke: #94a3b8;
+        }
+        
+        .forecast-canvas .react-flow__edge.selected .react-flow__edge-path[marker-end*="arrowclosed"] {
+          stroke: #60a5fa;
+        }
+      `}</style>
+    </div>
   );
 };
 

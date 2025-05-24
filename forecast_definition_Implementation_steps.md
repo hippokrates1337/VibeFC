@@ -118,6 +118,9 @@
 3.  **"Duplicate with Edges" Functionality:** ✅
     *   Implement logic in Zustand store to clone a selected node and its connected edges, generating new IDs and adjusting positions.
 
+### Known bugs
+    *   When the user navigates from the canvas page back to the page listing all forecasts, the forecast store gets reset and only reloads from the database after a while
+
 ### Phase 6: End-to-End Flow & Final Integration Testing:
     *   Test the complete user flow:
         *   Creating a new forecast.

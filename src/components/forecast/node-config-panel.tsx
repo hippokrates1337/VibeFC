@@ -101,33 +101,34 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     return (
       <>
         <div className="space-y-1">
-          <label htmlFor="name" className="text-sm font-medium">Name</label>
+          <label htmlFor="name" className="text-sm font-medium text-slate-300">Name</label>
           <Input 
             id="name"
             value={data.name || ''}
             onChange={(e) => updateNodeData(node.id, { name: e.target.value })}
             placeholder="Node name"
+            className="bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
           />
         </div>
         
         <div className="space-y-1">
-          <label htmlFor="variableId" className="text-sm font-medium">Variable</label>
+          <label htmlFor="variableId" className="text-sm font-medium text-slate-300">Variable</label>
           <Select 
             value={data.variableId || ''} 
             onValueChange={(value) => updateNodeData(node.id, { variableId: value })}
           >
-            <SelectTrigger id="variableId">
+            <SelectTrigger id="variableId" className="bg-slate-700 border-slate-600 text-slate-200">
               <SelectValue placeholder="Select variable" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-slate-800 border-slate-600">
               {organizationVariables.length > 0 ? (
                 organizationVariables.map(variable => (
-                  <SelectItem key={variable.id} value={variable.id}>
+                  <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
                     {variable.name}
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value="no-vars" disabled>
+                <SelectItem value="no-vars" disabled className="text-slate-400">
                   {selectedOrgIdForVariables ? 'No variables for this organization' : 'Please select an organization first'}
                 </SelectItem>
               )}
@@ -136,12 +137,13 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         </div>
         
         <div className="space-y-1">
-          <label htmlFor="offsetMonths" className="text-sm font-medium">Offset (months)</label>
+          <label htmlFor="offsetMonths" className="text-sm font-medium text-slate-300">Offset (months)</label>
           <Input 
             id="offsetMonths"
             type="number" 
             value={data.offsetMonths || 0}
             onChange={(e) => updateNodeData(node.id, { offsetMonths: parseInt(e.target.value) || 0 })}
+            className="bg-slate-700 border-slate-600 text-slate-200"
           />
         </div>
       </>
@@ -152,11 +154,12 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     const data = node.data as ConstantNodeAttributes;
     return (
       <div className="space-y-1">
-        <label className="text-sm font-medium">Value</label>
+        <label className="text-sm font-medium text-slate-300">Value</label>
         <Input 
           type="number" 
           value={data.value || 0}
           onChange={(e) => updateNodeData(node.id, { value: parseFloat(e.target.value) || 0 })}
+          className="bg-slate-700 border-slate-600 text-slate-200"
         />
       </div>
     );
@@ -166,20 +169,20 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     const data = node.data as OperatorNodeAttributes;
     return (
       <div className="space-y-1">
-        <label className="text-sm font-medium">Operation</label>
+        <label className="text-sm font-medium text-slate-300">Operation</label>
         <Select 
           value={data.op || '+'} 
           onValueChange={(value) => updateNodeData(node.id, { op: value as any })}
         >
-          <SelectTrigger>
+          <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
             <SelectValue placeholder="Select operation" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="+">Add (+)</SelectItem>
-            <SelectItem value="-">Subtract (-)</SelectItem>
-            <SelectItem value="*">Multiply (*)</SelectItem>
-            <SelectItem value="/">Divide (/)</SelectItem>
-            <SelectItem value="^">Power (^)</SelectItem>
+          <SelectContent className="bg-slate-800 border-slate-600">
+            <SelectItem value="+" className="text-slate-200 hover:bg-slate-700">Add (+)</SelectItem>
+            <SelectItem value="-" className="text-slate-200 hover:bg-slate-700">Subtract (-)</SelectItem>
+            <SelectItem value="*" className="text-slate-200 hover:bg-slate-700">Multiply (*)</SelectItem>
+            <SelectItem value="/" className="text-slate-200 hover:bg-slate-700">Divide (/)</SelectItem>
+            <SelectItem value="^" className="text-slate-200 hover:bg-slate-700">Power (^)</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -191,26 +194,27 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     return (
       <>
         <div className="space-y-1">
-          <label className="text-sm font-medium">Label</label>
+          <label className="text-sm font-medium text-slate-300">Label</label>
           <Input 
             value={data.label || ''}
             onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
             placeholder="Metric label"
+            className="bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
           />
         </div>
         
         <div className="space-y-1">
-          <label className="text-sm font-medium">Budget Variable</label>
+          <label className="text-sm font-medium text-slate-300">Budget Variable</label>
           <Select 
             value={data.budgetVariableId || ''} 
             onValueChange={(value) => updateNodeData(node.id, { budgetVariableId: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
               <SelectValue placeholder="Select budget variable" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-slate-800 border-slate-600">
               {organizationVariables.map(variable => (
-                <SelectItem key={variable.id} value={variable.id}>
+                <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
                   {variable.name} (Budget)
                 </SelectItem>
               ))}
@@ -219,17 +223,17 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         </div>
         
         <div className="space-y-1">
-          <label className="text-sm font-medium">Historical Variable</label>
+          <label className="text-sm font-medium text-slate-300">Historical Variable</label>
           <Select 
             value={data.historicalVariableId || ''} 
             onValueChange={(value) => updateNodeData(node.id, { historicalVariableId: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
               <SelectValue placeholder="Select historical variable" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-slate-800 border-slate-600">
               {organizationVariables.map(variable => (
-                <SelectItem key={variable.id} value={variable.id}>
+                <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
                   {variable.name} (Historical)
                 </SelectItem>
               ))}
@@ -244,22 +248,22 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     const data = node.data as SeedNodeAttributes;
     return (
       <div className="space-y-1">
-        <label className="text-sm font-medium">Source Metric</label>
+        <label className="text-sm font-medium text-slate-300">Source Metric</label>
         <Select 
           value={data.sourceMetricId || ''} 
           onValueChange={(value) => updateNodeData(node.id, { sourceMetricId: value })}
         >
-          <SelectTrigger>
+          <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
             <SelectValue placeholder="Select source metric" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-slate-800 border-slate-600">
             {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').map(metric => (
-              <SelectItem key={metric.id} value={metric.id}>
+              <SelectItem key={metric.id} value={metric.id} className="text-slate-200 hover:bg-slate-700">
                 {metric.name}
               </SelectItem>
             ))}
             {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').length === 0 && (
-                <SelectItem value="no-metrics" disabled>
+                <SelectItem value="no-metrics" disabled className="text-slate-400">
                   No metrics available for this organization
                 </SelectItem>
             )}
@@ -271,22 +275,22 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md no-overlay-config-panel">
+      <SheetContent className="sm:max-w-md no-overlay-config-panel bg-slate-800 border-slate-700 text-slate-200">
         <SheetHeader>
-          <SheetTitle>Configure {selectedNode.type} Node</SheetTitle>
-          <SheetDescription>
+          <SheetTitle className="text-slate-200">Configure {selectedNode.type} Node</SheetTitle>
+          <SheetDescription className="text-slate-400">
             Modify the properties of the selected {selectedNode.type} node below.
           </SheetDescription>
         </SheetHeader>
         
         <div className="py-4 space-y-4">
           {showDeleteConfirm ? (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="bg-red-900/20 border-red-500/50 text-red-300">
               <AlertDescription>
                 Are you sure you want to delete this node? This will also remove any connected edges.
                 <div className="flex gap-2 mt-2">
-                  <Button variant="destructive" size="sm" onClick={handleDeleteNode}>Delete</Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+                  <Button variant="destructive" size="sm" onClick={handleDeleteNode} className="bg-red-600 hover:bg-red-700">Delete</Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)} className="bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600">Cancel</Button>
                 </div>
               </AlertDescription>
             </Alert>
@@ -300,11 +304,12 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             variant="destructive" 
             onClick={() => setShowDeleteConfirm(true)}
             size="sm"
+            className="bg-red-600 hover:bg-red-700 text-white"
           >
             Delete Node
           </Button>
           <SheetClose asChild>
-            <Button variant="outline" size="sm" onClick={handleClose}>
+            <Button variant="outline" size="sm" onClick={handleClose} className="bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600">
               Close
             </Button>
           </SheetClose>

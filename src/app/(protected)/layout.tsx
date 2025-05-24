@@ -91,8 +91,8 @@ export default function ProtectedLayout({
       (currentOrganization && forecastStoreIsLoading && !forecastsLoaded && !useForecastGraphStore.getState().error)
   ) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="flex h-screen items-center justify-center bg-slate-900">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -104,23 +104,23 @@ export default function ProtectedLayout({
   
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b bg-background">
+      <header className="border-b border-slate-700 bg-slate-800">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/" className="font-semibold text-lg">
+            <Link href="/" className="font-semibold text-lg text-slate-100 hover:text-blue-400 transition-colors">
               VibeFC
             </Link>
             <nav className="hidden md:flex gap-6">
-              <Link href="/" className="text-sm font-medium">
+              <Link href="/" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                 Home
               </Link>
-              <Link href="/organizations" className="text-sm font-medium">
+              <Link href="/organizations" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                 Organizations
               </Link>
-              <Link href="/data-intake" className="text-sm font-medium">
+              <Link href="/data-intake" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                 Data Intake
               </Link>
-              <Link href="/forecast-definition" className="text-sm font-medium">
+              <Link href="/forecast-definition" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                 Forecast Definition
               </Link>
             </nav>
@@ -133,6 +133,7 @@ export default function ProtectedLayout({
               onClick={async () => {
                 await signOut();
               }}
+              className="text-slate-300 hover:text-slate-100 hover:bg-slate-700"
             >
               Sign Out
             </Button>
