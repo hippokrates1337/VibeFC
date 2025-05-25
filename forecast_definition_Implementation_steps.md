@@ -115,7 +115,7 @@
     *   Implement logic to load forecast data into Zustand store when `[forecastId]/page.tsx` mounts.
     *   Implement the "Save" button functionality to persist the current state from Zustand to the backend. Clear `isDirty` on success.
 
-3.  **"Duplicate with Edges" Functionality:** ✅
+3.  **"Duplicate with Edges" Functionality:** 
     *   Implement logic in Zustand store to clone a selected node and its connected edges, generating new IDs and adjusting positions.
 
 ### Known bugs

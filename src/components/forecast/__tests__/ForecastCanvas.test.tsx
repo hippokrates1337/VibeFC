@@ -37,7 +37,8 @@ jest.mock('reactflow', () => {
     Controls: () => <div data-testid="react-flow-controls">Controls</div>,
     Background: () => <div data-testid="react-flow-background">Background</div>,
     ReactFlowProvider: ({ children }: any) => <div data-testid="react-flow-provider">{children}</div>,
-    BackgroundVariant: { Dots: 'dots' }
+    BackgroundVariant: { Dots: 'dots' },
+    MarkerType: { ArrowClosed: 'arrowclosed' }
   };
 });
 
@@ -59,6 +60,7 @@ describe('ForecastCanvas', () => {
         onNodesChange: jest.fn(),
         onEdgesChange: jest.fn(),
         addEdge: jest.fn(),
+        setSelectedNodeId: jest.fn(),
       })
     );
   });
@@ -78,11 +80,11 @@ describe('ForecastCanvas', () => {
     render(<ForecastCanvas />);
     
     const nodeTypes = screen.getByTestId('node-types').textContent;
-    expect(nodeTypes).toContain('data');
-    expect(nodeTypes).toContain('constant');
-    expect(nodeTypes).toContain('operator');
-    expect(nodeTypes).toContain('metric');
-    expect(nodeTypes).toContain('seed');
+    expect(nodeTypes).toContain('DATA');
+    expect(nodeTypes).toContain('CONSTANT');
+    expect(nodeTypes).toContain('OPERATOR');
+    expect(nodeTypes).toContain('METRIC');
+    expect(nodeTypes).toContain('SEED');
   });
 
   it('renders ReactFlow with controls and background', () => {
@@ -101,6 +103,7 @@ describe('ForecastCanvas', () => {
         onNodesChange: mockOnNodesChange,
         onEdgesChange: jest.fn(),
         addEdge: jest.fn(),
+        setSelectedNodeId: jest.fn(),
       })
     );
 
@@ -119,6 +122,7 @@ describe('ForecastCanvas', () => {
         onNodesChange: jest.fn(),
         onEdgesChange: mockOnEdgesChange,
         addEdge: jest.fn(),
+        setSelectedNodeId: jest.fn(),
       })
     );
 
@@ -137,6 +141,7 @@ describe('ForecastCanvas', () => {
         onNodesChange: jest.fn(),
         onEdgesChange: jest.fn(),
         addEdge: mockAddEdge,
+        setSelectedNodeId: jest.fn(),
       })
     );
 

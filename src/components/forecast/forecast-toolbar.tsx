@@ -73,6 +73,7 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
         <Calendar
           mode="single"
           selected={selectedDate}
+          month={selectedDate}
           onSelect={(d: Date | undefined) => {
             if (d) {
               // Format to YYYY-MM-DD using local date parts to avoid timezone issues
@@ -203,8 +204,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
     });
     
     // Open configuration panel for the new node
-    // setSelectedNodeId(nodeId); // This is already done by onNodesChange
-    // setConfigPanelOpen(true); // This will be handled by the useEffect
+    setSelectedNodeId(nodeId);
     
     toast({
       title: 'Node Added',
@@ -234,7 +234,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
         </h3>
         <div className="space-y-3">
           <div>
-            <label htmlFor="forecastName" className="text-sm font-medium text-slate-300 mb-1 block">Name</label>
+            <label htmlFor="forecastName" className="text-sm font-medium text-slate-300 mb-1 block">Forecast Name</label>
             <Input
               id="forecastName"
               value={forecastName}
@@ -282,7 +282,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
             className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-blue-700 border-blue-500 text-blue-400 hover:text-white"
           >
             <Database className="h-4 w-4" />
-            Data Node
+            Data
           </Button>
           
           <Button 
@@ -292,7 +292,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
             className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-green-700 border-green-500 text-green-400 hover:text-white"
           >
             <Pencil className="h-4 w-4" />
-            Constant Node
+            Constant
           </Button>
           
           <Button 
@@ -302,7 +302,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
             className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-yellow-700 border-yellow-500 text-yellow-400 hover:text-white"
           >
             <Calculator className="h-4 w-4" />
-            Operator Node
+            Operator
           </Button>
           
           <Button 
@@ -312,7 +312,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
             className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-purple-700 border-purple-500 text-purple-400 hover:text-white"
           >
             <BarChart3 className="h-4 w-4" />
-            Metric Node
+            Metric
           </Button>
           
           <Button 
@@ -322,7 +322,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
             className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-pink-700 border-pink-500 text-pink-400 hover:text-white"
           >
             <Flame className="h-4 w-4" />
-            Seed Node
+            Seed
           </Button>
         </div>
       </div>
@@ -342,7 +342,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
             disabled={!isDirty}
           >
             <Save className="h-4 w-4" />
-            Save Forecast
+            Save
           </Button>
           
           {selectedNodeId && (

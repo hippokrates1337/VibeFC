@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>67/67</span>
+                <span class='fraction'>71/71</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>67/67</span>
+                <span class='fraction'>71/71</span>
             </div>
         
             
@@ -129,7 +129,11 @@
 <a name='L64'></a><a href='#L64'>64</a>
 <a name='L65'></a><a href='#L65'>65</a>
 <a name='L66'></a><a href='#L66'>66</a>
-<a name='L67'></a><a href='#L67'>67</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -149,6 +153,8 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -159,6 +165,8 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
@@ -206,11 +214,13 @@ interface LoadingStateProps {
 &nbsp;
 export const LoadingState: React.FC&lt;LoadingStateProps&gt; = ({ pageTitle }) =&gt; {
   return (
-    &lt;div className="container mx-auto p-4"&gt;
-      &lt;h1 className="text-2xl font-bold mb-4"&gt;{pageTitle}&lt;/h1&gt;
-      &lt;div className="flex flex-col items-center justify-center p-8" data-testid="loading-indicator"&gt;
-        &lt;Loader2 className="h-8 w-8 animate-spin text-gray-500" /&gt;
-        &lt;p className="mt-4 text-gray-500"&gt;Loading variables...&lt;/p&gt;
+    &lt;div className="min-h-screen bg-slate-900"&gt;
+      &lt;div className="container mx-auto p-4"&gt;
+        &lt;h1 className="text-2xl font-bold mb-4 text-slate-100"&gt;{pageTitle}&lt;/h1&gt;
+        &lt;div className="flex flex-col items-center justify-center p-8" data-testid="loading-indicator"&gt;
+          &lt;Loader2 className="h-8 w-8 animate-spin text-blue-500" /&gt;
+          &lt;p className="mt-4 text-slate-400"&gt;Loading variables...&lt;/p&gt;
+        &lt;/div&gt;
       &lt;/div&gt;
     &lt;/div&gt;
   )
@@ -232,18 +242,20 @@ export const ErrorState: React.FC&lt;ErrorStateProps&gt; = ({
   error 
 }) =&gt; {
   return (
-    &lt;div className="container mx-auto p-4"&gt;
-      &lt;h1 className="text-2xl font-bold mb-4"&gt;{pageTitle}&lt;/h1&gt;
-      &lt;Alert variant="destructive" className="mb-4"&gt;
-        &lt;AlertDescription&gt;
-          {errorMessage}
-        &lt;/AlertDescription&gt;
-      &lt;/Alert&gt;
-      &lt;UploadSection
-        onProcessCSV={onProcessCSV}
-        isUploading={isUploading}
-        error={error}
-      /&gt;
+    &lt;div className="min-h-screen bg-slate-900"&gt;
+      &lt;div className="container mx-auto p-4"&gt;
+        &lt;h1 className="text-2xl font-bold mb-4 text-slate-100"&gt;{pageTitle}&lt;/h1&gt;
+        &lt;Alert variant="destructive" className="mb-4 bg-red-900/20 border-red-800 text-red-300"&gt;
+          &lt;AlertDescription&gt;
+            {errorMessage}
+          &lt;/AlertDescription&gt;
+        &lt;/Alert&gt;
+        &lt;UploadSection
+          onProcessCSV={onProcessCSV}
+          isUploading={isUploading}
+          error={error}
+        /&gt;
+      &lt;/div&gt;
     &lt;/div&gt;
   )
 }
@@ -255,10 +267,10 @@ interface EmptyStateProps {
 export const EmptyState: React.FC&lt;EmptyStateProps&gt; = ({ message }) =&gt; {
   return (
     &lt;div 
-      className="mt-8 text-center p-8 bg-gray-50 rounded-lg border border-gray-100"
+      className="mt-8 text-center p-8 bg-slate-800 rounded-lg border border-slate-700"
       data-testid="empty-state" 
     &gt;
-      &lt;p className="text-gray-500"&gt;{message}&lt;/p&gt;
+      &lt;p className="text-slate-400"&gt;{message}&lt;/p&gt;
     &lt;/div&gt;
   )
 } </pre></td></tr></table></pre>
@@ -268,7 +280,7 @@ export const EmptyState: React.FC&lt;EmptyStateProps&gt; = ({ message }) =&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-05-17T06:30:34.922Z
+                at 2025-05-25T06:20:32.094Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

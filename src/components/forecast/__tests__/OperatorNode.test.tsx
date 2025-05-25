@@ -28,7 +28,7 @@ const createNodeProps = (data: any) => ({
 } as NodeProps);
 
 describe('OperatorNode', () => {
-  it('renders operator and input order', () => {
+  it('renders operator and input count', () => {
     const mockData = {
       op: '+',
       inputOrder: ['node1', 'node2']
@@ -38,15 +38,15 @@ describe('OperatorNode', () => {
 
     expect(screen.getByText('Operator')).toBeInTheDocument();
     expect(screen.getByText('+')).toBeInTheDocument();
-    expect(screen.getByText('node1, node2')).toBeInTheDocument();
+    expect(screen.getByText('2 connected')).toBeInTheDocument();
   });
 
   it('renders default values when data is missing', () => {
     render(<OperatorNode {...createNodeProps({})} />);
 
     expect(screen.getByText('Operator')).toBeInTheDocument();
-    const defaultValues = screen.getAllByText('-');
-    expect(defaultValues).toHaveLength(2); // One for op, one for inputOrder
+    expect(screen.getByText('-')).toBeInTheDocument(); // Default operation
+    expect(screen.getByText('0 connected')).toBeInTheDocument(); // Default input count
   });
 
   it('renders source and target handles', () => {

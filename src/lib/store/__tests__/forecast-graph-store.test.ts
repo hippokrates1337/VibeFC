@@ -63,6 +63,7 @@ describe('forecast-graph-store', () => {
       name: 'Test Forecast',
       startDate: '2023-01-01',
       endDate: '2023-12-31',
+      organizationId: null,
       nodes: [
         {
           id: 'node-1',
@@ -104,6 +105,7 @@ describe('forecast-graph-store', () => {
         name: 'Old Name',
         startDate: '2023-01-01',
         endDate: '2023-12-31',
+        organizationId: null,
         nodes: [],
         edges: []
       });
@@ -135,6 +137,7 @@ describe('forecast-graph-store', () => {
         name: 'Old Name',
         startDate: '2023-01-01',
         endDate: '2023-12-31',
+        organizationId: null,
         nodes: [],
         edges: []
       });
@@ -198,7 +201,7 @@ describe('forecast-graph-store', () => {
     
     // Check DATA node
     const dataNode = result.current.nodes.find(node => node.type === 'DATA');
-    expect(dataNode?.data).toEqual({ variableId: '', offsetMonths: 0 });
+    expect(dataNode?.data).toEqual({ name: 'New Data Node', variableId: '', offsetMonths: 0 });
     
     // Check CONSTANT node
     const constantNode = result.current.nodes.find(node => node.type === 'CONSTANT');
@@ -362,7 +365,7 @@ describe('forecast-graph-store', () => {
     });
     
     expect(result.current.edges).toHaveLength(1);
-    expect(result.current.edges[0].id).toBe('test-id-0');
+    expect(result.current.edges[0].id).toBe('test-id-2');
     expect(result.current.edges[0].source).toBe(nodeId1);
     expect(result.current.edges[0].target).toBe(nodeId2);
     expect(result.current.isDirty).toBe(true);
@@ -553,6 +556,7 @@ describe('forecast-graph-store', () => {
         name: 'Test Forecast',
         startDate: '2023-01-01',
         endDate: '2023-12-31',
+        organizationId: null,
         nodes: [],
         edges: []
       });
