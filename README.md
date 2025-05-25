@@ -10,7 +10,18 @@ A collaborative platform for creating and maintaining financial forecasts.
   - Manage variables (types: ACTUAL, BUDGET, INPUT, UNKNOWN) with preview, add, update, or skip options during import.
   - View, edit, and delete variables and their time series data through a card-based interface and detailed modals.
   - Data managed via Zustand (localStorage) and synchronized with a backend per organization.
-- **Forecast Definition:** Define and configure forecast calculations
+- **Forecast Definition:** 
+  - Define and configure forecast calculations
+  - Interactive graph canvas for building forecast models
+  - **Robust unsaved changes preservation** across browser events, window switching, and authentication refreshes
+  - **Keyboard Controls:**
+    - **Delete/Backspace:** Delete selected nodes and edges on the forecast canvas
+    - **Double-click:** Open node configuration panel
+    - **Drag:** Move nodes around the canvas
+    - **Click + Drag:** Create connections between nodes
+  - **Toolbar Actions:**
+    - **Save:** Save changes to the server
+    - **Reload:** Discard changes and reload fresh data from server
 - **Forecast Analysis:** View and analyze forecast results
 
 ## Tech Stack
@@ -20,6 +31,7 @@ A collaborative platform for creating and maintaining financial forecasts.
 - State Management: Zustand with localStorage persistence
 - Database: PostgreSQL with Prisma ORM
 - Backend: Next.js API Routes
+- Graph Visualization: React Flow for interactive forecast canvas
 
 ## Getting Started
 

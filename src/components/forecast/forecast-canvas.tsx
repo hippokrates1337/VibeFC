@@ -1,4 +1,4 @@
-import React, { useCallback, MouseEvent } from 'react';
+import React, { useCallback, MouseEvent, useEffect, useState, useRef } from 'react';
 import ReactFlow, {
   Controls,
   Background,
@@ -11,38 +11,90 @@ import ReactFlow, {
   Connection,
   BackgroundVariant,
   NodeMouseHandler,
-  MarkerType
+  useStoreApi,
+  useKeyPress,
+  OnSelectionChangeFunc
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
-// Node components (to be implemented)
-import DataNode from './nodes/DataNode';
-import ConstantNode from './nodes/ConstantNode';
-import OperatorNode from './nodes/OperatorNode';
-import MetricNode from './nodes/MetricNode';
-import SeedNode from './nodes/SeedNode';
+import { 
+  useForecastGraphStore,
+  useDeleteNode,
+  useDeleteEdge,
+  useForecastNodes,
+  useForecastEdges
+} from '@/lib/store/forecast-graph-store';
+import { nodeTypes, edgeTypes, defaultEdgeOptions, connectionLineStyle } from './node-types';
 
-// Moved nodeTypes outside the component for stable reference
-const nodeTypes = {
-  DATA: DataNode,
-  CONSTANT: ConstantNode,
-  OPERATOR: OperatorNode,
-  METRIC: MetricNode,
-  SEED: SeedNode
+// Component to handle React Flow store error suppression
+const ReactFlowErrorSuppressor: React.FC = () => {
+  const store = useStoreApi();
+  
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      store.getState().onError = (code: string, message: string) => {
+        if (code === "002") {
+          return;
+        }
+        console.warn(message);
+      };
+    }
+  }, [store]);
+  
+  return null;
 };
 
 /**
  * Main canvas for editing forecast graphs using React Flow.
+ * 
+ * Note: nodeTypes, edgeTypes, defaultEdgeOptions, and connectionLineStyle are imported
+ * from a separate module to ensure they are created once and never change.
+ * This is critical for React Flow v11+ to prevent warnings about creating new objects.
  */
 const ForecastCanvas: React.FC = () => {
-  const nodes = useForecastGraphStore((state) => state.nodes);
-  const edges = useForecastGraphStore((state) => state.edges);
+  const nodes = useForecastNodes();
+  const edges = useForecastEdges();
+  
+  // Store actions for deletion - using custom hooks to ensure stability
+  const deleteNode = useDeleteNode();
+  const deleteEdge = useDeleteEdge();
+  
+  // Use refs to track selected elements to avoid triggering useEffect on selection changes
+  const selectedNodesRef = useRef<Node[]>([]);
+  const selectedEdgesRef = useRef<Edge[]>([]);
   
   // Original handlers and selectors from the store - kept for easy restoration
   const onNodesChangeFromStore = useForecastGraphStore((state) => state.onNodesChange);
   const onEdgesChangeFromStore = useForecastGraphStore((state) => state.onEdgesChange);
   const addEdgeStore = useForecastGraphStore((state) => state.addEdge);
   const setSelectedNodeId = useForecastGraphStore((state) => state.setSelectedNodeId);
+
+  // Custom keyboard handling for delete functionality
+  const deletePressed = useKeyPress(['Delete', 'Backspace']);
+
+  // Handle deletion when delete key is pressed - only depends on deletePressed
+  useEffect(() => {
+    if (deletePressed) {
+      // Delete selected nodes (and their connected edges will be deleted automatically by the store)
+      selectedNodesRef.current.forEach((node) => {
+        deleteNode(node.id);
+      });
+      
+      // Delete selected edges
+      selectedEdgesRef.current.forEach((edge) => {
+        deleteEdge(edge.id);
+      });
+      
+      // Clear the refs after deletion
+      selectedNodesRef.current = [];
+      selectedEdgesRef.current = [];
+    }
+  }, [deletePressed]); // Only depend on deletePressed to avoid infinite loops
+
+  // Track selection changes to know what to delete - update refs instead of state
+  const onSelectionChange: OnSelectionChangeFunc = useCallback(({ nodes: selectedNodes, edges: selectedEdges }) => {
+    selectedNodesRef.current = selectedNodes;
+    selectedEdgesRef.current = selectedEdges;
+  }, []);
 
   const handleNodesChange: OnNodesChange = useCallback((changes) => {
     onNodesChangeFromStore(changes);
@@ -65,7 +117,9 @@ const ForecastCanvas: React.FC = () => {
   return (
     <div className="h-full w-full bg-slate-900 relative">
       <ReactFlowProvider>
+        <ReactFlowErrorSuppressor />
         <ReactFlow
+          key="forecast-canvas" // Stable key to prevent unnecessary remounts
           nodes={nodes as Node[]}
           edges={edges as Edge[]}
           
@@ -74,8 +128,13 @@ const ForecastCanvas: React.FC = () => {
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           onNodeDoubleClick={handleNodeDoubleClick}
+          onSelectionChange={onSelectionChange}
+          
+          // Disable built-in delete key handling since we're implementing custom logic
+          deleteKeyCode={[]}
           
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           selectNodesOnDrag={false}
           
@@ -83,26 +142,10 @@ const ForecastCanvas: React.FC = () => {
           className="forecast-canvas"
           
           // Default edge style with arrow
-          defaultEdgeOptions={{
-            style: {
-              strokeWidth: 2,
-              stroke: '#94a3b8',
-            },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: '#94a3b8',
-              width: 20,
-              height: 20,
-            },
-            animated: false,
-          }}
+          defaultEdgeOptions={defaultEdgeOptions}
           
           // Connection line style
-          connectionLineStyle={{
-            strokeWidth: 2,
-            stroke: '#60a5fa',
-            strokeDasharray: '5,5',
-          }}
+          connectionLineStyle={connectionLineStyle}
         >
           <Controls 
             className="bg-slate-800 border border-slate-600 shadow-md rounded-lg"

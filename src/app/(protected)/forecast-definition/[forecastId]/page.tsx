@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import ForecastCanvas from '@/components/forecast/forecast-canvas';
 import ForecastToolbar from '@/components/forecast/forecast-toolbar';
 import { useToast } from '@/components/ui/use-toast';
@@ -35,7 +35,6 @@ export default function ForecastEditorPage() {
   const loadForecastToStore = useLoadForecast();
   const setDirtyState = useForecastGraphStore(state => state.setDirty);
   const setStoreError = useForecastGraphStore(state => state.setError);
-  const resetStore = useForecastGraphStore.getState().resetStore;
   const isStoreDirty = useIsForecastDirty();
   const { name, startDate, endDate } = useForecastMetadata();
   const nodes = useForecastNodes();
@@ -55,8 +54,23 @@ export default function ForecastEditorPage() {
     }
   }, [currentActiveOrg, currentForecastOrgId, router, toast]);
   
-  const fetchForecastData = useCallback(async () => {
+  const fetchForecastData = useCallback(async (forceReload = false) => {
     if (!forecastId) return;
+    
+    // Check if we already have data for this forecast and there are unsaved changes
+    const currentForecastId = useForecastGraphStore.getState().forecastId;
+    const isDirty = useForecastGraphStore.getState().isDirty;
+    const hasNodes = useForecastGraphStore.getState().nodes.length > 0;
+    const hasEdges = useForecastGraphStore.getState().edges.length > 0;
+    
+    // If we already have data for this forecast and there are unsaved changes, don't reload
+    if (!forceReload && currentForecastId === forecastId && isDirty && (hasNodes || hasEdges)) {
+      console.log('[ForecastEditorPage] Preserving unsaved changes, skipping API fetch');
+      setIsPageComponentLoading(false);
+      return;
+    }
+    
+    // If we have data for a different forecast, or no data at all, or forced reload, fetch fresh data
     setIsPageComponentLoading(true);
     setStoreError(null);
 
@@ -67,6 +81,7 @@ export default function ForecastEditorPage() {
       }
       const clientData = mapForecastToClientFormat(response.data);
       loadForecastToStore(clientData);
+      console.log('[ForecastEditorPage] Fresh data loaded from API');
     } catch (err: any) {
       console.error('Error loading forecast:', err);
       setStoreError(err.message);
@@ -82,10 +97,7 @@ export default function ForecastEditorPage() {
 
   useEffect(() => {
     fetchForecastData();
-    return () => {
-      resetStore();
-    };
-  }, [fetchForecastData, resetStore]);
+  }, [fetchForecastData]);
   
   const handleSave = async () => {
     if (!forecastId) return;
@@ -140,6 +152,10 @@ export default function ForecastEditorPage() {
     router.push(navigationTarget);
   };
   
+  const handleReload = async () => {
+    await fetchForecastData(true); // Force reload
+  };
+  
   if (isPageComponentLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-900">
@@ -165,56 +181,20 @@ export default function ForecastEditorPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-900">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 bg-slate-800 border-b border-slate-700 shadow-sm">
-        <div className="flex items-center space-x-4">
-          <Button 
-            onClick={handleBack} 
-            variant="ghost" 
-            size="sm" 
-            className="flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-700"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Forecasts
-          </Button>
-          <div className="text-sm text-slate-400">
-            {name && (
-              <span className="font-medium text-slate-200">{name}</span>
-            )}
+    <div className="h-screen flex bg-slate-900">
+      {/* Sidebar */}
+      <div className="w-80 border-r border-slate-700 bg-slate-800 shadow-sm">
+        <div className="h-full overflow-y-auto">
+          <div className="p-6">
+            <h2 className="text-lg font-semibold text-slate-200 mb-4">Forecast Builder</h2>
+            <ForecastToolbar onSave={handleSave} onBack={handleBack} onReload={handleReload} />
           </div>
         </div>
-        
-        <Button 
-          onClick={handleSave} 
-          disabled={isSaving || isPageComponentLoading}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-        >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          {isSaving ? 'Saving...' : 'Save Forecast'}
-        </Button>
       </div>
       
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-80 border-r border-slate-700 bg-slate-800 shadow-sm">
-          <div className="h-full overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-200 mb-4">Forecast Builder</h2>
-              <ForecastToolbar onSave={handleSave} />
-            </div>
-          </div>
-        </div>
-        
-        {/* Canvas */}
-        <div className="flex-1 relative bg-slate-900">
-          <ForecastCanvas />
-        </div>
+      {/* Canvas */}
+      <div className="flex-1 relative bg-slate-900">
+        <ForecastCanvas />
       </div>
       
       <Toaster />

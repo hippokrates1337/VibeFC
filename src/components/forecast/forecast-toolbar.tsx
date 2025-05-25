@@ -27,7 +27,9 @@ import {
   Pencil,
   Calculator,
   BarChart3,
-  Flame
+  Flame,
+  ArrowLeft,
+  RefreshCw
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -35,6 +37,8 @@ import { CalendarIcon } from 'lucide-react';
 
 interface ForecastToolbarProps {
   onSave: () => Promise<void>;
+  onBack: () => void;
+  onReload?: () => Promise<void>;
 }
 
 // Custom date picker component since we don't have the full shadcn DatePicker
@@ -93,7 +97,7 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
   );
 };
 
-const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
+const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onReload }) => {
   const { toast } = useToast();
   
   // Node configuration panel state
@@ -190,6 +194,26 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
       setPendingAction(null);
     }
     setUnsavedDialogOpen(false);
+  };
+  
+  // Handle reload with unsaved changes check
+  const handleReload = async () => {
+    if (!onReload) return;
+    
+    try {
+      await onReload();
+      toast({
+        title: 'Reloaded',
+        description: 'Fresh data loaded from server.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to reload data. Please try again.',
+        variant: 'destructive',
+      });
+      console.error('Reload error:', error);
+    }
   };
   
   // Add a new node of the specified kind
@@ -345,6 +369,18 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
             Save
           </Button>
           
+          {onReload && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => checkUnsavedChanges(handleReload)}
+              className="w-full flex items-center gap-2 justify-center bg-slate-800 hover:bg-slate-600 border-slate-600 text-slate-300"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reload
+            </Button>
+          )}
+          
           {selectedNodeId && (
             <div className="pt-2 border-t border-slate-600 space-y-2">
               <p className="text-xs text-slate-400 font-medium">Selected Node Actions:</p>
@@ -395,6 +431,19 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave }) => {
           </div>
         </div>
       )}
+      
+      {/* Back Navigation */}
+      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+        <Button 
+          onClick={onBack}
+          variant="ghost" 
+          size="sm"
+          className="w-full flex items-center gap-2 justify-center text-slate-300 hover:text-white hover:bg-slate-600"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Forecasts
+        </Button>
+      </div>
       
       {/* Node configuration panel */}
       <NodeConfigPanel 

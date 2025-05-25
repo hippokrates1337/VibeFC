@@ -48,11 +48,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchOrgData, fetchVars]);
 
-  const clearAllAppData = useCallback(() => {
+  const clearAllAppData = useCallback((preserveUnsavedForecasts = false) => {
     console.log('[AuthProvider] Clearing all app data (stores and localStorage)...');
     clearOrgData();
     clearVars();
-    clearForecasts();
+    
+    // Only clear forecast store if we're not preserving unsaved changes
+    if (!preserveUnsavedForecasts) {
+      clearForecasts();
+    } else {
+      const isDirty = useForecastGraphStore.getState().isDirty;
+      if (isDirty) {
+        console.log('[AuthProvider] Preserving unsaved forecast changes during data clear');
+      } else {
+        clearForecasts();
+      }
+    }
+    
     localStorage.removeItem('currentOrganizationId');
     removeAuthCookie();
   }, [clearOrgData, clearVars, clearForecasts]);
@@ -81,12 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthCookie(initialSession.access_token, initialSession.expires_in);
         triggerInitialDataFetch(initialSession);
       } else {
-        clearAllAppData();
+        clearAllAppData(); // No session, safe to clear everything
       }
     }).catch(err => {
       console.error('[AuthProvider] Error getting initial session:', err);
       setIsLoading(false);
-      clearAllAppData();
+      clearAllAppData(); // Error case, safe to clear everything
     });
 
     // Listen for auth changes
@@ -98,28 +110,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_IN') {
         if (session?.access_token) {
           setAuthCookie(session.access_token, session.expires_in);
-          triggerInitialDataFetch(session);
+          
+          // Only trigger initial data fetch if we don't already have organization data
+          // This prevents clearing unsaved changes when browser window is restored
+          const hasOrgData = useOrganizationStore.getState().currentOrganization;
+          const hasForecastData = useForecastGraphStore.getState().forecastId;
+          const hasUnsavedChanges = useForecastGraphStore.getState().isDirty;
+          
+          if (!hasOrgData || (!hasForecastData && !hasUnsavedChanges)) {
+            console.log('[AuthProvider] SIGNED_IN: No existing data or no unsaved changes, fetching fresh data');
+            triggerInitialDataFetch(session);
+          } else {
+            console.log('[AuthProvider] SIGNED_IN: Existing data found with potential unsaved changes, skipping data fetch');
+          }
         } else {
           console.warn('[AuthProvider] SIGNED_IN event received but session/token missing.');
-          clearAllAppData();
+          clearAllAppData(); // Invalid sign in, safe to clear everything
         }
       } else if (event === 'SIGNED_OUT') {
-        clearAllAppData();
+        clearAllAppData(); // Explicit sign out, clear everything
       } else if (event === 'TOKEN_REFRESHED') {
         if (session?.access_token) {
            setAuthCookie(session.access_token, session.expires_in);
+           // Don't clear data on token refresh, just update the cookie
         } else {
            console.warn('[AuthProvider] TOKEN_REFRESHED event received but session/token missing.');
-           clearAllAppData();
+           clearAllAppData(); // Invalid token refresh, safe to clear everything
         }
       } else if (event === 'USER_UPDATED') {
         // Handle user updates if necessary (e.g., email change)
-        // Might need to refetch some data depending on the app logic
+        // Don't clear forecast data for user updates
       }
       
       if (!session && event !== 'SIGNED_OUT') { 
           console.log(`[AuthProvider] Session became null unexpectedly (event: ${event}), clearing data.`);
-          clearAllAppData();
+          clearAllAppData(); // Unexpected session loss, safe to clear everything
       }
     });
 
@@ -139,8 +164,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (userId && token && orgId) {
         console.log('[AuthProvider] Current organization set/changed, attempting to fetch forecasts for org ID:', orgId);
-        setForecastLoading(true);
-        setForecastError(null); // Clear previous errors
+        
+        // Check if we're switching to a different organization or if this is the same org
+        const currentForecastOrgId = useForecastGraphStore.getState().organizationId;
+        const isDirty = useForecastGraphStore.getState().isDirty;
+        
+        // If we're switching to a different organization, clear the forecast store
+        // If it's the same organization and we have unsaved changes, preserve them
+        if (currentForecastOrgId && currentForecastOrgId !== orgId) {
+          console.log('[AuthProvider] Switching to different organization, clearing forecast store');
+          clearForecasts();
+        } else if (currentForecastOrgId === orgId && isDirty) {
+          console.log('[AuthProvider] Same organization with unsaved changes, preserving forecast data');
+          // Don't clear the store, just update the organization forecasts list
+          setForecastLoading(true);
+          setForecastError(null);
+        } else {
+          // New organization or no unsaved changes, safe to clear
+          setForecastLoading(true);
+          setForecastError(null);
+        }
+        
         try {
           // Replace with your actual forecast API call using forecastApi if available
           // For now, using Supabase client directly as in previous attempt.

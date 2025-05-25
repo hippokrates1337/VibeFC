@@ -53,4 +53,4 @@ const OperatorNode: React.FC<NodeProps> = ({ data, selected }) => {
   );
 };
 
-export default OperatorNode; 
+export default React.memo(OperatorNode); 

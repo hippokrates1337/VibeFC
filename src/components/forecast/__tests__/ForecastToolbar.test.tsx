@@ -30,6 +30,7 @@ describe('ForecastToolbar', () => {
   const mockSetSelectedNodeId = jest.fn();
   const mockToast = jest.fn();
   const mockOnSave = jest.fn().mockResolvedValue(undefined);
+  const mockOnBack = jest.fn();
 
   // Track current state for the mock
   let currentState = {
@@ -79,7 +80,7 @@ describe('ForecastToolbar', () => {
   });
 
   test('renders forecast metadata fields', () => {
-    render(<ForecastToolbar onSave={mockOnSave} />);
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Check for forecast metadata fields with proper label associations
     const nameInput = screen.getByLabelText('Forecast Name') as HTMLInputElement;
@@ -96,7 +97,7 @@ describe('ForecastToolbar', () => {
   });
 
   test('updates forecast metadata when values change', async () => {
-    const { rerender } = render(<ForecastToolbar onSave={mockOnSave} />);
+    const { rerender } = render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Get the input elements
     const nameInput = screen.getByLabelText('Forecast Name') as HTMLInputElement;
@@ -110,7 +111,7 @@ describe('ForecastToolbar', () => {
     
     // Update mock state and verify UI update
     currentState.forecastName = '';
-    rerender(<ForecastToolbar onSave={mockOnSave} />);
+    rerender(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     expect(nameInput.value).toBe('');
     
     // Test setting a new value
@@ -119,7 +120,7 @@ describe('ForecastToolbar', () => {
     
     // Update mock state and verify UI update
     currentState.forecastName = 'Updated Forecast';
-    rerender(<ForecastToolbar onSave={mockOnSave} />);
+    rerender(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     expect(nameInput.value).toBe('Updated Forecast');
     
     // Test date picker functionality
@@ -139,7 +140,7 @@ describe('ForecastToolbar', () => {
   });
 
   test('adds a new node when node buttons are clicked', async () => {
-    render(<ForecastToolbar onSave={mockOnSave} />);
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Click the DATA node button
     const dataNodeButton = screen.getByText('Data');
@@ -163,7 +164,7 @@ describe('ForecastToolbar', () => {
   });
 
   test('calls onSave when save button is clicked', async () => {
-    render(<ForecastToolbar onSave={mockOnSave} />);
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Click the save button
     const saveButton = screen.getByText('Save');
@@ -197,7 +198,7 @@ describe('ForecastToolbar', () => {
       return selector(state);
     });
     
-    render(<ForecastToolbar onSave={mockOnSave} />);
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Click the save button
     const saveButton = screen.getByText('Save');
@@ -211,5 +212,16 @@ describe('ForecastToolbar', () => {
       title: 'Validation Error',
       variant: 'destructive',
     }));
+  });
+
+  test('calls onBack when back button is clicked', async () => {
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
+    
+    // Click the back button
+    const backButton = screen.getByText('Back to Forecasts');
+    await user.click(backButton);
+    
+    // Check if onBack was called
+    expect(mockOnBack).toHaveBeenCalled();
   });
 }); 

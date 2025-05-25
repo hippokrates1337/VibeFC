@@ -101,7 +101,49 @@ interface ForecastGraphActions {
 }
 
 // Helper functions
-const getDefaultNodeData = (type: ForecastNodeKind): ForecastNodeData => {  switch (type) {    case 'DATA':      return { name: 'New Data Node', variableId: '', offsetMonths: 0 };    case 'CONSTANT':      return { value: 0 };    case 'OPERATOR':      return { op: '+', inputOrder: [] };    case 'METRIC':      return { label: '', budgetVariableId: '', historicalVariableId: '' };    case 'SEED':      return { sourceMetricId: '' };    default:      return { value: 0 };  }};
+const getDefaultNodeData = (type: ForecastNodeKind): ForecastNodeData => {
+  switch (type) {
+    case 'DATA':
+      return { name: 'New Data Node', variableId: '', offsetMonths: 0 };
+    case 'CONSTANT':
+      return { value: 0 };
+    case 'OPERATOR':
+      return { op: '+', inputOrder: [] };
+    case 'METRIC':
+      return { label: '', budgetVariableId: '', historicalVariableId: '' };
+    case 'SEED':
+      return { sourceMetricId: '' };
+    default:
+      return { value: 0 };
+  }
+};
+
+/**
+ * Updates the inputOrder arrays for all operator nodes based on the current edges.
+ * This ensures that operator nodes display the correct number of connected inputs.
+ */
+const updateOperatorInputOrders = (nodes: ForecastNodeClient[], edges: ForecastEdgeClient[]): ForecastNodeClient[] => {
+  return nodes.map(node => {
+    if (node.type === 'OPERATOR') {
+      // Find all edges that target this operator node
+      const incomingEdges = edges.filter(edge => edge.target === node.id);
+      // Extract the source node IDs to create the inputOrder array
+      const inputOrder = incomingEdges.map(edge => edge.source);
+      
+      // Create a completely new node object to ensure React detects the change
+      const updatedNode: ForecastNodeClient = {
+        ...node,
+        data: {
+          ...(node.data as OperatorNodeAttributes),
+          inputOrder,
+        },
+      };
+      
+      return updatedNode;
+    }
+    return node;
+  });
+};
 
 // Initial state
 const initialState: ForecastGraphState = {
@@ -214,9 +256,11 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
           const filteredEdges = state.edges.filter(
             (edge) => edge.source !== nodeId && edge.target !== nodeId
           );
+          const updatedNodes = updateOperatorInputOrders(filteredNodes, filteredEdges);
+          
           logger.log(`[ForecastGraphStore] Node deleted: ${nodeId} and associated edges.`);
           return {
-            nodes: filteredNodes,
+            nodes: updatedNodes,
             edges: filteredEdges,
             selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
             isDirty: true,
@@ -233,9 +277,14 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         };
 
         set((state) => {
+          const newEdges = [...state.edges, newEdge];
+          const updatedNodes = updateOperatorInputOrders(state.nodes, newEdges);
+          
           logger.log('[ForecastGraphStore] Edge added:', newEdge);
+          
           return {
-            edges: [...state.edges, newEdge],
+            edges: newEdges,
+            nodes: updatedNodes,
             isDirty: true,
           };
         });
@@ -247,9 +296,12 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         logger.log(`[ForecastGraphStore] deleteEdge called for edgeId: ${edgeId}`);
         set((state) => {
           const newEdges = state.edges.filter((edge) => edge.id !== edgeId);
+          const updatedNodes = updateOperatorInputOrders(state.nodes, newEdges);
+          
           logger.log(`[ForecastGraphStore] Edge deleted: ${edgeId}`);
           return {
             edges: newEdges,
+            nodes: updatedNodes,
             isDirty: true,
           };
         });
@@ -279,12 +331,16 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         // logger.log('[ForecastGraphStore] onEdgesChange called with changes:', changes); // Can be very noisy
         set((state) => {
           const newEdges = applyEdgeChanges(changes, state.edges) as ForecastEdgeClient[];
+          const hasEdgeChanges = changes.some(change => change.type === 'remove' || change.type === 'add');
+          const updatedNodes = hasEdgeChanges ? updateOperatorInputOrders(state.nodes, newEdges) : state.nodes;
+          
           const dirty = changes.some(change => change.type === 'remove');
           if (dirty) {
             // logger.log('[ForecastGraphStore] Edges changed, setting isDirty to true.');
           }
           return {
             edges: newEdges,
+            nodes: updatedNodes,
             isDirty: dirty ? true : state.isDirty,
           };
         });
@@ -295,10 +351,17 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         set({ isDirty });
       },
 
+      // Resets the forecast editing state (nodes, edges, metadata) while preserving
+      // the organization forecasts list to prevent clearing the forecast list when
+      // navigating back from the editor to the forecast list page.
       resetStore: () => {
         logger.log('[ForecastGraphStore] resetStore called.');
-        set(initialState);
-        logger.log('[ForecastGraphStore] Store reset to initial state.');
+        set((state) => ({
+          ...initialState,
+          // Preserve organization forecasts to avoid clearing the list when navigating back
+          organizationForecasts: state.organizationForecasts,
+        }));
+        logger.log('[ForecastGraphStore] Store reset to initial state, preserving organization forecasts.');
       },
 
       setSelectedNodeId: (nodeId) => {
@@ -361,11 +424,17 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
           };
         });
         
-        set((currentState) => ({
-          nodes: [...currentState.nodes, duplicatedNode],
-          edges: [...currentState.edges, ...duplicatedEdges],
-          isDirty: true,
-        }));
+        set((currentState) => {
+          const newNodes = [...currentState.nodes, duplicatedNode];
+          const newEdges = [...currentState.edges, ...duplicatedEdges];
+          const updatedNodes = updateOperatorInputOrders(newNodes, newEdges);
+          
+          return {
+            nodes: updatedNodes,
+            edges: newEdges,
+            isDirty: true,
+          };
+        });
         logger.log(`[ForecastGraphStore] Node duplicated: ${nodeId} -> ${newNodeId} with ${duplicatedEdges.length} edges.`);
         return newNodeId;
       },
@@ -396,7 +465,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
 
 // Selectors for easy state access
 export const useForecastId = () => useForecastGraphStore((state) => state.forecastId);
-export const useForecastNodes = () => useForecastGraphStore(useShallow((state) => state.nodes));
+export const useForecastNodes = () => useForecastGraphStore((state) => state.nodes);
 export const useForecastEdges = () => useForecastGraphStore(useShallow((state) => state.edges));
 export const useForecastOrganizationId = () => useForecastGraphStore((state) => state.organizationId);
 export const useForecastMetadata = () => useForecastGraphStore(
@@ -429,4 +498,4 @@ export const useOnNodesChange = () => useForecastGraphStore((state) => state.onN
 export const useOnEdgesChange = () => useForecastGraphStore((state) => state.onEdgesChange);
 export const useSetSelectedNodeId = () => useForecastGraphStore((state) => state.setSelectedNodeId);
 export const useDuplicateNodeWithEdges = () => useForecastGraphStore((state) => state.duplicateNodeWithEdges);
-export const useLoadOrganizationForecasts = () => useForecastGraphStore((state) => state.loadOrganizationForecasts); 
+export const useLoadOrganizationForecasts = () => useForecastGraphStore((state) => state.loadOrganizationForecasts);
