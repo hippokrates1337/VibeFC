@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '@/test-utils';
 import ConstantNode from '../nodes/ConstantNode';
 import '@testing-library/jest-dom';
 import { NodeProps } from 'reactflow';

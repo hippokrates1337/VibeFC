@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor } from '@/test-utils';
 import { useParams, useRouter } from 'next/navigation';
 import ForecastEditorPage from '../page';
 import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';

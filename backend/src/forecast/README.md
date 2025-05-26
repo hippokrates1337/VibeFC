@@ -10,9 +10,34 @@ This module implements a graph-based forecasting system where users can build fo
 
 The module works with the following Supabase tables:
 
-- **forecasts**: Stores metadata about each forecast (name, date range, etc.)
-- **forecast_nodes**: Stores the nodes (calculation components) of each forecast
-- **forecast_edges**: Stores the connections between nodes
+### forecasts
+Stores metadata about each forecast:
+- `id`: UUID (primary key, auto-generated)
+- `organization_id`: UUID (NOT NULL, foreign key to organizations.id)
+- `name`: text (NOT NULL)
+- `forecast_start_date`: date (NOT NULL)
+- `forecast_end_date`: date (NOT NULL)
+- `user_id`: UUID (NOT NULL, foreign key to auth.users.id)
+- `created_at`: timestamptz (default now())
+- `updated_at`: timestamptz (default now())
+
+### forecast_nodes
+Stores the nodes (calculation components) of each forecast:
+- `id`: UUID (primary key, auto-generated)
+- `forecast_id`: UUID (NOT NULL, foreign key to forecasts.id)
+- `kind`: forecast_node_kind_enum (NOT NULL, values: DATA|CONSTANT|OPERATOR|METRIC|SEED)
+- `attributes`: jsonb (NOT NULL, stores node-specific configuration)
+- `position`: jsonb (NOT NULL, stores x,y coordinates for UI)
+- `created_at`: timestamptz (default now())
+- `updated_at`: timestamptz (default now())
+
+### forecast_edges
+Stores the connections between nodes:
+- `id`: UUID (primary key, auto-generated)
+- `forecast_id`: UUID (NOT NULL, foreign key to forecasts.id)
+- `source_node_id`: UUID (NOT NULL, foreign key to forecast_nodes.id)
+- `target_node_id`: UUID (NOT NULL, foreign key to forecast_nodes.id)
+- `created_at`: timestamptz (default now())
 
 ## Node Types
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   Sheet, 
   SheetContent, 
@@ -32,6 +32,37 @@ interface NodeConfigPanelProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Custom hook for debounced store updates
+const useDebouncedUpdate = (delay: number = 300) => {
+  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  const callbackRef = useRef<((value: any) => void) | null>(null);
+
+  const debouncedCallback = useCallback((callback: (value: any) => void, value: any) => {
+    callbackRef.current = callback;
+    
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+    }
+    
+    timeoutIdRef.current = setTimeout(() => {
+      if (callbackRef.current) {
+        callbackRef.current(value);
+      }
+    }, delay);
+  }, [delay]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+      }
+    };
+  }, []);
+
+  return debouncedCallback;
+};
+
 const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ 
   open,
   onOpenChange
@@ -51,15 +82,28 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   // Filter variables for the currently selected organization context of the variable store
   const organizationVariables = allVariables.filter(variable => variable.organizationId === selectedOrgIdForVariables);
   
+  // Handle node deletion with confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Local state for form inputs to provide immediate UI feedback
+  const [localFormData, setLocalFormData] = useState<Record<string, any>>({});
+
+  // Debounced update function
+  const debouncedUpdate = useDebouncedUpdate(300);
+
+  // Initialize local form data when selected node changes
+  useEffect(() => {
+    if (selectedNode) {
+      setLocalFormData(selectedNode.data);
+    }
+  }, [selectedNode]);
+  
   // Close panel when no node is selected
   useEffect(() => {
     if (!selectedNodeId && open) {
       onOpenChange(false);
     }
   }, [selectedNodeId, open, onOpenChange]);
-  
-  // Handle node deletion with confirmation
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   const handleDeleteNode = () => {
     if (selectedNodeId) {
@@ -74,11 +118,22 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     setShowDeleteConfirm(false);
     onOpenChange(false);
   };
-  
-  if (!selectedNode) return null;
+
+  // Helper function to update both local state and trigger debounced store update
+  const handleInputChange = (field: string, value: any) => {
+    const newData = { ...localFormData, [field]: value };
+    setLocalFormData(newData);
+    debouncedUpdate((updates: Record<string, any>) => {
+      if (selectedNode) {
+        updateNodeData(selectedNode.id, updates);
+      }
+    }, { [field]: value });
+  };
 
   // Render appropriate form based on node type
   const renderNodeForm = () => {
+    if (!selectedNode) return null;
+    
     switch(selectedNode.type) {
       case 'DATA':
         return renderDataNodeForm(selectedNode);
@@ -104,8 +159,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           <label htmlFor="name" className="text-sm font-medium text-slate-300">Name</label>
           <Input 
             id="name"
-            value={data.name || ''}
-            onChange={(e) => updateNodeData(node.id, { name: e.target.value })}
+            value={localFormData.name || ''}
+            onChange={(e) => handleInputChange('name', e.target.value)}
             placeholder="Node name"
             className="bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
           />
@@ -114,8 +169,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         <div className="space-y-1">
           <label htmlFor="variableId" className="text-sm font-medium text-slate-300">Variable</label>
           <Select 
-            value={data.variableId || ''} 
-            onValueChange={(value) => updateNodeData(node.id, { variableId: value })}
+            value={localFormData.variableId || ''} 
+            onValueChange={(value) => handleInputChange('variableId', value)}
           >
             <SelectTrigger id="variableId" className="bg-slate-700 border-slate-600 text-slate-200">
               <SelectValue placeholder="Select variable" />
@@ -141,8 +196,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           <Input 
             id="offsetMonths"
             type="number" 
-            value={data.offsetMonths || 0}
-            onChange={(e) => updateNodeData(node.id, { offsetMonths: parseInt(e.target.value) || 0 })}
+            value={localFormData.offsetMonths || 0}
+            onChange={(e) => handleInputChange('offsetMonths', parseInt(e.target.value) || 0)}
             className="bg-slate-700 border-slate-600 text-slate-200"
           />
         </div>
@@ -157,8 +212,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         <label className="text-sm font-medium text-slate-300">Value</label>
         <Input 
           type="number" 
-          value={data.value || 0}
-          onChange={(e) => updateNodeData(node.id, { value: parseFloat(e.target.value) || 0 })}
+          value={localFormData.value || 0}
+          onChange={(e) => handleInputChange('value', parseFloat(e.target.value) || 0)}
           className="bg-slate-700 border-slate-600 text-slate-200"
         />
       </div>
@@ -171,8 +226,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       <div className="space-y-1">
         <label className="text-sm font-medium text-slate-300">Operation</label>
         <Select 
-          value={data.op || '+'} 
-          onValueChange={(value) => updateNodeData(node.id, { op: value as any })}
+          value={localFormData.op || '+'} 
+          onValueChange={(value) => handleInputChange('op', value)}
         >
           <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
             <SelectValue placeholder="Select operation" />
@@ -196,8 +251,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-300">Label</label>
           <Input 
-            value={data.label || ''}
-            onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
+            value={localFormData.label || ''}
+            onChange={(e) => handleInputChange('label', e.target.value)}
             placeholder="Metric label"
             className="bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
           />
@@ -206,8 +261,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-300">Budget Variable</label>
           <Select 
-            value={data.budgetVariableId || ''} 
-            onValueChange={(value) => updateNodeData(node.id, { budgetVariableId: value })}
+            value={localFormData.budgetVariableId || ''} 
+            onValueChange={(value) => handleInputChange('budgetVariableId', value)}
           >
             <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
               <SelectValue placeholder="Select budget variable" />
@@ -225,8 +280,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-300">Historical Variable</label>
           <Select 
-            value={data.historicalVariableId || ''} 
-            onValueChange={(value) => updateNodeData(node.id, { historicalVariableId: value })}
+            value={localFormData.historicalVariableId || ''} 
+            onValueChange={(value) => handleInputChange('historicalVariableId', value)}
           >
             <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
               <SelectValue placeholder="Select historical variable" />
@@ -250,8 +305,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       <div className="space-y-1">
         <label className="text-sm font-medium text-slate-300">Source Metric</label>
         <Select 
-          value={data.sourceMetricId || ''} 
-          onValueChange={(value) => updateNodeData(node.id, { sourceMetricId: value })}
+          value={localFormData.sourceMetricId || ''} 
+          onValueChange={(value) => handleInputChange('sourceMetricId', value)}
         >
           <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
             <SelectValue placeholder="Select source metric" />
@@ -273,13 +328,16 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     );
   };
 
+  // Early return AFTER all hooks have been called
+  if (!selectedNode) return null;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-md no-overlay-config-panel bg-slate-800 border-slate-700 text-slate-200">
         <SheetHeader>
-          <SheetTitle className="text-slate-200">Configure {selectedNode.type} Node</SheetTitle>
+          <SheetTitle className="text-slate-200">Configure {selectedNode!.type} Node</SheetTitle>
           <SheetDescription className="text-slate-400">
-            Modify the properties of the selected {selectedNode.type} node below.
+            Modify the properties of the selected {selectedNode!.type} node below.
           </SheetDescription>
         </SheetHeader>
         

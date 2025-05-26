@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook } from '@/test-utils';
 import { NodeChange, EdgeChange } from 'reactflow';
 import { 
   useForecastGraphStore, 

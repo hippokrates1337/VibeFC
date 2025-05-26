@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '@/test-utils';
 import DataNode from '../nodes/DataNode';
 import '@testing-library/jest-dom';
 import { NodeProps } from 'reactflow';

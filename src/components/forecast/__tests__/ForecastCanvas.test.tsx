@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '@/test-utils';
 import ForecastCanvas from '../forecast-canvas';
 import '@testing-library/jest-dom';
 
@@ -26,8 +26,27 @@ jest.mock('../node-types', () => ({
 
 // Mock the React Flow library
 jest.mock('reactflow', () => {
-  const ReactFlowMock = ({ nodes, edges, onNodesChange, onEdgesChange, onConnect, nodeTypes, edgeTypes, children }: any) => (
-    <div data-testid="react-flow-mock">
+  const ReactFlowMock = ({ 
+    nodes, 
+    edges, 
+    onNodesChange, 
+    onEdgesChange, 
+    onConnect, 
+    nodeTypes, 
+    edgeTypes, 
+    children,
+    // Filter out other React Flow props to avoid DOM warnings
+    onNodeDoubleClick,
+    onSelectionChange,
+    deleteKeyCode,
+    fitView,
+    selectNodesOnDrag,
+    className,
+    defaultEdgeOptions,
+    connectionLineStyle,
+    ...domProps
+  }: any) => (
+    <div data-testid="react-flow-mock" className={className} {...domProps}>
       <div data-testid="nodes-count">{nodes.length}</div>
       <div data-testid="edges-count">{edges.length}</div>
       <button 
@@ -61,8 +80,10 @@ jest.mock('reactflow', () => {
   return {
     __esModule: true,
     default: ReactFlowMock,
-    Controls: () => <div data-testid="react-flow-controls">Controls</div>,
-    Background: () => <div data-testid="react-flow-background">Background</div>,
+    Controls: ({ showZoom, showFitView, showInteractive, className, ...domProps }: any) => 
+      <div data-testid="react-flow-controls" className={className} {...domProps}>Controls</div>,
+    Background: ({ variant, gap, size, color, className, ...domProps }: any) => 
+      <div data-testid="react-flow-background" className={className} {...domProps}>Background</div>,
     ReactFlowProvider: ({ children }: any) => <div data-testid="react-flow-provider">{children}</div>,
     useStoreApi: () => mockStore,
     BackgroundVariant: { Dots: 'dots' },
@@ -74,20 +95,28 @@ jest.mock('reactflow', () => {
 // Mock Zustand store
 jest.mock('@/lib/store/forecast-graph-store', () => ({
   useForecastGraphStore: jest.fn(),
+  useForecastNodes: jest.fn(),
+  useForecastEdges: jest.fn(),
   useDeleteNode: () => jest.fn(),
   useDeleteEdge: () => jest.fn()
 }));
 
 // Import after mocking
-const { useForecastGraphStore } = jest.requireMock('@/lib/store/forecast-graph-store');
+const { useForecastGraphStore, useForecastNodes, useForecastEdges } = jest.requireMock('@/lib/store/forecast-graph-store');
 
 describe('ForecastCanvas', () => {
   beforeEach(() => {
     // Setup default mock implementation
+    const mockNodes = [{ id: 'node1' }, { id: 'node2' }];
+    const mockEdges = [{ id: 'edge1', source: 'node1', target: 'node2' }];
+    
+    useForecastNodes.mockReturnValue(mockNodes);
+    useForecastEdges.mockReturnValue(mockEdges);
+    
     useForecastGraphStore.mockImplementation((selector: any) => 
       selector({
-        nodes: [{ id: 'node1' }, { id: 'node2' }],
-        edges: [{ id: 'edge1', source: 'node1', target: 'node2' }],
+        nodes: mockNodes,
+        edges: mockEdges,
         onNodesChange: jest.fn(),
         onEdgesChange: jest.fn(),
         addEdge: jest.fn(),
@@ -135,10 +164,16 @@ describe('ForecastCanvas', () => {
 
   it('calls store onNodesChange when nodes change', () => {
     const mockOnNodesChange = jest.fn();
+    const emptyNodes: any[] = [];
+    const emptyEdges: any[] = [];
+    
+    useForecastNodes.mockReturnValue(emptyNodes);
+    useForecastEdges.mockReturnValue(emptyEdges);
+    
     useForecastGraphStore.mockImplementation((selector: any) => 
       selector({
-        nodes: [],
-        edges: [],
+        nodes: emptyNodes,
+        edges: emptyEdges,
         onNodesChange: mockOnNodesChange,
         onEdgesChange: jest.fn(),
         addEdge: jest.fn(),
@@ -154,10 +189,16 @@ describe('ForecastCanvas', () => {
 
   it('calls store onEdgesChange when edges change', () => {
     const mockOnEdgesChange = jest.fn();
+    const emptyNodes: any[] = [];
+    const emptyEdges: any[] = [];
+    
+    useForecastNodes.mockReturnValue(emptyNodes);
+    useForecastEdges.mockReturnValue(emptyEdges);
+    
     useForecastGraphStore.mockImplementation((selector: any) => 
       selector({
-        nodes: [],
-        edges: [],
+        nodes: emptyNodes,
+        edges: emptyEdges,
         onNodesChange: jest.fn(),
         onEdgesChange: mockOnEdgesChange,
         addEdge: jest.fn(),
@@ -173,10 +214,16 @@ describe('ForecastCanvas', () => {
 
   it('calls store addEdge when connection is made', () => {
     const mockAddEdge = jest.fn();
+    const emptyNodes: any[] = [];
+    const emptyEdges: any[] = [];
+    
+    useForecastNodes.mockReturnValue(emptyNodes);
+    useForecastEdges.mockReturnValue(emptyEdges);
+    
     useForecastGraphStore.mockImplementation((selector: any) => 
       selector({
-        nodes: [],
-        edges: [],
+        nodes: emptyNodes,
+        edges: emptyEdges,
         onNodesChange: jest.fn(),
         onEdgesChange: jest.fn(),
         addEdge: mockAddEdge,

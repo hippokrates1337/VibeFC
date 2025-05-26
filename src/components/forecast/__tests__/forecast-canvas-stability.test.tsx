@@ -1,11 +1,29 @@
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render } from '@/test-utils';
 import ForecastCanvas from '../forecast-canvas';
 
 // Mock React Flow with minimal implementation
 jest.mock('reactflow', () => {
   // Create a mock component that will be used in the factory
-  const MockReactFlow = ({ onSelectionChange, ...props }: any) => {
+  const MockReactFlow = ({ 
+    onSelectionChange, 
+    // Filter out React Flow specific props
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    onNodeDoubleClick,
+    deleteKeyCode,
+    nodeTypes,
+    edgeTypes,
+    fitView,
+    selectNodesOnDrag,
+    className,
+    defaultEdgeOptions,
+    connectionLineStyle,
+    ...domProps 
+  }: any) => {
     const mockReact = require('react');
     
     // Simulate selection changes that previously caused infinite loops
@@ -24,14 +42,28 @@ jest.mock('reactflow', () => {
       }
     }, [onSelectionChange]);
     
-    return mockReact.createElement('div', { 'data-testid': 'react-flow', ...props });
+    return mockReact.createElement('div', { 
+      'data-testid': 'react-flow', 
+      className,
+      ...domProps 
+    });
   };
 
   return {
     __esModule: true,
     default: MockReactFlow,
-    Controls: () => require('react').createElement('div', { 'data-testid': 'controls' }),
-    Background: () => require('react').createElement('div', { 'data-testid': 'background' }),
+    Controls: ({ showZoom, showFitView, showInteractive, className, ...domProps }: any) => 
+      require('react').createElement('div', { 
+        'data-testid': 'controls', 
+        className,
+        ...domProps 
+      }),
+    Background: ({ variant, gap, size, color, className, ...domProps }: any) => 
+      require('react').createElement('div', { 
+        'data-testid': 'background', 
+        className,
+        ...domProps 
+      }),
     ReactFlowProvider: ({ children }: any) => require('react').createElement('div', {}, children),
     BackgroundVariant: { Dots: 'dots' },
     useStoreApi: () => ({ getState: () => ({ onError: jest.fn() }) }),
@@ -49,6 +81,8 @@ jest.mock('@/lib/store/forecast-graph-store', () => ({
     addEdge: jest.fn(),
     setSelectedNodeId: jest.fn()
   })),
+  useForecastNodes: jest.fn(() => []),
+  useForecastEdges: jest.fn(() => []),
   useDeleteNode: () => jest.fn(),
   useDeleteEdge: () => jest.fn()
 }));

@@ -200,6 +200,37 @@ The store uses the `persist` middleware to save forecast data to `localStorage` 
 
 Runtime state (`isDirty`, `selectedNodeId`, `isLoading`, `error`) is excluded from persistence.
 
+## Available Hooks
+
+The store provides numerous hooks for accessing specific state and actions:
+
+### State Selectors
+- `useForecastId()`: Get the current forecast ID
+- `useForecastNodes()`: Get all nodes in the forecast
+- `useForecastEdges()`: Get all edges in the forecast
+- `useForecastOrganizationId()`: Get the organization ID for the forecast
+- `useForecastMetadata()`: Get forecast metadata (name, dates)
+- `useIsForecastDirty()`: Check if there are unsaved changes
+- `useSelectedNodeId()`: Get the ID of the selected node
+- `useSelectedNode()`: Get the complete selected node object
+- `useIsForecastLoading()`: Check loading state
+- `useForecastError()`: Get error message if any
+- `useOrganizationForecasts()`: Get all forecasts for the organization
+
+### Action Hooks
+- `useLoadForecast()`: Load a forecast into the store
+- `useSetForecastMetadata()`: Update forecast metadata
+- `useAddNode()`: Add a new node to the forecast
+- `useUpdateNodeData()`: Update node attributes
+- `useDeleteNode()`: Remove a node and its edges
+- `useAddEdge()`: Add a connection between nodes
+- `useDeleteEdge()`: Remove a connection
+- `useOnNodesChange()`: Handle React Flow node changes
+- `useOnEdgesChange()`: Handle React Flow edge changes
+- `useSetSelectedNodeId()`: Set the selected node
+- `useDuplicateNodeWithEdges()`: Duplicate a node with its connections
+- `useLoadOrganizationForecasts()`: Load all forecasts for an organization
+
 ## Usage
 
 Import the hooks to interact with the store in your components:
@@ -212,6 +243,8 @@ import {
   useAddNode,
   useUpdateNodeData,
   useDeleteNode,
+  useSelectedNode,
+  useIsForecastDirty,
   // ... other hooks
 } from '@/lib/store/forecast-graph-store';
 
@@ -222,6 +255,7 @@ const store = useForecastGraphStore();
 const nodes = useForecastNodes();
 const edges = useForecastEdges();
 const selectedNode = useSelectedNode();
+const isDirty = useIsForecastDirty();
 
 // Access actions with dedicated hooks
 const addNode = useAddNode();
@@ -245,4 +279,125 @@ const handleUpdateValue = (nodeId: string, value: number) => {
 
 ## Integration with React Flow
 
-This store is designed to work seamlessly with React Flow. The node and edge structures are compatible with React Flow's expected formats, and the store includes actions like `onNodesChange` and `onEdgesChange` that can be directly connected to React Flow's corresponding event handlers. 
+This store is designed to work seamlessly with React Flow. The node and edge structures are compatible with React Flow's expected formats, and the store includes actions like `onNodesChange` and `onEdgesChange` that can be directly connected to React Flow's corresponding event handlers.
+
+# Organization Store (`organization.ts`)
+
+This module defines a Zustand store for managing organization data, member management, and role-based access control within the application.
+
+## Purpose
+
+The `useOrganizationStore` provides a centralized location for managing organization-related functionality, including:
+
+- Organization CRUD operations (create, read, update, delete)
+- Member management (invite, update roles, remove members)
+- Organization switching and current organization tracking
+- Role-based access control and permission management
+- Persistence of current organization selection
+
+## Data Structure
+
+The core data structures managed by this store are:
+
+```typescript
+interface Organization {
+  id: string;
+  name: string;
+  created_at: string;
+  owner_id: string;
+}
+
+interface OrganizationMember {
+  id: number;
+  organization_id: string;
+  user_id: string;
+  role: 'admin' | 'editor' | 'viewer';
+  joined_at: string;
+  email?: string;
+}
+```
+
+## State
+
+The store maintains the following state:
+
+- `organizations`: Array of organizations the user has access to
+- `currentOrganization`: The currently selected organization or null
+- `userRole`: The user's role in the current organization ('admin' | 'editor' | 'viewer' | null)
+- `members`: Array of members in the current organization
+- `isLoading`: Loading state for async operations
+- `error`: Error message or null
+
+## Actions
+
+The store exposes the following key actions:
+
+### Organization Management
+- `fetchOrganizationData(userId, token)`: Loads all organizations for a user and sets the current organization
+- `switchOrganization(organizationId, userId, token)`: Switches to a different organization
+- `createOrganization(name, userId, token)`: Creates a new organization
+- `updateOrganization(id, name, token)`: Updates an organization's name
+- `deleteOrganization(id, token)`: Deletes an organization and all its members
+- `clearOrganizationData()`: Clears all organization data from the store
+
+### Member Management
+- `loadMembers(organizationId, token)`: Loads members for a specific organization
+- `inviteMember(email, role, currentOrgId, token)`: Invites a new member to the organization
+- `updateMemberRole(userId, role, currentOrgId, token)`: Updates a member's role
+- `removeMember(userId, currentOrgId, token)`: Removes a member from the organization
+
+## Persistence
+
+The store uses the `persist` middleware to save minimal state to `localStorage` under the key `organization-storage`. Only the current organization ID is persisted to maintain the user's organization selection across sessions.
+
+## Usage
+
+```typescript
+import { useOrganizationStore } from '@/lib/store/organization';
+
+// Access the entire state
+const {
+  organizations,
+  currentOrganization,
+  userRole,
+  members,
+  isLoading,
+  error,
+  fetchOrganizationData,
+  switchOrganization,
+  createOrganization,
+  // ... other actions
+} = useOrganizationStore();
+
+// Example: Fetching organization data
+useEffect(() => {
+  if (userId && token) {
+    fetchOrganizationData(userId, token);
+  }
+}, [userId, token]);
+
+// Example: Switching organizations
+const handleOrgSwitch = async (orgId: string) => {
+  await switchOrganization(orgId, userId, token);
+};
+
+// Example: Creating a new organization
+const handleCreateOrg = async (name: string) => {
+  const newOrg = await createOrganization(name, userId, token);
+  if (newOrg) {
+    console.log('Organization created:', newOrg);
+  }
+};
+```
+
+## Role-Based Access Control
+
+The store tracks the user's role in the current organization and provides this information for implementing role-based UI and functionality:
+
+- **Admin**: Full access to organization management and member management
+- **Editor**: Can edit content but limited organization management access
+- **Viewer**: Read-only access to organization content
+
+## Backend Integration
+
+The organization store integrates directly with Supabase for data persistence and real-time updates. It handles authentication token management and provides comprehensive error handling for all operations. 

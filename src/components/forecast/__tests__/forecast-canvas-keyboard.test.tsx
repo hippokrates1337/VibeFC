@@ -1,13 +1,34 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { act } from 'react-dom/test-utils';
+import { render, screen, fireEvent, act } from '@/test-utils';
 import ForecastCanvas from '../forecast-canvas';
 import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
+
+// Import mocked hooks
+const { useForecastNodes, useForecastEdges } = jest.requireMock('@/lib/store/forecast-graph-store');
 
 // Mock React Flow
 jest.mock('reactflow', () => {
   // Create a mock component that will be used in the factory
-  const MockReactFlow = ({ children, onSelectionChange, ...props }: any) => {
+  const MockReactFlow = ({ 
+    children, 
+    onSelectionChange, 
+    // Filter out React Flow specific props to avoid DOM warnings
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    onNodeDoubleClick,
+    deleteKeyCode,
+    nodeTypes,
+    edgeTypes,
+    fitView,
+    selectNodesOnDrag,
+    className,
+    defaultEdgeOptions,
+    connectionLineStyle,
+    ...domProps 
+  }: any) => {
     const mockReact = require('react');
     
     // Simulate React Flow component
@@ -20,14 +41,29 @@ jest.mock('reactflow', () => {
       }
     }, [onSelectionChange]);
     
-    return mockReact.createElement('div', { 'data-testid': 'react-flow', ...props }, children);
+    return mockReact.createElement('div', { 
+      'data-testid': 'react-flow',
+      'data-delete-key-code': JSON.stringify(deleteKeyCode || []), // Use data attribute to avoid React warning
+      className,
+      ...domProps 
+    }, children);
   };
 
   return {
     __esModule: true,
     default: MockReactFlow,
-    Controls: ({ children, ...props }: any) => require('react').createElement('div', { 'data-testid': 'controls', ...props }, children),
-    Background: (props: any) => require('react').createElement('div', { 'data-testid': 'background', ...props }),
+    Controls: ({ children, showZoom, showFitView, showInteractive, className, ...domProps }: any) => 
+      require('react').createElement('div', { 
+        'data-testid': 'controls', 
+        className,
+        ...domProps 
+      }, children),
+    Background: ({ variant, gap, size, color, className, ...domProps }: any) => 
+      require('react').createElement('div', { 
+        'data-testid': 'background', 
+        className,
+        ...domProps 
+      }),
     ReactFlowProvider: ({ children }: any) => require('react').createElement('div', { 'data-testid': 'react-flow-provider' }, children),
     BackgroundVariant: { Dots: 'dots' },
     useStoreApi: () => ({
@@ -45,6 +81,8 @@ const mockDeleteEdge = jest.fn();
 
 jest.mock('@/lib/store/forecast-graph-store', () => ({
   useForecastGraphStore: jest.fn(),
+  useForecastNodes: jest.fn(),
+  useForecastEdges: jest.fn(),
   useDeleteNode: () => mockDeleteNode,
   useDeleteEdge: () => mockDeleteEdge
 }));
@@ -74,6 +112,11 @@ describe('ForecastCanvas Keyboard Functionality', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    // Mock the individual hooks
+    useForecastNodes.mockReturnValue(mockStore.nodes);
+    useForecastEdges.mockReturnValue(mockStore.edges);
+    
     (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => selector(mockStore));
   });
 
@@ -85,7 +128,7 @@ describe('ForecastCanvas Keyboard Functionality', () => {
   it('should have deleteKeyCode set to empty array to disable built-in deletion', () => {
     render(<ForecastCanvas />);
     const reactFlow = screen.getByTestId('react-flow');
-    expect(reactFlow).toHaveAttribute('deleteKeyCode', '');
+    expect(reactFlow).toHaveAttribute('data-delete-key-code', '[]'); // Should be JSON stringified empty array
   });
 
   it('should call delete functions when delete key is pressed with selected elements', async () => {

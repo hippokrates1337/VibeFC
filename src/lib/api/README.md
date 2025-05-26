@@ -41,7 +41,18 @@ const { data, error } = await forecastApi.saveForecastGraph(
 The API modules include helper functions to convert between client and API data formats:
 
 - `mapForecastToClientFormat`: Converts API response data to the format used by the client
-- `mapClientToApiFormat`: Converts client data to the format expected by the API
+- `mapClientToApiFormat`: Converts client data to the format expected by the API (currently commented out after refactoring)
+
+## Additional API Methods
+
+The `forecastApi` object also includes methods for individual node and edge operations:
+
+- `addNode`: Add a new node to a forecast
+- `updateNode`: Update node attributes or position
+- `deleteNode`: Remove a node and its connected edges
+- `addEdge`: Create a connection between two nodes
+- `deleteEdge`: Remove a connection between nodes
+- `deleteForecast`: Delete an entire forecast
 
 ## Field Naming Convention
 

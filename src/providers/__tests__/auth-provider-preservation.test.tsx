@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor } from '@/test-utils';
 import { AuthProvider } from '../auth-provider';
 import { supabase } from '@/lib/supabase';
 import { useOrganizationStore } from '@/lib/store/organization';

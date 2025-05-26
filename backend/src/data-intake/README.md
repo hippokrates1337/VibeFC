@@ -94,9 +94,20 @@ interface VariableEntity {
   name: string;
   type: VariableType;
   values: TimeSeriesPoint[];
-  user_id: string;       // UUID format, snake_case for database column
-  organization_id: string; // UUID format, snake_case for database column (Mandatory)
+  user_id: string;       // text type in database (not UUID), snake_case for database column
+  organization_id: string; // UUID format, snake_case for database column (Mandatory, NOT NULL)
   created_at: string; // ISO Date string
   updated_at: string; // ISO Date string
 }
 ```
+
+### Actual Database Schema
+The `variables` table in Supabase has the following structure:
+- `id`: UUID (primary key, auto-generated)
+- `name`: text (NOT NULL)
+- `type`: text (NOT NULL, check constraint for ACTUAL|BUDGET|INPUT|UNKNOWN)
+- `values`: jsonb (NOT NULL, stores TimeSeriesPoint array)
+- `user_id`: text (NOT NULL, note: not UUID type)
+- `organization_id`: UUID (NOT NULL, foreign key to organizations.id)
+- `created_at`: timestamptz (default now())
+- `updated_at`: timestamptz (default now())

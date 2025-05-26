@@ -31,13 +31,14 @@ This directory implements the core routing and layout structure of the VibeFC fr
 ## Key Directories
 
 - **`/ (root)`:** Contains the main entry `layout.tsx` and the public landing `page.tsx`.
+- **`/landing/`:** Public landing page for new visitors. (See `landing/README.md`)
 - **`/(protected)/`:** A route group for pages and layouts requiring user authentication. Routes within this group (e.g., `/organizations`) are protected by middleware. It also defines a shared layout for these protected sections.
 - **`/auth/`:** Handles authentication-related backend logic.
   - **`/auth/callback/`:** Contains a `route.ts` handler for Supabase authentication callbacks (e.g., after email verification or OAuth flows).
 - **`/login/`:** Public route displaying the user login form (`LoginForm` component).
 - **`/signup/`:** Public route displaying the user registration form (`SignUpForm` component).
-- **`/variables/`:** Feature section for managing variables (Protected - requires login).
-- **`/data-intake/`:** Feature section for data intake processes (Protected - requires login).
+- **`/data-intake/`:** Feature section for data intake processes (Protected - requires login, located within `(protected)` group).
 - **`/organizations/`:** Feature section for managing organizations (Protected - requires login, located within `(protected)` group).
-- **`/api/`:** Contains server-side API route handlers.
-- **`/api-test/`:** Likely contains pages for testing API endpoints. 
+- **`/forecast-definition/`:** Feature section for creating and managing forecasts (Protected - requires login, located within `(protected)` group).
+- **`/api/`:** Contains server-side API route handlers. (See `api/README.md`)
+- **`/api-test/`:** Contains pages for testing API endpoints during development. (See `api-test/README.md`) 

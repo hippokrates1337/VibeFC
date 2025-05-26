@@ -1,8 +1,11 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import ForecastCanvas from '../forecast-canvas';
 import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
+
+// Import mocked hooks
+const { useForecastNodes, useForecastEdges } = jest.requireMock('@/lib/store/forecast-graph-store');
 
 // Mock React Flow with more realistic behavior
 jest.mock('reactflow', () => {
@@ -21,8 +24,17 @@ jest.mock('reactflow', () => {
       onSelectionChange, 
       onNodesChange, 
       onEdgesChange,
+      onConnect,
+      onNodeDoubleClick,
       deleteKeyCode,
-      ...props 
+      nodeTypes,
+      edgeTypes,
+      fitView,
+      selectNodesOnDrag,
+      className,
+      defaultEdgeOptions,
+      connectionLineStyle,
+      ...domProps 
     }: any, ref: any) => {
       const [selectedNodes, setSelectedNodes] = React.useState([]);
       const [selectedEdges, setSelectedEdges] = React.useState([]);
@@ -72,13 +84,14 @@ jest.mock('reactflow', () => {
         }
       };
       
-      return (
-        <div 
-          data-testid="react-flow" 
-          data-delete-key-code={JSON.stringify(deleteKeyCode)}
-          tabIndex={0}
-          {...props}
-        >
+              return (
+          <div 
+            data-testid="react-flow" 
+            data-delete-key-code={JSON.stringify(deleteKeyCode)}
+            tabIndex={0}
+            className={className}
+            {...domProps}
+          >
           {nodes.map((node: any) => (
             <div 
               key={node.id}
@@ -112,8 +125,10 @@ jest.mock('reactflow', () => {
         </div>
       );
     }),
-    Controls: ({ children, ...props }: any) => <div data-testid="controls" {...props}>{children}</div>,
-    Background: (props: any) => <div data-testid="background" {...props} />,
+    Controls: ({ children, showZoom, showFitView, showInteractive, className, ...domProps }: any) => 
+      <div data-testid="controls" className={className} {...domProps}>{children}</div>,
+    Background: ({ variant, gap, size, color, className, ...domProps }: any) => 
+      <div data-testid="background" className={className} {...domProps} />,
     ReactFlowProvider: ({ children }: any) => <div data-testid="react-flow-provider">{children}</div>,
     BackgroundVariant: { Dots: 'dots' },
     useStoreApi: () => ({
@@ -145,6 +160,8 @@ const mockOnEdgesChange = jest.fn();
 
 jest.mock('@/lib/store/forecast-graph-store', () => ({
   useForecastGraphStore: jest.fn(),
+  useForecastNodes: jest.fn(),
+  useForecastEdges: jest.fn(),
   useDeleteNode: () => mockDeleteNode,
   useDeleteEdge: () => mockDeleteEdge
 }));
@@ -174,6 +191,11 @@ describe('ForecastCanvas Integration Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    // Mock the individual hooks
+    useForecastNodes.mockReturnValue(mockStore.nodes);
+    useForecastEdges.mockReturnValue(mockStore.edges);
+    
     (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => selector(mockStore));
     
     // Clear selection state before each test

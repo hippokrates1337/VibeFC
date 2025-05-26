@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import ForecastToolbar from '../forecast-toolbar';
 import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
