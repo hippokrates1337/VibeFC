@@ -28,6 +28,8 @@ describe('ForecastToolbar', () => {
   const mockSetForecastMetadata = jest.fn();
   const mockResetStore = jest.fn();
   const mockSetSelectedNodeId = jest.fn();
+  const mockSetConfigPanelOpen = jest.fn();
+  const mockDuplicateNodeWithEdges = jest.fn().mockReturnValue('duplicated-node-id');
   const mockToast = jest.fn();
   const mockOnSave = jest.fn().mockResolvedValue(undefined);
   const mockOnBack = jest.fn();
@@ -39,6 +41,7 @@ describe('ForecastToolbar', () => {
     forecastEndDate: '2023-12-31',
     isDirty: true,
     selectedNodeId: null,
+    configPanelOpen: false,
   };
 
   beforeEach(() => {
@@ -51,6 +54,7 @@ describe('ForecastToolbar', () => {
       forecastEndDate: '2023-12-31',
       isDirty: true,
       selectedNodeId: null,
+      configPanelOpen: false,
     };
     
     // Mock setForecastMetadata to update the current state
@@ -67,6 +71,8 @@ describe('ForecastToolbar', () => {
         setForecastMetadata: mockSetForecastMetadata,
         resetStore: mockResetStore,
         setSelectedNodeId: mockSetSelectedNodeId,
+        setConfigPanelOpen: mockSetConfigPanelOpen,
+        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
       };
       
       // Call the selector with our mock state
@@ -194,6 +200,7 @@ describe('ForecastToolbar', () => {
         setForecastMetadata: mockSetForecastMetadata,
         resetStore: mockResetStore,
         setSelectedNodeId: mockSetSelectedNodeId,
+        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
       };
       return selector(state);
     });
@@ -223,5 +230,122 @@ describe('ForecastToolbar', () => {
     
     // Check if onBack was called
     expect(mockOnBack).toHaveBeenCalled();
+  });
+
+  test('shows duplicate node button when a node is selected', () => {
+    // Override store mock to have a selected node
+    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
+      const state = {
+        ...currentState,
+        selectedNodeId: 'selected-node-id',
+        addNode: mockAddNode,
+        setForecastMetadata: mockSetForecastMetadata,
+        resetStore: mockResetStore,
+        setSelectedNodeId: mockSetSelectedNodeId,
+        setConfigPanelOpen: mockSetConfigPanelOpen,
+        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
+      };
+      return selector(state);
+    });
+
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
+    
+    // Check that the duplicate button is visible
+    const duplicateButton = screen.getByText('Duplicate Node');
+    expect(duplicateButton).toBeInTheDocument();
+  });
+
+  test('duplicates node when duplicate button is clicked', async () => {
+    // Override store mock to have a selected node
+    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
+      const state = {
+        ...currentState,
+        selectedNodeId: 'selected-node-id',
+        addNode: mockAddNode,
+        setForecastMetadata: mockSetForecastMetadata,
+        resetStore: mockResetStore,
+        setSelectedNodeId: mockSetSelectedNodeId,
+        setConfigPanelOpen: mockSetConfigPanelOpen,
+        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
+      };
+      return selector(state);
+    });
+
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
+    
+    // Click the duplicate button
+    const duplicateButton = screen.getByText('Duplicate Node');
+    await user.click(duplicateButton);
+    
+    // Check if duplicateNodeWithEdges was called with the correct node ID
+    expect(mockDuplicateNodeWithEdges).toHaveBeenCalledWith('selected-node-id');
+    
+    // Check if the new duplicated node was selected
+    expect(mockSetSelectedNodeId).toHaveBeenCalledWith('duplicated-node-id');
+    
+    // Check if a success toast was shown
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Node Duplicated',
+      description: 'Node and its connections have been duplicated.',
+    }));
+  });
+
+  test('shows error when duplication fails', async () => {
+    // Mock duplication to return null (failure)
+    const mockFailedDuplication = jest.fn().mockReturnValue(null);
+    
+    // Override store mock to have a selected node
+    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
+      const state = {
+        ...currentState,
+        selectedNodeId: 'selected-node-id',
+        addNode: mockAddNode,
+        setForecastMetadata: mockSetForecastMetadata,
+        resetStore: mockResetStore,
+        setSelectedNodeId: mockSetSelectedNodeId,
+        setConfigPanelOpen: mockSetConfigPanelOpen,
+        duplicateNodeWithEdges: mockFailedDuplication,
+      };
+      return selector(state);
+    });
+
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
+    
+    // Click the duplicate button
+    const duplicateButton = screen.getByText('Duplicate Node');
+    await user.click(duplicateButton);
+    
+    // Check if duplicateNodeWithEdges was called
+    expect(mockFailedDuplication).toHaveBeenCalledWith('selected-node-id');
+    
+    // Check if an error toast was shown
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Duplication Failed',
+      description: 'Could not duplicate the selected node.',
+      variant: 'destructive',
+    }));
+  });
+
+  test('hides duplicate button when no node is selected', () => {
+    // Ensure the mock has no selected node
+    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
+      const state = {
+        ...currentState,
+        selectedNodeId: null,
+        addNode: mockAddNode,
+        setForecastMetadata: mockSetForecastMetadata,
+        resetStore: mockResetStore,
+        setSelectedNodeId: mockSetSelectedNodeId,
+        setConfigPanelOpen: mockSetConfigPanelOpen,
+        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
+      };
+      return selector(state);
+    });
+    
+    render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
+    
+    // Check that the duplicate button is disabled when no node is selected
+    const duplicateButton = screen.getByText('Duplicate Node');
+    expect(duplicateButton).toBeDisabled();
   });
 }); 

@@ -119,10 +119,8 @@
     *   Implement logic in Zustand store to clone a selected node and its connected edges, generating new IDs and adjusting positions.
 
 ### Known bugs
-    * Variables are shown as IDs not names on Metric nodes
-    * When selecting budget and historical variables for metric nodes, they have "(budget)" and "(historical)" behind their names
     * There is no option for calculated budgets and historicals, yet
-
+ 
 ### Phase 6: End-to-End Flow & Final Integration Testing:
     *   Test the complete user flow:
         *   Creating a new forecast.

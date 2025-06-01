@@ -32,6 +32,7 @@ export interface MetricNodeAttributes {
   label: string;
   budgetVariableId: string;
   historicalVariableId: string;
+  useCalculated: boolean;
 }
 
 export interface SeedNodeAttributes {

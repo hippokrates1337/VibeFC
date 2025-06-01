@@ -98,7 +98,8 @@ jest.mock('@/lib/store/forecast-graph-store', () => ({
   useForecastNodes: jest.fn(),
   useForecastEdges: jest.fn(),
   useDeleteNode: () => jest.fn(),
-  useDeleteEdge: () => jest.fn()
+  useDeleteEdge: () => jest.fn(),
+  useOpenConfigPanelForNode: () => jest.fn()
 }));
 
 // Import after mocking

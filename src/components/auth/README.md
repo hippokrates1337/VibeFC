@@ -11,9 +11,10 @@ This directory contains UI components for user authentication and account manage
   - Form validation with error handling
   - Integration with Supabase authentication
   - Loading states during authentication
+  - Automatic redirect to root (`/`) after successful login
   - Responsive design with Tailwind CSS
 - **Usage**: Used in `/login` page for user authentication
-- **Props**: Typically receives callback functions for success/error handling
+- **Props**: Uses `useAuth` hook for authentication and `useRouter` for navigation
 
 ### `SignUpForm.tsx`
 - **Purpose**: User registration form component
@@ -32,7 +33,13 @@ These components integrate with:
 - **Supabase Auth**: Backend authentication service
 - **Form Validation**: Client-side validation for user input
 - **Error Handling**: User-friendly error messages
-- **Redirect Logic**: Navigation after successful authentication
+- **Redirect Logic**: Navigation to root (`/`) after successful authentication
+
+## Routing Integration
+
+- **Login Success**: Redirects to `/` where users see their dashboard
+- **Middleware Protection**: Authenticated users accessing `/login` or `/signup` are redirected to `/`
+- **Unified Experience**: All authentication flows lead to the root page for consistency
 
 ## Styling
 
@@ -59,10 +66,7 @@ import { SignUpForm } from '@/components/auth/SignUpForm';
 export default function LoginPage() {
   return (
     <div className="container">
-      <LoginForm 
-        onSuccess={() => router.push('/')}
-        onError={(error) => console.error(error)}
-      />
+      <LoginForm />
     </div>
   );
 }
@@ -71,7 +75,7 @@ export default function LoginPage() {
 ## Integration
 
 These components work with:
-- **Middleware**: Authentication state checking
-- **Providers**: Auth context and session management
+- **Middleware**: Authentication state checking and route protection
+- **Providers**: Auth context and session management (`AuthProvider`)
 - **API Routes**: Backend authentication endpoints
 - **Protected Routes**: Conditional rendering based on auth state 

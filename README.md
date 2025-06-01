@@ -101,7 +101,8 @@ src/
 │   ├── api/               # Server-side API route handlers
 │   ├── auth/              # Authentication callbacks
 │   ├── login/             # Public login page
-│   └── signup/            # Public registration page
+│   ├── signup/            # Public registration page
+│   └── page.tsx           # Root page (serves both public and authenticated users)
 ├── components/            # Reusable React components
 │   ├── forecast/          # Forecast-specific components
 │   ├── ui/                # Shadcn UI components
@@ -141,6 +142,11 @@ backend/
 - `src/middleware.ts` handles route protection using Supabase authentication
 - Backend uses JWT guards and Row Level Security (RLS) for data access control
 - Organization-based access control with member roles (admin, editor, viewer)
+
+**Unified Entry Point**:
+- Root page (`/`) serves both authenticated and unauthenticated users
+- Shows public landing content for guests and dashboard for authenticated users
+- Simplified routing eliminates confusion between multiple entry points
 
 **State Management**:
 - Zustand stores with localStorage persistence for offline capability
@@ -251,6 +257,25 @@ The `src/setupTests.ts` file is used to configure the Jest testing environment. 
 - `DELETE /forecasts/:forecastId/edges/:edgeId` - Delete connection
 
 All endpoints require JWT authentication and respect organization-based access control through Supabase RLS policies.
+
+## Application Routes
+
+### Public Routes
+- `/` - Universal entry point (shows different content based on auth status)
+- `/login` - User authentication
+- `/signup` - User registration
+- `/auth/callback` - Authentication callback handler
+
+### Protected Routes
+- `/data-intake` - Data import and variable management
+- `/organizations` - Organization and team management
+- `/forecast-definition` - Forecast creation and analysis
+
+### Routing Flow
+1. **Unauthenticated users** visiting `/` see the public landing page with sign-up/sign-in options
+2. **After successful login**, users are redirected to `/` and see the authenticated dashboard
+3. **Authenticated users** accessing `/login` or `/signup` are redirected to `/`
+4. **Unauthenticated users** accessing protected routes are redirected to `/`
 
 ## Contributing
 

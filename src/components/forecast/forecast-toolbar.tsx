@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
@@ -19,7 +19,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/use-toast';
 import NodeConfigPanel from '@/components/forecast/node-config-panel';
 import { 
-  PlusCircle, 
   Save, 
   Trash2,
   Copy,
@@ -100,9 +99,6 @@ const SimpleDatePicker: React.FC<SimpleDatePickerProps> = ({
 const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onReload }) => {
   const { toast } = useToast();
   
-  // Node configuration panel state
-  const [configPanelOpen, setConfigPanelOpen] = useState(false);
-  
   // Unsaved changes dialog state
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -114,10 +110,13 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
     forecastEndDate,
     isDirty,
     selectedNodeId,
+    configPanelOpen,
     addNode,
     setForecastMetadata,
     resetStore,
-    setSelectedNodeId
+    setSelectedNodeId,
+    setConfigPanelOpen,
+    duplicateNodeWithEdges
   } = useForecastGraphStore(
     useShallow((state) => ({
       forecastName: state.forecastName,
@@ -125,21 +124,15 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
       forecastEndDate: state.forecastEndDate,
       isDirty: state.isDirty,
       selectedNodeId: state.selectedNodeId,
+      configPanelOpen: state.configPanelOpen,
       addNode: state.addNode,
       setForecastMetadata: state.setForecastMetadata,
       resetStore: state.resetStore,
-      setSelectedNodeId: state.setSelectedNodeId
+      setSelectedNodeId: state.setSelectedNodeId,
+      setConfigPanelOpen: state.setConfigPanelOpen,
+      duplicateNodeWithEdges: state.duplicateNodeWithEdges
     }))
   );
-  
-  // Effect to open/close panel based on selectedNodeId from store
-  useEffect(() => {
-    if (selectedNodeId) {
-      setConfigPanelOpen(true);
-    } else {
-      setConfigPanelOpen(false);
-    }
-  }, [selectedNodeId]);
   
   // Handle save with validation
   const handleSave = async () => {
@@ -227,8 +220,9 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
       } 
     });
     
-    // Open configuration panel for the new node
+    // Select the new node and open configuration panel for it
     setSelectedNodeId(nodeId);
+    setConfigPanelOpen(true);
     
     toast({
       title: 'Node Added',
@@ -239,11 +233,42 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
   // Handle node selection for configuration
   const handleOpenNodeConfig = () => {
     if (selectedNodeId) {
-      setConfigPanelOpen(true); // This is fine for the button click
+      setConfigPanelOpen(true);
     } else {
       toast({
         title: 'No Node Selected',
         description: 'Please select a node to configure.',
+      });
+    }
+  };
+
+  // Handle node duplication
+  const handleDuplicateNode = (e?: React.MouseEvent) => {
+    // Prevent event bubbling that might trigger Sheet close
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    if (selectedNodeId) {
+      const newNodeId = duplicateNodeWithEdges(selectedNodeId);
+      if (newNodeId) {
+        setSelectedNodeId(newNodeId); // Select the new duplicated node
+        toast({
+          title: 'Node Duplicated',
+          description: 'Node and its connections have been duplicated.',
+        });
+      } else {
+        toast({
+          title: 'Duplication Failed',
+          description: 'Could not duplicate the selected node.',
+          variant: 'destructive',
+        });
+      }
+    } else {
+      toast({
+        title: 'No Node Selected',
+        description: 'Please select a node to duplicate.',
       });
     }
   };
@@ -381,30 +406,19 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
             </Button>
           )}
           
-          {selectedNodeId && (
-            <div className="pt-2 border-t border-slate-600 space-y-2">
-              <p className="text-xs text-slate-400 font-medium">Selected Node Actions:</p>
-              <Button 
-                variant="secondary" 
-                size="sm"
-                onClick={handleOpenNodeConfig}
-                className="w-full flex items-center gap-2 justify-center bg-slate-600 hover:bg-slate-500 text-slate-200"
-              >
-                <PlusCircle className="h-4 w-4" />
-                Configure Node
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {/* Implement duplicate with edges */}}
-                className="w-full flex items-center gap-2 justify-center bg-slate-800 hover:bg-slate-600 border-slate-600 text-slate-300"
-              >
-                <Copy className="h-4 w-4" />
-                Duplicate Node
-              </Button>
-            </div>
-          )}
+          <div className="pt-2 border-t border-slate-600 space-y-2">
+            <p className="text-xs text-slate-400 font-medium">Node Actions:</p>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={(e) => handleDuplicateNode(e)}
+              disabled={!selectedNodeId}
+              className="w-full flex items-center gap-2 justify-center bg-slate-800 hover:bg-slate-600 border-slate-600 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Copy className="h-4 w-4" />
+              Duplicate Node
+            </Button>
+          </div>
         </div>
       </div>
       
@@ -450,8 +464,9 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
         open={configPanelOpen} 
         onOpenChange={(isOpen) => {
           setConfigPanelOpen(isOpen);
+          // Only deselect the node if the panel is being manually closed by the user
           if (!isOpen) {
-            setSelectedNodeId(null); // Deselect node when panel is closed by user
+            setSelectedNodeId(null);
           }
         }}
       />

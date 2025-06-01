@@ -21,7 +21,8 @@ import {
   useDeleteNode,
   useDeleteEdge,
   useForecastNodes,
-  useForecastEdges
+  useForecastEdges,
+  useOpenConfigPanelForNode
 } from '@/lib/store/forecast-graph-store';
 import { nodeTypes, edgeTypes, defaultEdgeOptions, connectionLineStyle } from './node-types';
 
@@ -57,6 +58,7 @@ const ForecastCanvas: React.FC = () => {
   // Store actions for deletion - using custom hooks to ensure stability
   const deleteNode = useDeleteNode();
   const deleteEdge = useDeleteEdge();
+  const openConfigPanelForNode = useOpenConfigPanelForNode();
   
   // Use refs to track selected elements to avoid triggering useEffect on selection changes
   const selectedNodesRef = useRef<Node[]>([]);
@@ -94,7 +96,16 @@ const ForecastCanvas: React.FC = () => {
   const onSelectionChange: OnSelectionChangeFunc = useCallback(({ nodes: selectedNodes, edges: selectedEdges }) => {
     selectedNodesRef.current = selectedNodes;
     selectedEdgesRef.current = selectedEdges;
-  }, []);
+    
+    // Update store's selectedNodeId based on selection
+    if (selectedNodes.length === 1) {
+      // Single node selected - set it as selected in store
+      setSelectedNodeId(selectedNodes[0].id);
+    } else {
+      // No nodes selected or multiple nodes selected - clear selection
+      setSelectedNodeId(null);
+    }
+  }, [setSelectedNodeId]);
 
   const handleNodesChange: OnNodesChange = useCallback((changes) => {
     onNodesChangeFromStore(changes);
@@ -111,8 +122,8 @@ const ForecastCanvas: React.FC = () => {
   }, [addEdgeStore]);
 
   const handleNodeDoubleClick: NodeMouseHandler = useCallback((event: MouseEvent, node: Node) => {
-    setSelectedNodeId(node.id);
-  }, [setSelectedNodeId]);
+    openConfigPanelForNode(node.id);
+  }, [openConfigPanelForNode]);
 
   return (
     <div className="h-full w-full bg-slate-900 relative">

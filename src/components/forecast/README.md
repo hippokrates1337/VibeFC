@@ -23,9 +23,9 @@ Custom node components for different node types are found in the `nodes/` subdir
 The forecast editor provides the following functionality:
 
 - Create and connect different types of nodes to build a forecast graph
-- Configure node properties via the configuration panel, with dynamic variable lists for relevant nodes.
+- Configure node properties via the configuration panel, with dynamic variable lists for relevant nodes. The configuration panel opens automatically when a node is selected.
 - Save and load forecast definitions from the API
-- Duplicate nodes with their connected edges
+- Duplicate nodes with their connected edges using the "Duplicate Node" button that appears when a node is selected
 - Visual design with drag-and-drop for building forecast relationships
 - Name and label nodes for better identification
 

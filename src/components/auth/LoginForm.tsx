@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/providers/auth-provider';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export function LoginForm() {
@@ -11,6 +12,7 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +30,9 @@ export function LoginForm() {
       
       if (error) {
         setError(error.message || 'Invalid login credentials');
+      } else {
+        // Successful login - redirect to root
+        router.push('/');
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during login');

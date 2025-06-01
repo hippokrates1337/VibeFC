@@ -27,12 +27,21 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    "*.ts",
-    "*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".next/types/**/*.ts",
     "src/types/**/*.d.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "backend",
+    "packages",
+    "tests",
+    "coverage",
+    "test-results",
+    "playwright-report",
+    ".next",
+    "dist",
+    "build"
+  ]
 } 

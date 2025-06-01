@@ -213,7 +213,7 @@ describe('forecast-graph-store', () => {
     
     // Check METRIC node
     const metricNode = result.current.nodes.find(node => node.type === 'METRIC');
-    expect(metricNode?.data).toEqual({ label: '', budgetVariableId: '', historicalVariableId: '' });
+    expect(metricNode?.data).toEqual({ label: '', budgetVariableId: '', historicalVariableId: '', useCalculated: false });
     
     // Check SEED node
     const seedNode = result.current.nodes.find(node => node.type === 'SEED');

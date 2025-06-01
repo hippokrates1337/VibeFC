@@ -42,8 +42,22 @@ export default function ProtectedLayout({
   
   // Redirect to login if not authenticated
   useEffect(() => {
+    console.log('🛡️ PROTECTED LAYOUT: Auth check effect triggered', {
+      isLoading,
+      hasUser: !!user,
+      shouldRedirect: !isLoading && !user,
+      currentPath: typeof window !== 'undefined' ? window.location.pathname : 'SSR'
+    });
+    
     if (!isLoading && !user) {
-      router.push('/landing');
+      console.log('🛡️ PROTECTED LAYOUT: Redirecting to root - user not authenticated');
+      console.log('🛡️ PROTECTED LAYOUT: About to call router.push("/")');
+      try {
+        router.push('/');
+        console.log('🛡️ PROTECTED LAYOUT: router.push("/") executed');
+      } catch (error) {
+        console.error('🛡️ PROTECTED LAYOUT: router.push failed:', error);
+      }
     }
   }, [user, isLoading, router]);
   
@@ -62,7 +76,8 @@ export default function ProtectedLayout({
     }
   }, [user, session, currentOrganization, setSelectedOrgIdForVariables, fetchVariablesForOrg]);
   
-  // Fetch forecast data when organization is selected
+  // Fetch forecast data when organization is selected - TEMPORARILY DISABLED FOR DEBUGGING
+  /*
   useEffect(() => {
     const fetchAndLoadForecasts = async () => {
       if (user && session?.access_token && currentOrganization?.id) {
@@ -84,12 +99,48 @@ export default function ProtectedLayout({
     };
     fetchAndLoadForecasts();
   }, [user, session, currentOrganization, loadOrgForecastsAction]);
+  */
   
-  // Show loading state
-  if (isLoading || 
-      (currentOrganization && variableStoreIsLoading && !variablesLoaded) || 
-      (currentOrganization && forecastStoreIsLoading && !forecastsLoaded && !useForecastGraphStore.getState().error)
-  ) {
+  // Show loading state with more specific conditions to prevent infinite loading
+  const orgStore = useOrganizationStore.getState();
+  const varStore = useVariableStore.getState();
+  const forecastStore = useForecastGraphStore.getState();
+  
+  const shouldShowLoading = 
+    isLoading || // Auth loading
+    (!user && !isLoading) || // No user but not loading (should redirect)
+    (user && organizations.length === 0 && !orgStore.error && !orgStore.isLoading); // User exists, no orgs loaded, no error, not currently loading
+    
+  console.log('🔍 PROTECTED LAYOUT DEBUG:', {
+    isLoading,
+    hasUser: !!user,
+    userId: user?.id,
+    organizationCount: organizations.length,
+    currentOrg: currentOrganization?.name,
+    variableStoreIsLoading,
+    variablesLoaded,
+    orgStoreError: orgStore.error,
+    orgStoreIsLoading: orgStore.isLoading,
+    varStoreError: varStore.error,
+    varStoreIsLoading: varStore.isLoading,
+    varStoreCount: varStore.variables.length,
+    forecastStoreIsLoading: forecastStore.isLoading,
+    forecastStoreError: forecastStore.error,
+    forecastCount: forecastStore.organizationForecasts.length,
+    shouldShowLoading,
+    timestamp: new Date().toISOString()
+  });
+    
+  if (shouldShowLoading) {
+    console.log('🛡️ PROTECTED LAYOUT: Showing loading spinner', {
+      reason: shouldShowLoading ? 'shouldShowLoading is true' : 'unknown',
+      isLoading,
+      hasUser: !!user,
+      orgCount: organizations.length,
+      orgError: orgStore.error,
+      orgIsLoading: orgStore.isLoading
+    });
+    
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
@@ -99,8 +150,11 @@ export default function ProtectedLayout({
   
   // If not authenticated, don't render the children
   if (!user) {
+    console.log('🛡️ PROTECTED LAYOUT: No user, returning null');
     return null;
   }
+  
+  console.log('🛡️ PROTECTED LAYOUT: Rendering layout with children');
   
   return (
     <div className="min-h-screen flex flex-col">

@@ -84,7 +84,8 @@ jest.mock('@/lib/store/forecast-graph-store', () => ({
   useForecastNodes: jest.fn(),
   useForecastEdges: jest.fn(),
   useDeleteNode: () => mockDeleteNode,
-  useDeleteEdge: () => mockDeleteEdge
+  useDeleteEdge: () => mockDeleteEdge,
+  useOpenConfigPanelForNode: () => jest.fn()
 }));
 
 // Mock node types

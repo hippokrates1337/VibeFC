@@ -29,6 +29,7 @@ export interface MetricNodeAttributes {
   label: string;
   budgetVariableId: string;
   historicalVariableId: string;
+  useCalculated: boolean;
 }
 
 export interface SeedNodeAttributes {
@@ -58,6 +59,7 @@ interface ForecastGraphState {
   edges: ForecastEdgeClient[];
   isDirty: boolean;
   selectedNodeId: string | null;
+  configPanelOpen: boolean;
   isLoading: boolean;
   error: string | null;
   organizationForecasts: ClientForecastSummary[];
@@ -94,6 +96,8 @@ interface ForecastGraphActions {
   setDirty: (isDirty: boolean) => void;
   resetStore: () => void;
   setSelectedNodeId: (nodeId: string | null) => void;
+  setConfigPanelOpen: (open: boolean) => void;
+  openConfigPanelForNode: (nodeId: string) => void;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   duplicateNodeWithEdges: (nodeId: string) => string | null;
@@ -110,7 +114,7 @@ const getDefaultNodeData = (type: ForecastNodeKind): ForecastNodeData => {
     case 'OPERATOR':
       return { op: '+', inputOrder: [] };
     case 'METRIC':
-      return { label: '', budgetVariableId: '', historicalVariableId: '' };
+      return { label: '', budgetVariableId: '', historicalVariableId: '', useCalculated: false };
     case 'SEED':
       return { sourceMetricId: '' };
     default:
@@ -156,6 +160,7 @@ const initialState: ForecastGraphState = {
   edges: [],
   isDirty: false,
   selectedNodeId: null,
+  configPanelOpen: false,
   isLoading: false,
   error: null,
   organizationForecasts: [],
@@ -369,6 +374,16 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         set({ selectedNodeId: nodeId });
       },
 
+      setConfigPanelOpen: (open) => {
+        logger.log(`[ForecastGraphStore] setConfigPanelOpen called with: ${open}`);
+        set({ configPanelOpen: open });
+      },
+
+      openConfigPanelForNode: (nodeId) => {
+        logger.log(`[ForecastGraphStore] openConfigPanelForNode called for nodeId: ${nodeId}`);
+        set({ selectedNodeId: nodeId, configPanelOpen: true });
+      },
+
       setLoading: (isLoading) => {
         logger.log(`[ForecastGraphStore] setLoading called with: ${isLoading}`);
         set({ isLoading });
@@ -497,5 +512,8 @@ export const useDeleteEdge = () => useForecastGraphStore((state) => state.delete
 export const useOnNodesChange = () => useForecastGraphStore((state) => state.onNodesChange);
 export const useOnEdgesChange = () => useForecastGraphStore((state) => state.onEdgesChange);
 export const useSetSelectedNodeId = () => useForecastGraphStore((state) => state.setSelectedNodeId);
+export const useConfigPanelOpen = () => useForecastGraphStore((state) => state.configPanelOpen);
+export const useSetConfigPanelOpen = () => useForecastGraphStore((state) => state.setConfigPanelOpen);
+export const useOpenConfigPanelForNode = () => useForecastGraphStore((state) => state.openConfigPanelForNode);
 export const useDuplicateNodeWithEdges = () => useForecastGraphStore((state) => state.duplicateNodeWithEdges);
 export const useLoadOrganizationForecasts = () => useForecastGraphStore((state) => state.loadOrganizationForecasts);

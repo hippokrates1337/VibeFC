@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
         path: '/',
       });
       
-      // Redirect to the dashboard or organizations page
-      return NextResponse.redirect(new URL('/organizations', request.url));
+      // Redirect to the root dashboard
+      return NextResponse.redirect(new URL('/', request.url));
     }
   }
   

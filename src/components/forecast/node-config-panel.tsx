@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { 
   Sheet, 
   SheetContent, 
@@ -26,6 +26,7 @@ import {
 import { useVariableStore } from '@/lib/store/variables';
 import { X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Toggle } from '@/components/ui/toggle';
 
 interface NodeConfigPanelProps {
   open: boolean;
@@ -73,7 +74,11 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const deleteNode = useForecastGraphStore(state => state.deleteNode);
   const setSelectedGraphNodeId = useForecastGraphStore(state => state.setSelectedNodeId);
   
-  const selectedNode = nodes.find(node => node.id === selectedNodeId);
+  // Memoize selected node to prevent unnecessary re-renders
+  const selectedNode = useMemo(() => 
+    nodes.find(node => node.id === selectedNodeId), 
+    [nodes, selectedNodeId]
+  );
   
   // Get variables and selectedOrgId from the variable store
   const allVariables = useVariableStore(state => state.variables);
@@ -92,18 +97,14 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const debouncedUpdate = useDebouncedUpdate(300);
 
   // Initialize local form data when selected node changes
+  // Use selectedNodeId to avoid infinite loops
   useEffect(() => {
-    if (selectedNode) {
+    if (selectedNode?.data) {
       setLocalFormData(selectedNode.data);
+    } else {
+      setLocalFormData({});
     }
-  }, [selectedNode]);
-  
-  // Close panel when no node is selected
-  useEffect(() => {
-    if (!selectedNodeId && open) {
-      onOpenChange(false);
-    }
-  }, [selectedNodeId, open, onOpenChange]);
+  }, [selectedNodeId]); // Only depend on selectedNodeId, not the entire node object
   
   const handleDeleteNode = () => {
     if (selectedNodeId) {
@@ -246,6 +247,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
   const renderMetricNodeForm = (node: ForecastNodeClient) => {
     const data = node.data as MetricNodeAttributes;
+    const isCalculated = localFormData.useCalculated ?? false;
+    
     return (
       <>
         <div className="space-y-1">
@@ -259,18 +262,32 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         </div>
         
         <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300">Data Source</label>
+          <Toggle
+            options={[
+              { value: 'variable', label: 'Variable' },
+              { value: 'calculated', label: 'Calculated' }
+            ]}
+            value={isCalculated ? 'calculated' : 'variable'}
+            onValueChange={(value) => handleInputChange('useCalculated', value === 'calculated')}
+            className="w-full"
+          />
+        </div>
+        
+        <div className="space-y-1">
           <label className="text-sm font-medium text-slate-300">Budget Variable</label>
           <Select 
             value={localFormData.budgetVariableId || ''} 
             onValueChange={(value) => handleInputChange('budgetVariableId', value)}
+            disabled={isCalculated}
           >
-            <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
+            <SelectTrigger className={`bg-slate-700 border-slate-600 text-slate-200 ${isCalculated ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <SelectValue placeholder="Select budget variable" />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-600">
               {organizationVariables.map(variable => (
                 <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
-                  {variable.name} (Budget)
+                  {variable.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -282,14 +299,15 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           <Select 
             value={localFormData.historicalVariableId || ''} 
             onValueChange={(value) => handleInputChange('historicalVariableId', value)}
+            disabled={isCalculated}
           >
-            <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
+            <SelectTrigger className={`bg-slate-700 border-slate-600 text-slate-200 ${isCalculated ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <SelectValue placeholder="Select historical variable" />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-600">
               {organizationVariables.map(variable => (
                 <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
-                  {variable.name} (Historical)
+                  {variable.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -328,50 +346,60 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     );
   };
 
-  // Early return AFTER all hooks have been called
-  if (!selectedNode) return null;
+  // Early return AFTER all hooks have been called - REMOVED to prevent Sheet cleanup issues
+  // if (!selectedNode) return null;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md no-overlay-config-panel bg-slate-800 border-slate-700 text-slate-200">
-        <SheetHeader>
-          <SheetTitle className="text-slate-200">Configure {selectedNode!.type} Node</SheetTitle>
-          <SheetDescription className="text-slate-400">
-            Modify the properties of the selected {selectedNode!.type} node below.
-          </SheetDescription>
-        </SheetHeader>
-        
-        <div className="py-4 space-y-4">
-          {showDeleteConfirm ? (
-            <Alert variant="destructive" className="bg-red-900/20 border-red-500/50 text-red-300">
-              <AlertDescription>
-                Are you sure you want to delete this node? This will also remove any connected edges.
-                <div className="flex gap-2 mt-2">
-                  <Button variant="destructive" size="sm" onClick={handleDeleteNode} className="bg-red-600 hover:bg-red-700">Delete</Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)} className="bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600">Cancel</Button>
-                </div>
-              </AlertDescription>
-            </Alert>
-          ) : (
-            renderNodeForm()
-          )}
-        </div>
-        
-        <SheetFooter className="flex justify-between sm:justify-between">
-          <Button 
-            variant="destructive" 
-            onClick={() => setShowDeleteConfirm(true)}
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white"
-          >
-            Delete Node
-          </Button>
-          <SheetClose asChild>
-            <Button variant="outline" size="sm" onClick={handleClose} className="bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600">
-              Close
-            </Button>
-          </SheetClose>
-        </SheetFooter>
+    <Sheet open={open && !!selectedNode} onOpenChange={onOpenChange}>
+      <SheetContent 
+        className="sm:max-w-md bg-slate-800 border-slate-700 text-slate-200"
+      >
+        {selectedNode ? (
+          <>
+            <SheetHeader>
+              <SheetTitle className="text-slate-200">Configure {selectedNode.type} Node</SheetTitle>
+              <SheetDescription className="text-slate-400">
+                Modify the properties of the selected {selectedNode.type} node below.
+              </SheetDescription>
+            </SheetHeader>
+            
+            <div className="py-4 space-y-4">
+              {showDeleteConfirm ? (
+                <Alert variant="destructive" className="bg-red-900/20 border-red-500/50 text-red-300">
+                  <AlertDescription>
+                    Are you sure you want to delete this node? This will also remove any connected edges.
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="destructive" size="sm" onClick={handleDeleteNode} className="bg-red-600 hover:bg-red-700">Delete</Button>
+                      <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)} className="bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600">Cancel</Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                renderNodeForm()
+              )}
+            </div>
+            
+            <SheetFooter className="flex justify-between sm:justify-between">
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowDeleteConfirm(true)}
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Delete Node
+              </Button>
+              <SheetClose asChild>
+                <Button variant="outline" size="sm" onClick={handleClose} className="bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600">
+                  Close
+                </Button>
+              </SheetClose>
+            </SheetFooter>
+          </>
+        ) : (
+          <div className="p-4">
+            <p className="text-slate-400">No node selected</p>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

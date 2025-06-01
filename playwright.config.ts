@@ -4,6 +4,8 @@ import path from 'path';
 
 // Load environment variables from .env file at the project root
 dotenv.config({ path: path.resolve(__dirname, '.env') });
+// Also load .env.local for local development overrides
+dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 
 // Read environment variables from file. https://github.com/motdotla/dotenv
 // require('dotenv').config();
