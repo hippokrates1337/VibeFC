@@ -36,7 +36,7 @@ export function OrganizationSelector() {
   if (isLoading) {
     return (
       <div className="flex items-center space-x-2">
-        <div className="h-4 w-28 bg-muted animate-pulse rounded"></div>
+        <div className="h-4 w-28 bg-slate-700 animate-pulse rounded"></div>
       </div>
     );
   }
@@ -49,7 +49,7 @@ export function OrganizationSelector() {
           variant="outline"
           size="sm"
           onClick={() => setIsCreateModalOpen(true)}
-          className="text-sm"
+          className="text-sm bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white"
         >
           Create Organization
         </Button>
@@ -68,16 +68,16 @@ export function OrganizationSelector() {
         onValueChange={handleSwitch}
         data-testid="organization-selector"
       >
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger className="w-[180px] bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600">
           <SelectValue placeholder="Select organization" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="bg-slate-700 border-slate-600">
           {organizations.map((org) => (
-            <SelectItem key={org.id} value={org.id}>
+            <SelectItem key={org.id} value={org.id} className="text-slate-200 hover:bg-slate-600 focus:bg-slate-600">
               {org.name}
             </SelectItem>
           ))}
-          <SelectItem value="__create__" className="text-primary font-semibold">
+          <SelectItem value="__create__" className="text-blue-400 font-semibold hover:bg-slate-600 focus:bg-slate-600">
             <div className="flex items-center">
               <PlusCircle className="mr-2 h-4 w-4" /> Create New...
             </div>

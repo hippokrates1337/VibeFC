@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     const body = await request.json();
     
     console.log('POST /api/data-intake/variables received:', JSON.stringify(body));
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   console.log('==== PUT API HANDLER START ====');
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     const body = await request.json();
     
     console.log('PUT /api/data-intake/variables received:', JSON.stringify(body));

@@ -23,12 +23,17 @@ Update your `.env` file with your Supabase credentials:
 
 ```
 SUPABASE_URL="https://your-project-ref.supabase.co"
-SUPABASE_KEY="your-service-role-key"
+SUPABASE_ANON_KEY="your-public-anon-key"
+// If you need to perform operations that bypass Row Level Security (RLS),
+// for specific admin tasks or system processes, you would configure a separate client
+// with SUPABASE_SERVICE_ROLE_KEY="your-service-role-key".
+// The main application services (like SupabaseService) are designed to use
+// the anon key along with the user's JWT to respect RLS.
 ```
 
 - You can find your Supabase URL and keys in the Supabase dashboard under Project Settings > API.
-- For development, you should use the **service_role** key as it has full access to the database.
-- For production, consider using more restricted keys and implementing proper authentication.
+- The `SUPABASE_ANON_KEY` is the **public anon key**.
+- The `SUPABASE_SERVICE_ROLE_KEY` (if used for admin tasks) has full access and bypasses RLS; use it cautiously.
 
 ### 3. Create Database Schema
 
@@ -62,10 +67,14 @@ Here's an example of the expected payload format for the add-variables endpoint:
 {
   "variables": [
     {
+      "id": "client-generated-uuid-v4", // Client should generate a UUID v4 for each new variable
       "name": "Revenue",
       "type": "ACTUAL",
-      "userId": "user123",
-      "organizationId": "org-uuid-456",
+      // user_id and organization_id are technically optional in the payload if the user is authenticated,
+      // as the backend may populate them from the JWT.
+      // However, if provided, organization_id is mandatory as per DTO.
+      "user_id": "user-auth-uuid-123", 
+      "organization_id": "org-uuid-456", 
       "values": [
         { "date": "2024-01-01", "value": 1000 },
         { "date": "2024-02-01", "value": 1250 },

@@ -49,14 +49,14 @@ export function UploadSection({ isUploading, error, onProcessCSV }: UploadSectio
   
   return (
     <div 
-      className={`rounded-lg border p-6 ${dragActive ? 'bg-primary/5 border-primary' : 'bg-card'}`}
+      className={`rounded-lg border p-6 ${dragActive ? 'bg-blue-900/20 border-blue-500' : 'bg-slate-800 border-slate-700'}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <h2 className="text-xl font-semibold mb-4">Upload Data</h2>
+      <h2 className="text-xl font-semibold mb-4 text-slate-100">Upload Data</h2>
       <div className="flex items-center space-x-4">
-        <label className="relative cursor-pointer bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+        <label className="relative cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
           <span>Choose File</span>
           <input
             type="file"
@@ -67,13 +67,13 @@ export function UploadSection({ isUploading, error, onProcessCSV }: UploadSectio
             data-testid="csv-upload-input"
           />
         </label>
-        {isUploading && <span className="text-muted-foreground">Uploading...</span>}
+        {isUploading && <span className="text-slate-400">Uploading...</span>}
       </div>
-      <p className="text-sm text-muted-foreground mt-2">
+      <p className="text-sm text-slate-400 mt-2">
         Supported format: CSV with columns for Variable, Type, and Dates (drag and drop supported)
       </p>
       {error && (
-        <p className="text-destructive mt-2">{error}</p>
+        <p className="text-red-400 mt-2">{error}</p>
       )}
     </div>
   )

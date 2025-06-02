@@ -69,7 +69,7 @@ export class JwtAuthGuard implements CanActivate {
       if (error instanceof UnauthorizedException) {
         throw error; // Re-throw known auth errors
       }
-      this.logger.error(`Unexpected error during authentication: ${error.message}`, error.stack);
+      this.logger.error(`Unexpected error during authentication: ${(error as Error).message}`, (error as Error).stack);
       throw new UnauthorizedException('Authentication failed due to an unexpected error');
     }
   }

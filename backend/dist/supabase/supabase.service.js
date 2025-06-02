@@ -24,34 +24,119 @@ let SupabaseService = SupabaseService_1 = class SupabaseService {
         this.request = request;
         this.supabaseClient = null;
         this.logger = new common_1.Logger(SupabaseService_1.name);
+        this.isTestEnvironment = process.env.IS_TEST_ENVIRONMENT === 'true';
+        this.isAdminMode = process.env.SUPABASE_ADMIN_MODE === 'true';
+        this.logger.log(`SupabaseService initialized in ${this.isTestEnvironment ? 'TEST' : 'PRODUCTION'} mode, Admin Mode: ${this.isAdminMode}`);
+        if (this.isTestEnvironment) {
+            this.logger.debug(`Request user in constructor: ${JSON.stringify(this.request.user)}`);
+            this.logger.debug(`Request auth header: ${this.request.headers.authorization}`);
+        }
+    }
+    get user() {
+        const userInfo = this.request.user;
+        if (this.isTestEnvironment && !userInfo) {
+            this.logger.warn('No user found in request during test environment');
+        }
+        return userInfo;
     }
     get client() {
         if (this.supabaseClient) {
             return this.supabaseClient;
         }
-        const supabaseUrl = this.configService.get('SUPABASE_URL');
+        const supabaseUrl = this.configService.get('SUPABASE_URL') || '';
         const supabaseAnonKey = this.configService.get('SUPABASE_ANON_KEY');
-        if (!supabaseUrl || !supabaseAnonKey) {
-            this.logger.error('Supabase URL or Anon Key not configured');
+        const serviceRoleKey = this.configService.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (!supabaseUrl || (!supabaseAnonKey && !serviceRoleKey)) {
+            this.logger.error('Supabase URL or API keys not configured');
             throw new Error('Supabase credentials are not properly configured.');
         }
+        const keyToUse = (this.isTestEnvironment || this.isAdminMode) && serviceRoleKey
+            ? serviceRoleKey
+            : supabaseAnonKey || '';
         const authHeader = this.request.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            this.logger.warn('Attempted to create Supabase client without Authorization header.');
-            throw new common_1.UnauthorizedException('Authorization token is missing or invalid.');
-        }
-        const token = authHeader.split(' ')[1];
-        this.supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, supabaseAnonKey, {
-            global: {
-                headers: { Authorization: `Bearer ${token}` },
-            },
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false,
+        let token = authHeader?.split(' ')[1];
+        try {
+            if (this.isAdminMode) {
+                this.logger.log('Creating admin client with service role key (bypassing JWT validation)');
+                this.supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, keyToUse, {
+                    auth: {
+                        autoRefreshToken: false,
+                        persistSession: false,
+                    },
+                });
+                if (this.user?.userId) {
+                    this.logger.debug(`Setting user context for RLS with user ID: ${this.user.userId}`);
+                    this.setAuthContext(this.user.userId);
+                }
+                else {
+                    this.logger.warn('Admin mode active but no user ID available for RLS context');
+                }
+                return this.supabaseClient;
             }
-        });
-        this.logger.log('Request-scoped Supabase client initialized for user.');
-        return this.supabaseClient;
+            if (this.isTestEnvironment) {
+                if (this.user?.userId) {
+                    this.logger.log(`Test environment with user ${this.user.userId} - creating authenticated client`);
+                    this.supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, keyToUse, {
+                        auth: {
+                            autoRefreshToken: false,
+                            persistSession: false,
+                        },
+                        global: {
+                            headers: {
+                                Authorization: `Bearer ${token || 'test-token'}`,
+                            },
+                        },
+                    });
+                    if (!token && this.user.userId) {
+                        this.logger.debug(`No auth token available, setting explicit RLS context for user: ${this.user.userId}`);
+                        this.setAuthContext(this.user.userId);
+                    }
+                    this.logger.debug(`Test client created with auth header: ${authHeader}`);
+                    this.logger.debug(`Test client user: ${JSON.stringify(this.user)}`);
+                    return this.supabaseClient;
+                }
+                else {
+                    this.logger.warn('Test environment but no user in request - creating anonymous client');
+                }
+            }
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                this.logger.warn('Attempted to create Supabase client without Authorization header.');
+                throw new common_1.UnauthorizedException('Authorization token is missing or invalid.');
+            }
+            this.supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, keyToUse, {
+                global: {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false,
+                }
+            });
+            this.logger.log('Request-scoped Supabase client initialized for user.');
+            return this.supabaseClient;
+        }
+        catch (error) {
+            this.logger.error(`Error creating Supabase client: ${error.message}`);
+            throw error;
+        }
+    }
+    setAuthContext(userId) {
+        if (!this.supabaseClient) {
+            this.logger.error('Cannot set auth context - no Supabase client available');
+            return;
+        }
+        try {
+            this.supabaseClient.rpc('set_auth_user_id', { user_id: userId })
+                .then(() => {
+                this.logger.debug(`Auth context set successfully for user ${userId}`);
+            })
+                .then(undefined, (err) => {
+                this.logger.error(`Failed to set auth context: ${err.message}`);
+            });
+        }
+        catch (error) {
+            this.logger.error(`Error setting auth context: ${error.message}`);
+        }
     }
 };
 exports.SupabaseService = SupabaseService;

@@ -1,3 +1,6 @@
+// Import jest-dom matchers
+import '@testing-library/jest-dom';
+
 // src/setupTests.ts
 // No need to import crypto or encoding polyfills - now handled by jest-globals-setup.js
 
@@ -63,8 +66,6 @@ jest.mock('undici', () => {
 
 // Note: If MSW still has issues, consider installing and configuring:
 // npm install --save-dev web-streams-polyfill node-domexception
-
-// console.log('Loaded test setup with polyfills.'); // Optional: Add log to confirm execution
 
 // If you are using Jest with JSDOM environment, you might not need all of these,
 // but for Vitest's default Node.js environment, they are often necessary for MSW v2+. 

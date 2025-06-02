@@ -6,26 +6,72 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { InfoIcon, CheckCircleIcon, XCircleIcon, RotateCwIcon } from 'lucide-react'
 
+interface EnvironmentData {
+  server: any;
+  client: {
+    supabaseUrl: string;
+    backendUrl: string;
+    hasNextData: boolean;
+    hasRuntimeConfig: boolean;
+    windowEnv: any;
+    runtimeConfig: any;
+    directProcessEnv: {
+      supabaseUrl: string;
+      backendUrl: string;
+    };
+  };
+}
+
 export default function ApiTestPage() {
-  const [loading, setLoading] = useState(false)
+  const [envData, setEnvData] = useState<EnvironmentData | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [responseData, setResponseData] = useState<any>(null)
-  const [backendUrl, setBackendUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    // Try to fetch the BACKEND_URL from .env.local via a simple API endpoint
-    const checkBackendUrl = async () => {
+    async function checkEnvironment() {
       try {
-        const res = await fetch('/api/env-test')
-        const data = await res.json()
-        setBackendUrl(data.backendUrl || 'Not configured')
-      } catch (e) {
-        setBackendUrl('Error fetching environment configuration')
+        // Check server-side environment
+        const serverResponse = await fetch('/api/env-test')
+        const serverData = await serverResponse.json()
+
+        // Check client-side environment (bundled by Next.js)
+        const clientData = {
+          // These should be available if properly bundled by Next.js
+          supabaseUrl: 
+            (globalThis as any).process?.env?.NEXT_PUBLIC_SUPABASE_URL || 
+            (window as any).__NEXT_DATA__?.env?.NEXT_PUBLIC_SUPABASE_URL ||
+            (window as any).__NEXT_RUNTIME_CONFIG__?.NEXT_PUBLIC_SUPABASE_URL ||
+            'Not available in browser',
+          backendUrl: 
+            (globalThis as any).process?.env?.NEXT_PUBLIC_BACKEND_URL ||
+            (window as any).__NEXT_DATA__?.env?.NEXT_PUBLIC_BACKEND_URL ||
+            (window as any).__NEXT_RUNTIME_CONFIG__?.NEXT_PUBLIC_BACKEND_URL ||
+            'Not available in browser',
+          hasNextData: !!(window as any).__NEXT_DATA__,
+          hasRuntimeConfig: !!(window as any).__NEXT_RUNTIME_CONFIG__,
+          windowEnv: (window as any).__NEXT_DATA__?.env || 'No env in __NEXT_DATA__',
+          runtimeConfig: (window as any).__NEXT_RUNTIME_CONFIG__ || 'No runtime config',
+          // Try to access process.env directly (should work after config fix)
+          directProcessEnv: {
+            supabaseUrl: typeof process !== 'undefined' ? (process.env?.NEXT_PUBLIC_SUPABASE_URL || 'undefined') : 'process undefined',
+            backendUrl: typeof process !== 'undefined' ? (process.env?.NEXT_PUBLIC_BACKEND_URL || 'undefined') : 'process undefined'
+          }
+        }
+
+        setEnvData({
+          server: serverData,
+          client: clientData
+        })
+      } catch (error) {
+        console.error('Environment check failed:', error)
+      } finally {
+        setLoading(false)
       }
     }
 
-    checkBackendUrl()
+    checkEnvironment()
   }, [])
 
   const handleTestApi = async () => {
@@ -72,19 +118,32 @@ export default function ApiTestPage() {
     }
   }
 
+  if (loading) {
+    return <div className="p-8">Loading environment data...</div>
+  }
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">API Connection Test</h1>
       
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Backend Configuration</CardTitle>
-          <CardDescription>Current backend endpoint configuration</CardDescription>
+          <CardTitle>Environment Variables</CardTitle>
+          <CardDescription>Current environment variables</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
             <div>
-              <strong>BACKEND_URL:</strong> {backendUrl || 'Loading...'}
+              <strong>Server-Side Environment:</strong>
+              <pre className="text-xs overflow-auto max-h-80 text-black">
+                {JSON.stringify(envData?.server, null, 2)}
+              </pre>
+            </div>
+            <div>
+              <strong>Client-Side Environment:</strong>
+              <pre className="text-xs overflow-auto max-h-80 text-black">
+                {JSON.stringify(envData?.client, null, 2)}
+              </pre>
             </div>
           </div>
         </CardContent>

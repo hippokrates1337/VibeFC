@@ -23,21 +23,28 @@ This directory implements the core routing and layout structure of the VibeFC fr
 
 - **Middleware (`src/middleware.ts`):** Handles authentication checks for incoming requests.
   - Uses Supabase to verify user sessions via the `sb-access-token` cookie.
-  - Redirects unauthenticated users attempting to access protected routes to `/login`.
-  - Redirects authenticated users attempting to access `/login` or `/signup` to the application root (`/`).
+  - Redirects unauthenticated users attempting to access protected routes to `/` (root).
+  - Redirects authenticated users attempting to access `/login` or `/signup` to `/` (root).
 - **Public Routes:** `/login`, `/signup`, `/auth/callback` are accessible without authentication.
 - **Protected Routes:** Routes intended for authenticated users are grouped under `src/app/(protected)/`. Access is enforced by the middleware.
 
 ## Key Directories
 
-- **`/ (root)`:** Contains the main entry `layout.tsx` and the public landing `page.tsx`.
+- **`/ (root)`:** Contains the main entry `layout.tsx` and the universal `page.tsx` that serves both authenticated and unauthenticated users.
 - **`/(protected)/`:** A route group for pages and layouts requiring user authentication. Routes within this group (e.g., `/organizations`) are protected by middleware. It also defines a shared layout for these protected sections.
 - **`/auth/`:** Handles authentication-related backend logic.
   - **`/auth/callback/`:** Contains a `route.ts` handler for Supabase authentication callbacks (e.g., after email verification or OAuth flows).
 - **`/login/`:** Public route displaying the user login form (`LoginForm` component).
 - **`/signup/`:** Public route displaying the user registration form (`SignUpForm` component).
-- **`/variables/`:** Feature section for managing variables (Protected - requires login).
-- **`/data-intake/`:** Feature section for data intake processes (Protected - requires login).
+- **`/data-intake/`:** Feature section for data intake processes (Protected - requires login, located within `(protected)` group).
 - **`/organizations/`:** Feature section for managing organizations (Protected - requires login, located within `(protected)` group).
-- **`/api/`:** Contains server-side API route handlers.
-- **`/api-test/`:** Likely contains pages for testing API endpoints. 
+- **`/forecast-definition/`:** Feature section for creating and managing forecasts (Protected - requires login, located within `(protected)` group).
+- **`/api/`:** Contains server-side API route handlers. (See `api/README.md`)
+- **`/api-test/`:** Contains pages for testing API endpoints during development. (See `api-test/README.md`)
+
+## Unified Entry Point
+
+The root page (`/page.tsx`) serves as the universal entry point for the application:
+- **Unauthenticated users** see a public landing page with feature highlights and sign-up/sign-in options
+- **Authenticated users** see a dashboard with navigation to application features
+- This eliminates the need for separate landing pages and creates a seamless user experience 

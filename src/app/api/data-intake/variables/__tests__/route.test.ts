@@ -47,12 +47,12 @@ describe('API Route: /api/data-intake/variables', () => {
       json: async () => ({ message: 'Success' }),
       text: async () => JSON.stringify({ message: 'Success' }),
     });
-    // Set process.env.BACKEND_URL
-    process.env.BACKEND_URL = 'http://mock-backend:3001';
+    // Set process.env.NEXT_PUBLIC_BACKEND_URL (the correct env var the API route uses)
+    process.env.NEXT_PUBLIC_BACKEND_URL = 'http://mock-backend:3001';
   });
 
   afterEach(() => {
-    delete process.env.BACKEND_URL;
+    delete process.env.NEXT_PUBLIC_BACKEND_URL;
   });
 
   describe('PUT Handler', () => {
@@ -80,7 +80,7 @@ describe('API Route: /api/data-intake/variables', () => {
       expect(responseBody).toEqual(mockBackendResponse);
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledWith(
-        `${process.env.BACKEND_URL}/data-intake/variables`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/data-intake/variables`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

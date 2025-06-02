@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">96.76% </span>
+                <span class="strong">96.78% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>239/247</span>
+                <span class='fraction'>241/249</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">96.76% </span>
+                <span class="strong">96.78% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>239/247</span>
+                <span class='fraction'>241/249</span>
             </div>
         
             
@@ -309,7 +309,9 @@
 <a name='L244'></a><a href='#L244'>244</a>
 <a name='L245'></a><a href='#L245'>245</a>
 <a name='L246'></a><a href='#L246'>246</a>
-<a name='L247'></a><a href='#L247'>247</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -497,6 +499,7 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-yes">14x</span>
@@ -545,6 +548,7 @@
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-yes">17x</span>
@@ -760,45 +764,47 @@ export const DataIntakeContainer = ({
   };
 &nbsp;
   return (
-    &lt;div className="container mx-auto p-4"&gt;
-      &lt;h1 className="text-2xl font-bold mb-4"&gt;Data Intake&lt;/h1&gt;
-      
-      &lt;ApiStatus success={apiStatus.success} error={apiStatus.error} /&gt;
+    &lt;div className="min-h-screen bg-slate-900"&gt;
+      &lt;div className="container mx-auto p-4"&gt;
+        &lt;h1 className="text-2xl font-bold mb-4 text-slate-100"&gt;Data Intake&lt;/h1&gt;
+        
+        &lt;ApiStatus success={apiStatus.success} error={apiStatus.error} /&gt;
 &nbsp;
-      &lt;UploadSection
-        onProcessCSV={parseCSV}
-        isUploading={isUploading}
-        error={error}
-      /&gt;
-&nbsp;
-      {/* Render cards/children using the containerProps */}
-      {children ? (
-        typeof children === 'function' ? 
-          (children as (props: ContainerProps) =&gt; ReactNode)(containerProps)<span class="branch-0 cbranch-no" title="branch not covered" > : </span>
-<span class="cstat-no" title="statement not covered" >          children</span>
-      ) : (
-        // Default fallback if no children provided
-        filteredVariables.length === 0 &amp;&amp; !storeIsLoading &amp;&amp; (
-          &lt;EmptyState message="No variables found for the selected organization, or no organization selected. Upload a CSV file or select an organization." /&gt;
-        )
-      )}
-&nbsp;
-      {showImportModal &amp;&amp; (
-        &lt;ImportModal
-          isOpen={showImportModal}
-          onClose={() =&gt; setShowImportModal(false)}
-          newVariables={processedVariables}
-          existingVariables={variables}
-          onConfirm={handleImportVariables}
+        &lt;UploadSection
+          onProcessCSV={parseCSV}
+          isUploading={isUploading}
+          error={error}
         /&gt;
-      )}
 &nbsp;
-      &lt;DeleteConfirmationModal
-        isOpen={deleteConfirmation.isOpen}
-        variableName={deleteConfirmation.variableName}
-        onClose={closeDeleteConfirmation}
-        onConfirm={handleConfirmDelete}
-      /&gt;
+        {/* Render cards/children using the containerProps */}
+        {children ? (
+          typeof children === 'function' ? 
+            (children as (props: ContainerProps) =&gt; ReactNode)(containerProps)<span class="branch-0 cbranch-no" title="branch not covered" > : </span>
+<span class="cstat-no" title="statement not covered" >            children</span>
+        ) : (
+          // Default fallback if no children provided
+          filteredVariables.length === 0 &amp;&amp; !storeIsLoading &amp;&amp; (
+            &lt;EmptyState message="No variables found for the selected organization, or no organization selected. Upload a CSV file or select an organization." /&gt;
+          )
+        )}
+&nbsp;
+        {showImportModal &amp;&amp; (
+          &lt;ImportModal
+            isOpen={showImportModal}
+            onClose={() =&gt; setShowImportModal(false)}
+            newVariables={processedVariables}
+            existingVariables={variables}
+            onConfirm={handleImportVariables}
+          /&gt;
+        )}
+&nbsp;
+        &lt;DeleteConfirmationModal
+          isOpen={deleteConfirmation.isOpen}
+          variableName={deleteConfirmation.variableName}
+          onClose={closeDeleteConfirmation}
+          onConfirm={handleConfirmDelete}
+        /&gt;
+      &lt;/div&gt;
     &lt;/div&gt;
   )
 } </pre></td></tr></table></pre>
@@ -808,7 +814,7 @@ export const DataIntakeContainer = ({
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-05-10T21:19:55.140Z
+                at 2025-05-25T20:18:49.044Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

@@ -185,9 +185,9 @@ export function VariableDetailsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
+      <DialogContent className="max-w-2xl h-[80vh] flex flex-col bg-slate-800 border-slate-700 text-slate-100">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">
+          <DialogTitle className="text-xl font-semibold text-slate-100">
             Variable Details
           </DialogTitle>
         </DialogHeader>
@@ -195,9 +195,9 @@ export function VariableDetailsModal({
         <div className="flex flex-col gap-4 flex-1 overflow-hidden py-4">
           {/* Variable Name */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-sm font-medium">Name:</label>
+            <label className="text-sm font-medium text-slate-200">Name:</label>
             <Input 
-              className="col-span-3"
+              className="col-span-3 bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400 focus:border-blue-500"
               value={editableVariable.name}
               onChange={handleNameChange}
             />
@@ -205,32 +205,32 @@ export function VariableDetailsModal({
           
           {/* Variable Type */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-sm font-medium">Type:</label>
+            <label className="text-sm font-medium text-slate-200">Type:</label>
             <Select 
               value={editableVariable.type} 
               onValueChange={handleTypeChange}
             >
-              <SelectTrigger className="col-span-3">
+              <SelectTrigger className="col-span-3 bg-slate-700 border-slate-600 text-slate-100 focus:border-blue-500">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ACTUAL">ACTUAL</SelectItem>
-                <SelectItem value="BUDGET">BUDGET</SelectItem>
-                <SelectItem value="INPUT">INPUT</SelectItem>
-                <SelectItem value="UNKNOWN">UNKNOWN</SelectItem>
+              <SelectContent className="bg-slate-700 border-slate-600">
+                <SelectItem value="ACTUAL" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">ACTUAL</SelectItem>
+                <SelectItem value="BUDGET" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">BUDGET</SelectItem>
+                <SelectItem value="INPUT" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">INPUT</SelectItem>
+                <SelectItem value="UNKNOWN" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">UNKNOWN</SelectItem>
               </SelectContent>
             </Select>
           </div>
           
           {/* Time Series Data */}
           <div className="flex flex-col gap-2 flex-1 overflow-hidden">
-            <label className="text-sm font-medium">Time Series Data:</label>
-            <div className="border rounded-md overflow-auto flex-1">
+            <label className="text-sm font-medium text-slate-200">Time Series Data:</label>
+            <div className="border border-slate-600 rounded-md overflow-auto flex-1 bg-slate-700">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-muted/50">
-                    <th className="px-4 py-2 text-left font-medium text-sm">Date</th>
-                    <th className="px-4 py-2 text-right font-medium text-sm">Value</th>
+                  <tr className="bg-slate-600 border-b border-slate-500">
+                    <th className="px-4 py-2 text-left font-medium text-sm text-slate-100">Date</th>
+                    <th className="px-4 py-2 text-right font-medium text-sm text-slate-100">Value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,16 +238,16 @@ export function VariableDetailsModal({
                     sortedTimeSeries.map((point, index) => (
                       <tr 
                         key={index}
-                        className="border-t hover:bg-muted/30"
+                        className="border-t border-slate-600 hover:bg-slate-600/50"
                       >
-                        <td className="px-4 py-2 text-sm">
+                        <td className="px-4 py-2 text-sm text-slate-200">
                           {format(point.date, 'MM/yyyy')}
                         </td>
                         <td className="px-4 py-2 text-right">
                           {editingCellIndex === index ? (
                             <div className="flex items-center space-x-1 justify-end">
                               <Input
-                                className="w-24 text-right py-1 px-2 h-8"
+                                className="w-24 text-right py-1 px-2 h-8 bg-slate-800 border-slate-500 text-slate-100 focus:border-blue-500"
                                 value={editedValue}
                                 onChange={(e) => setEditedValue(e.target.value)}
                                 onKeyDown={handleKeyDown}
@@ -256,7 +256,7 @@ export function VariableDetailsModal({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 w-6 p-0"
+                                className="h-6 w-6 p-0 text-green-400 hover:text-green-300 hover:bg-green-900/20"
                                 onClick={confirmValueChange}
                               >
                                 <span className="sr-only">Confirm</span>
@@ -265,7 +265,7 @@ export function VariableDetailsModal({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 w-6 p-0"
+                                className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20"
                                 onClick={cancelValueChange}
                               >
                                 <span className="sr-only">Cancel</span>
@@ -274,7 +274,7 @@ export function VariableDetailsModal({
                             </div>
                           ) : (
                             <div 
-                              className="cursor-pointer hover:underline text-sm"
+                              className="cursor-pointer hover:underline text-sm text-slate-200 hover:text-blue-400"
                               onClick={() => startEditingValue(index)}
                             >
                               {point.value !== null ? point.value.toLocaleString() : '-'}
@@ -285,7 +285,7 @@ export function VariableDetailsModal({
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={2} className="px-4 py-2 text-center text-muted-foreground">
+                      <td colSpan={2} className="px-4 py-2 text-center text-slate-400">
                         No time series data available
                       </td>
                     </tr>
@@ -296,18 +296,27 @@ export function VariableDetailsModal({
           </div>
         </div>
         
-        <DialogFooter className="flex justify-end space-x-2">
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+        <DialogFooter className="flex justify-end space-x-2 border-t border-slate-700 pt-4">
+          <Button 
+            variant="outline" 
+            onClick={onClose} 
+            disabled={isSaving}
+            className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white"
+          >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button 
+            onClick={handleSave} 
+            disabled={isSaving}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogFooter>
         
         <DialogClose asChild>
           <button
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none text-slate-400 hover:text-slate-200 hover:bg-slate-700"
             aria-label="Close"
             onClick={onClose}
             disabled={isSaving}

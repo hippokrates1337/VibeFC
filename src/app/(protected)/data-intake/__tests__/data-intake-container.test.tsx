@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act } from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { DataIntakeContainer } from '../_components/data-intake-container';

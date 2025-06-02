@@ -70,30 +70,30 @@ export function MembersList() {
   };
 
   if (!currentOrganization) {
-    return <p className="text-muted-foreground">Select an organization to view members.</p>;
+    return <p className="text-slate-400">Select an organization to view members.</p>;
   }
 
   if (members.length === 0) {
-    return <p className="text-muted-foreground">No members found in this organization.</p>;
+    return <p className="text-slate-400">No members found in this organization.</p>;
   }
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-medium">Organization Members</h3>
+      <h3 className="text-lg font-medium text-slate-200">Organization Members</h3>
       
       {error && (
-        <div className="bg-red-100 text-red-800 p-3 rounded-md text-sm mb-4">
+        <div className="bg-red-900/20 text-red-300 p-3 rounded-md text-sm mb-4 border border-red-800">
           {error}
         </div>
       )}
       
-      <div className="border rounded-md divide-y">
+      <div className="border border-slate-700 rounded-md divide-y divide-slate-700 bg-slate-800">
         {members.map((member: OrganizationMember) => (
           <div key={member.user_id} className="flex items-center justify-between p-4">
             <div>
-              <p className="font-medium">{member.email}</p>
+              <p className="font-medium text-slate-100">{member.email}</p>
               {member.user_id === currentOrganization.owner_id && (
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Owner</span>
+                <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-1 rounded border border-blue-800">Owner</span>
               )}
             </div>
             
@@ -106,13 +106,13 @@ export function MembersList() {
                       onValueChange={(value) => handleRoleChange(member.user_id, value as 'admin' | 'editor' | 'viewer')}
                       disabled={userRole !== 'admin' || member.user_id === user?.id}
                     >
-                      <SelectTrigger className="w-[100px]">
+                      <SelectTrigger className="w-[100px] bg-slate-700 border-slate-600 text-slate-100 focus:border-blue-500">
                         <SelectValue placeholder="Role" />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="editor">Editor</SelectItem>
-                        <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectContent className="bg-slate-700 border-slate-600">
+                        <SelectItem value="admin" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">Admin</SelectItem>
+                        <SelectItem value="editor" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">Editor</SelectItem>
+                        <SelectItem value="viewer" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">Viewer</SelectItem>
                       </SelectContent>
                     </Select>
                     
@@ -121,7 +121,7 @@ export function MembersList() {
                       size="icon"
                       onClick={() => handleRemoveMember(member.user_id)}
                       disabled={userRole !== 'admin' || member.user_id === user?.id || member.user_id === currentOrganization.owner_id}
-                      className="text-red-500 hover:text-red-700"
+                      className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -130,7 +130,7 @@ export function MembersList() {
               </AdminOnly>
               
               {(!userRole || userRole !== 'admin' || member.user_id === currentOrganization.owner_id) && (
-                <span className="text-sm text-muted-foreground">{member.role}</span>
+                <span className="text-sm text-slate-400">{member.role}</span>
               )}
             </div>
           </div>
