@@ -37,7 +37,7 @@ alwaysApply: true
 
 ## 🧪 Testing Practices
 
-- **Unit Testing:** Use Jest for unit tests, React Testing Library for components, and snapshot testing for UI components.
+- **Unit Testing:** Use Jest for unit tests, React Testing Library for components, and snapshot testing for UI components. Do not run tests yourself, let the user handle test execution.
 - **Test Coverage:** Minimum 80% test coverage. Always first consider whether the actual functionality can be tested before mocking something.
 - **Test Structure:** Place tests alongside source files in `__tests__` folders or `*.test.ts` files.
 

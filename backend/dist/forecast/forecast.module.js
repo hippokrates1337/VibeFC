@@ -9,26 +9,31 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ForecastModule = void 0;
 const common_1 = require("@nestjs/common");
 const forecast_controller_1 = require("./controllers/forecast.controller");
+const forecast_calculation_controller_1 = require("./controllers/forecast-calculation.controller");
 const forecast_service_1 = require("./services/forecast.service");
 const forecast_node_service_1 = require("./services/forecast-node.service");
 const forecast_edge_service_1 = require("./services/forecast-edge.service");
+const forecast_calculation_service_1 = require("./services/forecast-calculation.service");
 const supabase_module_1 = require("../supabase/supabase.module");
+const data_intake_module_1 = require("../data-intake/data-intake.module");
 let ForecastModule = class ForecastModule {
 };
 exports.ForecastModule = ForecastModule;
 exports.ForecastModule = ForecastModule = __decorate([
     (0, common_1.Module)({
-        imports: [supabase_module_1.SupabaseModule],
-        controllers: [forecast_controller_1.ForecastController],
+        imports: [supabase_module_1.SupabaseModule, data_intake_module_1.DataIntakeModule],
+        controllers: [forecast_controller_1.ForecastController, forecast_calculation_controller_1.ForecastCalculationController],
         providers: [
             forecast_service_1.ForecastService,
             forecast_node_service_1.ForecastNodeService,
-            forecast_edge_service_1.ForecastEdgeService
+            forecast_edge_service_1.ForecastEdgeService,
+            forecast_calculation_service_1.ForecastCalculationService
         ],
         exports: [
             forecast_service_1.ForecastService,
             forecast_node_service_1.ForecastNodeService,
-            forecast_edge_service_1.ForecastEdgeService
+            forecast_edge_service_1.ForecastEdgeService,
+            forecast_calculation_service_1.ForecastCalculationService
         ],
     })
 ], ForecastModule);

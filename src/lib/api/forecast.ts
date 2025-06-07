@@ -380,10 +380,13 @@ export const forecastApi = {
       const nodeIdMap = new Map<string, string>(); // Map from old client ID to new server ID
 
       for (const nodeClient of nodes) {
+        // For SEED nodes, we need to update sourceMetricId references after all nodes are created
+        let nodeData = nodeClient.data;
+        
         const addNodeResponse = await forecastApi.addNode(
           forecastId,
           nodeClient.type as string,
-          nodeClient.data,
+          nodeData,
           nodeClient.position
         );
         if (addNodeResponse.error || !addNodeResponse.data) {
@@ -393,6 +396,66 @@ export const forecastApi = {
         createdNodes.push(addNodeResponse.data);
         // Store the mapping from the original client ID to the new server ID
         nodeIdMap.set(nodeClient.id, addNodeResponse.data.id);
+      }
+
+      // 5.1. Update SEED node references to point to new metric IDs
+      const seedNodes = createdNodes.filter(node => node.kind === 'SEED');
+      for (const seedNode of seedNodes) {
+        const seedData = seedNode.attributes as any;
+        if (seedData.sourceMetricId) {
+          const newMetricId = nodeIdMap.get(seedData.sourceMetricId);
+          if (newMetricId) {
+            // Update the SEED node with the correct metric reference
+            const updateResponse = await forecastApi.updateNode(
+              forecastId,
+              seedNode.id,
+              {
+                attributes: {
+                  ...seedData,
+                  sourceMetricId: newMetricId
+                }
+              }
+            );
+            if (updateResponse.error) {
+              console.error(`Failed to update SEED node ${seedNode.id} reference:`, updateResponse.error);
+              return { error: { message: `Failed to update SEED node reference: ${updateResponse.error.message}` } };
+            }
+            // Update the local node data for the response
+            seedNode.attributes = { ...seedData, sourceMetricId: newMetricId };
+          }
+        }
+      }
+
+      // 5.2. Update OPERATOR node inputOrder to point to new node IDs
+      const operatorNodes = createdNodes.filter(node => node.kind === 'OPERATOR');
+      for (const operatorNode of operatorNodes) {
+        const operatorData = operatorNode.attributes as any;
+        if (operatorData.inputOrder && Array.isArray(operatorData.inputOrder)) {
+          // Map old node IDs to new node IDs in inputOrder
+          const updatedInputOrder = operatorData.inputOrder
+            .map((oldNodeId: string) => nodeIdMap.get(oldNodeId))
+            .filter((newNodeId: string | undefined) => newNodeId !== undefined);
+          
+          if (updatedInputOrder.length > 0) {
+            // Update the OPERATOR node with the correct inputOrder
+            const updateResponse = await forecastApi.updateNode(
+              forecastId,
+              operatorNode.id,
+              {
+                attributes: {
+                  ...operatorData,
+                  inputOrder: updatedInputOrder
+                }
+              }
+            );
+            if (updateResponse.error) {
+              console.error(`Failed to update OPERATOR node ${operatorNode.id} inputOrder:`, updateResponse.error);
+              return { error: { message: `Failed to update OPERATOR node inputOrder: ${updateResponse.error.message}` } };
+            }
+            // Update the local node data for the response
+            operatorNode.attributes = { ...operatorData, inputOrder: updatedInputOrder };
+          }
+        }
       }
 
       // 6. Add new edges

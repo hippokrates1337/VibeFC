@@ -37,6 +37,17 @@ Manages organizations and their members. Users can create organizations, invite 
 ### Forecast
 Enables the creation and management of forecasting models using a graph-based approach. Users can build models by connecting different types of nodes (data, constants, operators, metrics) to define calculation flows.
 
+#### Calculation Engine
+- **Graph-based Calculation:** Converts forecast graphs to calculation trees for monthly evaluation
+- **Node Types:** DATA, CONSTANT, OPERATOR, METRIC, SEED with specific evaluation logic
+- **Time-series Dependencies:** SEED nodes reference previous calculations and historical data
+- **Error Handling:** Comprehensive validation with detailed error messages
+  - Historical data availability checks
+  - Variable configuration validation
+  - Graph structure integrity verification
+- **Caching:** Monthly calculation caching for performance optimization
+- **Result Storage:** Persistent calculation results with full history tracking
+
 ## Getting Started
 
 1.  **Install Dependencies:** Run `npm install` or the provided `install-deps.ps1` script.

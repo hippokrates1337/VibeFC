@@ -5,6 +5,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { useShallow } from 'zustand/react/shallow';
 import type { Forecast as ClientForecastSummary } from '@/lib/api/forecast';
 import { logger } from '@/lib/utils/logger';
+import type { GraphValidationResult, ForecastCalculationResult } from '@/types/forecast';
+import { forecastService } from '@/lib/services/forecast-calculation/forecast-service';
+import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
+import { useVariableStore } from './variables';
 
 // Define node types
 export type ForecastNodeKind = 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
@@ -63,6 +67,16 @@ interface ForecastGraphState {
   isLoading: boolean;
   error: string | null;
   organizationForecasts: ClientForecastSummary[];
+  
+  // NEW: Graph validation state
+  graphValidation: GraphValidationResult | null;
+  isValidatingGraph: boolean;
+  
+  // NEW: Calculation results
+  calculationResults: ForecastCalculationResult | null;
+  isCalculating: boolean;
+  calculationError: string | null;
+  lastCalculatedAt: Date | null;
 }
 
 // Store actions
@@ -102,6 +116,20 @@ interface ForecastGraphActions {
   setError: (error: string | null) => void;
   duplicateNodeWithEdges: (nodeId: string) => string | null;
   loadOrganizationForecasts: (forecasts: ClientForecastSummary[]) => void;
+  
+  // Graph validation actions
+  validateGraph: () => Promise<GraphValidationResult>;
+  setGraphValidation: (validation: GraphValidationResult) => void;
+  clearGraphValidation: () => void;
+  setValidatingGraph: (isValidating: boolean) => void;
+  
+  // Calculation actions (only allowed when graph is valid)
+  calculateForecast: () => Promise<void>;
+  loadCalculationResults: () => Promise<void>;
+  setCalculationResults: (results: ForecastCalculationResult) => void;
+  clearCalculationResults: () => void;
+  setCalculating: (isCalculating: boolean) => void;
+  setCalculationError: (error: string | null) => void;
 }
 
 // Helper functions
@@ -149,6 +177,49 @@ const updateOperatorInputOrders = (nodes: ForecastNodeClient[], edges: ForecastE
   });
 };
 
+/**
+ * Clean up orphaned SEED node references and return cleaned nodes
+ * Only cleans if the referenced metric ID is a placeholder pattern or definitely invalid
+ */
+const cleanOrphanedReferences = (
+  nodes: ForecastNodeClient[], 
+  edges: ForecastEdgeClient[]
+): { cleanedNodes: ForecastNodeClient[]; hadOrphanedRefs: boolean } => {
+  const metricNodeIds = new Set(nodes.filter(n => n.type === 'METRIC').map(n => n.id));
+  let hadOrphanedRefs = false;
+  
+  const cleanedNodes = nodes.map(node => {
+    if (node.type === 'SEED') {
+      const seedData = node.data as SeedNodeAttributes;
+      
+      // Check if the referenced metric exists
+      if (seedData.sourceMetricId && !metricNodeIds.has(seedData.sourceMetricId)) {
+        // Only clean up if this is clearly a stale reference (UUID pattern but not found)
+        // This prevents accidentally clearing legitimate temporary references
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seedData.sourceMetricId);
+        
+        if (isValidUUID) {
+          hadOrphanedRefs = true;
+          console.warn(`[ForecastGraphStore] Cleaning orphaned SEED reference: ${seedData.sourceMetricId} not found in current metrics`);
+          
+          // Reset the sourceMetricId to empty string
+          const cleanedData: SeedNodeAttributes = {
+            sourceMetricId: ''
+          };
+          
+          return {
+            ...node,
+            data: cleanedData
+          };
+        }
+      }
+    }
+    return node;
+  });
+  
+  return { cleanedNodes, hadOrphanedRefs };
+};
+
 // Initial state
 const initialState: ForecastGraphState = {
   forecastId: null,
@@ -164,6 +235,16 @@ const initialState: ForecastGraphState = {
   isLoading: false,
   error: null,
   organizationForecasts: [],
+  
+  // NEW: Graph validation state
+  graphValidation: null,
+  isValidatingGraph: false,
+  
+  // NEW: Calculation results
+  calculationResults: null,
+  isCalculating: false,
+  calculationError: null,
+  lastCalculatedAt: null,
 };
 
 // Create store with persist middleware
@@ -175,15 +256,23 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
       // Actions
       loadForecast: (data) => {
         logger.log('[ForecastGraphStore] loadForecast called with:', data);
+        
+        // Clean up orphaned references before loading
+        const { cleanedNodes, hadOrphanedRefs } = cleanOrphanedReferences(data.nodes, data.edges);
+        
+        if (hadOrphanedRefs) {
+          logger.warn('[ForecastGraphStore] Cleaned up orphaned SEED node references during load');
+        }
+        
         set({
           forecastId: data.id,
           forecastName: data.name,
           forecastStartDate: data.startDate,
           forecastEndDate: data.endDate,
           organizationId: data.organizationId,
-          nodes: data.nodes,
+          nodes: cleanedNodes,
           edges: data.edges,
-          isDirty: false,
+          isDirty: false, // Fresh data from server should not be dirty
           isLoading: false,
           error: null,
         });
@@ -316,14 +405,14 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         // logger.log('[ForecastGraphStore] onNodesChange called with changes:', changes); // Can be very noisy
         set((state) => {
           const newNodes = applyNodeChanges(changes, state.nodes) as ForecastNodeClient[];
+          // Only mark as dirty for structural changes that affect calculation
+          // Position, dimensions, and selection don't affect graph calculation results
           const dirty = changes.some(change => 
-            change.type === 'position' || 
-            change.type === 'dimensions' || 
             change.type === 'remove' ||
-            change.type === 'select'
+            change.type === 'add'
           );
           if (dirty) {
-            // logger.log('[ForecastGraphStore] Nodes changed, setting isDirty to true.');
+            // logger.log('[ForecastGraphStore] Nodes structurally changed, setting isDirty to true.');
           }
           return {
             nodes: newNodes,
@@ -463,6 +552,144 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         });
         logger.log('[ForecastGraphStore] Organization forecasts loaded.');
       },
+
+      // Graph validation actions
+      validateGraph: async () => {
+        logger.log('[ForecastGraphStore] validateGraph called');
+        const state = get();
+        
+        try {
+          set({ isValidatingGraph: true });
+          const validation = await forecastService.validateGraph(state.nodes, state.edges);
+          set({ graphValidation: validation, isValidatingGraph: false });
+          return validation;
+        } catch (error) {
+          logger.error('[ForecastGraphStore] Graph validation failed:', error);
+          const errorResult = {
+            isValid: false,
+            errors: [`Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            warnings: []
+          };
+          set({ graphValidation: errorResult, isValidatingGraph: false });
+          return errorResult;
+        }
+      },
+
+      setGraphValidation: (validation) => {
+        logger.log('[ForecastGraphStore] setGraphValidation called with:', validation);
+        set({ graphValidation: validation });
+      },
+
+      clearGraphValidation: () => {
+        logger.log('[ForecastGraphStore] clearGraphValidation called');
+        set({ graphValidation: null });
+      },
+
+      setValidatingGraph: (isValidating) => {
+        logger.log('[ForecastGraphStore] setValidatingGraph called with:', isValidating);
+        set({ isValidatingGraph: isValidating });
+      },
+
+      // Calculation actions
+      calculateForecast: async () => {
+        logger.log('[ForecastGraphStore] calculateForecast called');
+        const state = get();
+        
+        // Validate required data
+        if (!state.forecastId) {
+          throw new Error('Forecast ID is required for calculation');
+        }
+        
+        try {
+          set({ isCalculating: true, calculationError: null });
+          
+          logger.log(`[ForecastGraphStore] Triggering calculation for forecast ${state.forecastId}`);
+          
+          // Use the API client to trigger calculation on backend
+          const result = await forecastCalculationApi.calculateForecast(state.forecastId);
+          
+          set({ 
+            calculationResults: result,
+            lastCalculatedAt: new Date(),
+            isCalculating: false,
+            calculationError: null
+          });
+          
+          logger.log('[ForecastGraphStore] Forecast calculation completed successfully');
+        } catch (error) {
+          logger.error('[ForecastGraphStore] Forecast calculation failed:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown calculation error';
+          set({ 
+            calculationError: errorMessage,
+            isCalculating: false
+          });
+          throw error;
+        }
+      },
+
+      loadCalculationResults: async () => {
+        logger.log('[ForecastGraphStore] loadCalculationResults called');
+        const state = get();
+        
+        if (!state.forecastId) {
+          logger.warn('[ForecastGraphStore] Cannot load calculation results without forecast ID');
+          return;
+        }
+        
+        try {
+          logger.log(`[ForecastGraphStore] Loading calculation results for forecast ${state.forecastId}`);
+          
+          const result = await forecastCalculationApi.getCalculationResults(state.forecastId);
+          
+          if (result) {
+            set({ 
+              calculationResults: result,
+              lastCalculatedAt: result.calculatedAt,
+              calculationError: null
+            });
+            logger.log('[ForecastGraphStore] Calculation results loaded successfully');
+          } else {
+            logger.log('[ForecastGraphStore] No calculation results found');
+            set({ 
+              calculationResults: null,
+              lastCalculatedAt: null,
+              calculationError: null
+            });
+          }
+        } catch (error) {
+          logger.error('[ForecastGraphStore] Failed to load calculation results:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to load calculation results';
+          set({ calculationError: errorMessage });
+        }
+      },
+
+      setCalculationResults: (results) => {
+        logger.log('[ForecastGraphStore] setCalculationResults called with:', results);
+        set({
+          calculationResults: results,
+          lastCalculatedAt: new Date(),
+          calculationError: null,
+        });
+      },
+
+      clearCalculationResults: () => {
+        logger.log('[ForecastGraphStore] clearCalculationResults called');
+        set({
+          calculationResults: null,
+          lastCalculatedAt: null,
+          calculationError: null,
+        });
+      },
+
+      setCalculating: (isCalculating) => {
+        logger.log('[ForecastGraphStore] setCalculating called with:', isCalculating);
+        set({ isCalculating });
+      },
+
+      setCalculationError: (error) => {
+        logger.log('[ForecastGraphStore] setCalculationError called with:', error);
+        set({ calculationError: error });
+      },
     }),
     {
       name: 'forecast-graph-store',
@@ -501,6 +728,14 @@ export const useIsForecastLoading = () => useForecastGraphStore((state) => state
 export const useForecastError = () => useForecastGraphStore((state) => state.error);
 export const useOrganizationForecasts = () => useForecastGraphStore(useShallow((state) => state.organizationForecasts));
 
+// NEW: Validation and calculation selectors
+export const useGraphValidation = () => useForecastGraphStore((state) => state.graphValidation);
+export const useIsValidatingGraph = () => useForecastGraphStore((state) => state.isValidatingGraph);
+export const useCalculationResults = () => useForecastGraphStore((state) => state.calculationResults);
+export const useIsCalculating = () => useForecastGraphStore((state) => state.isCalculating);
+export const useCalculationError = () => useForecastGraphStore((state) => state.calculationError);
+export const useLastCalculatedAt = () => useForecastGraphStore((state) => state.lastCalculatedAt);
+
 // Action hooks for easy access
 export const useLoadForecast = () => useForecastGraphStore((state) => state.loadForecast);
 export const useSetForecastMetadata = () => useForecastGraphStore((state) => state.setForecastMetadata);
@@ -517,3 +752,15 @@ export const useSetConfigPanelOpen = () => useForecastGraphStore((state) => stat
 export const useOpenConfigPanelForNode = () => useForecastGraphStore((state) => state.openConfigPanelForNode);
 export const useDuplicateNodeWithEdges = () => useForecastGraphStore((state) => state.duplicateNodeWithEdges);
 export const useLoadOrganizationForecasts = () => useForecastGraphStore((state) => state.loadOrganizationForecasts);
+
+// NEW: Validation and calculation action hooks
+export const useValidateGraph = () => useForecastGraphStore((state) => state.validateGraph);
+export const useSetGraphValidation = () => useForecastGraphStore((state) => state.setGraphValidation);
+export const useClearGraphValidation = () => useForecastGraphStore((state) => state.clearGraphValidation);
+export const useSetValidatingGraph = () => useForecastGraphStore((state) => state.setValidatingGraph);
+export const useCalculateForecast = () => useForecastGraphStore((state) => state.calculateForecast);
+export const useLoadCalculationResults = () => useForecastGraphStore((state) => state.loadCalculationResults);
+export const useSetCalculationResults = () => useForecastGraphStore((state) => state.setCalculationResults);
+export const useClearCalculationResults = () => useForecastGraphStore((state) => state.clearCalculationResults);
+export const useSetCalculating = () => useForecastGraphStore((state) => state.setCalculating);
+export const useSetCalculationError = () => useForecastGraphStore((state) => state.setCalculationError);

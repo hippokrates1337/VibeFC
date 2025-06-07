@@ -319,29 +319,39 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
   const renderSeedNodeForm = (node: ForecastNodeClient) => {
     const data = node.data as SeedNodeAttributes;
+    
+    // Get all METRIC nodes from the current forecast graph (excluding the current node)
+    const metricNodes = nodes.filter(n => n.type === 'METRIC' && n.id !== node.id);
+    
     return (
       <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-300">Source Metric</label>
+        <label className="text-sm font-medium text-slate-300">Source Metric Node</label>
         <Select 
           value={localFormData.sourceMetricId || ''} 
           onValueChange={(value) => handleInputChange('sourceMetricId', value)}
         >
           <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
-            <SelectValue placeholder="Select source metric" />
+            <SelectValue placeholder="Select source metric node" />
           </SelectTrigger>
           <SelectContent className="bg-slate-800 border-slate-600">
-            {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').map(metric => (
-              <SelectItem key={metric.id} value={metric.id} className="text-slate-200 hover:bg-slate-700">
-                {metric.name}
-              </SelectItem>
-            ))}
-            {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').length === 0 && (
-                <SelectItem value="no-metrics" disabled className="text-slate-400">
-                  No metrics available for this organization
+            {metricNodes.length > 0 ? (
+              metricNodes.map(metricNode => (
+                <SelectItem key={metricNode.id} value={metricNode.id} className="text-slate-200 hover:bg-slate-700">
+                  {(metricNode.data as MetricNodeAttributes)?.label || `Metric ${metricNode.id.slice(0, 8)}...`}
                 </SelectItem>
+              ))
+            ) : (
+              <SelectItem value="no-metrics" disabled className="text-slate-400">
+                No metric nodes available in this forecast
+              </SelectItem>
             )}
           </SelectContent>
         </Select>
+        {metricNodes.length === 0 && (
+          <p className="text-xs text-slate-400 mt-1">
+            Create a METRIC node first to use as a source for this SEED node.
+          </p>
+        )}
       </div>
     );
   };

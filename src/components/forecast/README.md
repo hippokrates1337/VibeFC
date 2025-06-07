@@ -5,8 +5,15 @@ This directory contains the UI components for the Graphical Forecast Definition 
 ## Main Components
 
 - `forecast-canvas.tsx` - The main canvas component that displays and manages the forecast graph
-- `forecast-toolbar.tsx` - Toolbar for controlling the forecast graph and its metadata
+- `forecast-toolbar.tsx` - Enhanced toolbar for controlling the forecast graph, metadata, **graph validation, and calculation triggers** (UPDATED)
 - `node-config-panel.tsx` - Configuration panel for editing node properties. For Data, Metric, and Seed nodes, variable/metric selection dropdowns are dynamically populated from the global `useVariableStore`, filtered by the currently selected organization in that store.
+
+## New Calculation Components
+
+- `graph-validation-display.tsx` - Component for displaying graph validation status with error/warning details and validation controls
+- `calculation-results-display.tsx` - Component for displaying forecast calculation results with export functionality and metric filtering
+- `calculation-results-table.tsx` - Simple scrollable table for displaying calculation results in main editor area (interim solution)
+- `calculation-error-boundary.tsx` - Error boundary component for graceful handling of calculation-related UI errors
 
 ## Node Components
 
@@ -28,6 +35,10 @@ The forecast editor provides the following functionality:
 - Duplicate nodes with their connected edges using the "Duplicate Node" button that appears when a node is selected
 - Visual design with drag-and-drop for building forecast relationships
 - Name and label nodes for better identification
+- **Graph validation with cycle detection and business rule enforcement** (NEW)
+- **Forecast calculation with real-time status updates** (NEW)
+- **Calculation result display with export capabilities** (NEW)
+- **Comprehensive error handling for calculation operations** (NEW)
 
 ## API Integration
 
