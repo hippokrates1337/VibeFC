@@ -6,13 +6,20 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 // Define response and data types
 export interface Forecast {
   id: string;
-  name: string;
-  forecastStartDate: string;
-  forecastEndDate: string;
   organizationId: string;
+  userId: string;
+  name: string;
+  forecastStartDate: string | null;
+  forecastEndDate: string | null;
   createdAt: string;
   updatedAt: string;
-  userId: string;
+}
+
+// New interface for forecast with graph summary statistics
+export interface ForecastWithSummary extends Forecast {
+  nodeCount: number;
+  edgeCount: number;
+  nodeTypes: string[];
 }
 
 export interface ForecastNode {
@@ -225,6 +232,13 @@ export const forecastApi = {
       return { error: { message: 'Organization ID is required to fetch forecasts.' } };
     }
     return fetchWithAuth<Forecast[]>(`/forecasts?organizationId=${organizationId}`, {
+      method: 'GET',
+    });
+  },
+
+  // Get all forecasts for an organization with graph summary data
+  getForecastsWithSummary: async (organizationId: string): Promise<ApiResponse<ForecastWithSummary[]>> => {
+    return fetchWithAuth<ForecastWithSummary[]>(`/organizations/${organizationId}/forecasts/summary`, {
       method: 'GET',
     });
   },

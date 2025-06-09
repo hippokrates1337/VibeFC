@@ -54,7 +54,7 @@ class GraphConverter {
         });
         this.validateNodeConnections(nodes, edges, errors, warnings);
         this.validateSeedNodeConnections(nodes, edges, errors, warnings);
-        this.validateMetricNodeConfiguration(nodes, errors, warnings);
+        this.validateMetricNodeConfiguration(nodes, edges, errors, warnings);
         const topLevelMetricNodes = this.findTopLevelMetricNodes(nodes, edges);
         if (topLevelMetricNodes.length === 0 && metricNodes.length > 0) {
             errors.push('All METRIC nodes are connected as inputs to other METRIC nodes - at least one METRIC node must be at the top level');
@@ -117,15 +117,26 @@ class GraphConverter {
             }
         });
     }
-    validateMetricNodeConfiguration(nodes, errors, warnings) {
+    validateMetricNodeConfiguration(nodes, edges, errors, warnings) {
         const metricNodes = nodes.filter(n => n.type === 'METRIC');
         metricNodes.forEach(metricNode => {
             const metricData = metricNode.data;
-            if (!metricData.budgetVariableId) {
-                errors.push(`METRIC node ${metricNode.id} missing required budgetVariableId`);
+            const hasCalculationInputs = edges.some(edge => edge.target === metricNode.id);
+            if (!metricData.useCalculated) {
+                if (!metricData.budgetVariableId) {
+                    warnings.push(`METRIC node ${metricNode.id} has no budget variable configured - budget values will be null`);
+                }
+                if (!metricData.historicalVariableId) {
+                    warnings.push(`METRIC node ${metricNode.id} has no historical variable configured - historical values will be null`);
+                }
             }
-            if (!metricData.historicalVariableId) {
-                errors.push(`METRIC node ${metricNode.id} missing required historicalVariableId`);
+            else {
+                if (!metricData.budgetVariableId) {
+                    warnings.push(`METRIC node ${metricNode.id} uses calculated values but has no budget variable fallback`);
+                }
+                if (!metricData.historicalVariableId) {
+                    warnings.push(`METRIC node ${metricNode.id} uses calculated values but has no historical variable fallback`);
+                }
             }
             if (!metricData.label) {
                 warnings.push(`METRIC node ${metricNode.id} missing label`);

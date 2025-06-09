@@ -1,103 +1,102 @@
 # Forecast Calculation Services
 
-This directory contains the core forecast calculation engine implementation for VibeFC.
+This directory contains the frontend forecast calculation components used for immediate UI validation.
 
 ## Architecture Overview
 
-The forecast calculation system is built with a modular architecture consisting of four main components:
+The frontend calculation services have been simplified to focus on immediate UI feedback, while the actual forecast calculations are handled by the backend for better performance and consistency.
 
-### 1. Graph Converter (`graph-converter.ts`)
-- **Purpose**: Converts forecast graphs into calculation trees and validates graph structure
+### Core Component
+
+#### Graph Converter (`graph-converter.ts`)
+- **Purpose**: Converts forecast graphs into calculation trees and validates graph structure for immediate UI feedback
 - **Key Features**:
   - Graph validation with detailed error reporting
   - Cycle detection
   - Node connection validation
-  - Conversion to calculation trees for execution
+  - Conversion to calculation trees for validation purposes
+  - Dependency analysis for cross-tree references
 
-### 2. Variable Data Service (`variable-data-service.ts`)
-- **Purpose**: Provides access to variable data during calculations
-- **Key Features**:
-  - Month-based data retrieval
-  - Offset calculations for historical data
-  - Date normalization to first of month
+## Validation Flow
 
-### 3. Calculation Engine (`calculation-engine.ts`)
-- **Purpose**: Core calculation execution engine
-- **Key Features**:
-  - Tree-based calculation execution
-  - Support for all node types (DATA, CONSTANT, OPERATOR, METRIC, SEED)
-  - Caching for performance optimization
-  - Monthly calculation iteration
-
-### 4. Forecast Service (`forecast-service.ts`)
-- **Purpose**: Main orchestration service that coordinates the entire calculation process
-- **Key Features**:
-  - End-to-end calculation workflow
-  - Error handling and logging
-  - Integration with graph store
-
-## Calculation Flow
-
-1. **Validation**: Graph structure is validated for cycles, connections, and business rules
-2. **Conversion**: Valid graphs are converted into calculation trees
-3. **Execution**: Trees are executed month-by-month to generate forecast values
-4. **Results**: Calculation results are returned with forecast, budget, and historical values
+1. **Immediate Validation**: Graph structure is validated client-side for instant UI feedback
+2. **Backend Calculation**: Actual calculations are performed server-side via API
+3. **Result Display**: Calculation results are fetched and displayed in the UI
 
 ## Node Type Support
 
 ### DATA Nodes
-- Retrieve variable values with optional month offsets
-- Support for historical data lookups
+- Validate variable references and month offsets
+- Check for proper data node configuration
 
 ### CONSTANT Nodes
-- Return fixed numeric values
-- Used for static parameters in calculations
+- Validate numeric values
+- Ensure constants are properly defined
 
 ### OPERATOR Nodes
-- Support arithmetic operations: +, -, *, /, ^
-- Handle multiple inputs with proper ordering
-- Division by zero protection
+- Validate arithmetic operations: +, -, *, /, ^
+- Check input connections and ordering
+- Ensure proper operator configuration
 
 ### METRIC Nodes
-- Top-level calculation nodes that define forecast outputs
-- Support both calculated and variable-based values
-- Generate forecast, budget, and historical series
+- Validate top-level calculation nodes
+- Check metric configuration (budget/historical variables)
+- Ensure proper metric setup
 
 ### SEED Nodes
-- Reference previous month's results from other metrics
-- Enable time-series dependencies
-- Support for metric chaining
+- Validate references to other metrics
+- Check for cross-tree dependencies
+- Ensure proper metric chaining setup
 
 ## Usage
 
+### Graph Validation for UI
+
 ```typescript
-import { forecastService } from '@/lib/services/forecast-calculation';
+import { GraphConverter } from '@/lib/services/forecast-calculation/graph-converter';
 
-// Validate a graph
-const validation = await forecastService.validateGraph(nodes, edges);
+// Validate graph structure for immediate UI feedback
+const graphConverter = new GraphConverter();
+const validation = graphConverter.validateGraph(nodes, edges);
 
-// Calculate forecast
-const results = await forecastService.calculateForecast(
-  forecastId,
-  nodes,
-  edges,
-  startDate,
-  endDate,
-  variables
-);
+if (!validation.isValid) {
+  // Show validation errors in UI
+  console.error('Graph validation errors:', validation.errors);
+}
+
+// Convert to trees for dependency analysis
+const trees = graphConverter.convertToTrees(nodes, edges);
 ```
+
+### Forecast Calculation
+
+For actual forecast calculations, use the backend API:
+
+```typescript
+import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
+
+// Trigger calculation on backend
+const results = await forecastCalculationApi.calculateForecast(forecastId);
+
+// Get latest results
+const latestResults = await forecastCalculationApi.getCalculationResults(forecastId);
+
+// Get calculation history
+const history = await forecastCalculationApi.getCalculationHistory(forecastId);
+```
+
+## Architecture Benefits
+
+- **Single Source of Truth**: All calculations happen on the backend
+- **Immediate UI Feedback**: Graph validation provides instant user feedback
+- **Consistency**: No risk of frontend/backend calculation drift
+- **Performance**: Backend handles heavy computational work
+- **Scalability**: Calculations can be optimized and scaled server-side
 
 ## Error Handling
 
-All services include comprehensive error handling with:
-- Detailed error messages
-- Logging for debugging
-- Graceful failure modes
-- Validation before execution
-
-## Performance Considerations
-
-- **Caching**: Results are cached to avoid redundant calculations
-- **Tree Structure**: Efficient tree traversal for complex graphs
-- **Memory Management**: Careful handling of large datasets
-- **Async Operations**: Non-blocking calculation execution 
+Graph validation includes comprehensive error handling with:
+- Detailed validation messages
+- Warning notifications for potential issues
+- Clear error categorization
+- User-friendly error descriptions 

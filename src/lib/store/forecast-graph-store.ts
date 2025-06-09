@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Forecast as ClientForecastSummary } from '@/lib/api/forecast';
 import { logger } from '@/lib/utils/logger';
 import type { GraphValidationResult, ForecastCalculationResult } from '@/types/forecast';
-import { forecastService } from '@/lib/services/forecast-calculation/forecast-service';
+import { GraphConverter } from '@/lib/services/forecast-calculation/graph-converter';
 import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
 import { useVariableStore } from './variables';
 
@@ -21,6 +21,7 @@ export interface DataNodeAttributes {
 }
 
 export interface ConstantNodeAttributes {
+  name: string;
   value: number;
 }
 
@@ -138,15 +139,15 @@ const getDefaultNodeData = (type: ForecastNodeKind): ForecastNodeData => {
     case 'DATA':
       return { name: 'New Data Node', variableId: '', offsetMonths: 0 };
     case 'CONSTANT':
-      return { value: 0 };
+      return { name: 'New Constant', value: 0 };
     case 'OPERATOR':
       return { op: '+', inputOrder: [] };
     case 'METRIC':
-      return { label: '', budgetVariableId: '', historicalVariableId: '', useCalculated: false };
+      return { label: 'New Metric', budgetVariableId: '', historicalVariableId: '', useCalculated: false };
     case 'SEED':
       return { sourceMetricId: '' };
     default:
-      return { value: 0 };
+      return { name: 'New Constant', value: 0 };
   }
 };
 
@@ -560,7 +561,11 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         
         try {
           set({ isValidatingGraph: true });
-          const validation = await forecastService.validateGraph(state.nodes, state.edges);
+          
+          // Use GraphConverter directly for immediate UI validation
+          const graphConverter = new GraphConverter();
+          const validation = graphConverter.validateGraph(state.nodes, state.edges);
+          
           set({ graphValidation: validation, isValidatingGraph: false });
           return validation;
         } catch (error) {

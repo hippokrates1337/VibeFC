@@ -19,5 +19,9 @@ export declare class CalculationEngine implements ICalculationEngineService {
     private getMonthsBetween;
     private addMonths;
     private normalizeToFirstOfMonth;
+    private orderTreesByDependencies;
+    private analyzeCrossTreeDependencies;
+    private findSeedNodesInTree;
+    private topologicalSortTrees;
 }
 export {};

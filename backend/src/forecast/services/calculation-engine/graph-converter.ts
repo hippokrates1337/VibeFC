@@ -121,7 +121,7 @@ export class GraphConverter implements GraphConverterService {
     // Additional validation rules
     this.validateNodeConnections(nodes, edges, errors, warnings);
     this.validateSeedNodeConnections(nodes, edges, errors, warnings);
-    this.validateMetricNodeConfiguration(nodes, errors, warnings);
+    this.validateMetricNodeConfiguration(nodes, edges, errors, warnings);
 
     // Validate that we have at least one top-level metric node
     const topLevelMetricNodes = this.findTopLevelMetricNodes(nodes, edges);
@@ -219,6 +219,7 @@ export class GraphConverter implements GraphConverterService {
 
   private validateMetricNodeConfiguration(
     nodes: readonly ForecastNodeClient[],
+    edges: readonly ForecastEdgeClient[],
     errors: string[],
     warnings: string[]
   ): void {
@@ -226,12 +227,28 @@ export class GraphConverter implements GraphConverterService {
     
     metricNodes.forEach(metricNode => {
       const metricData = metricNode.data as MetricNodeAttributes;
-      if (!metricData.budgetVariableId) {
-        errors.push(`METRIC node ${metricNode.id} missing required budgetVariableId`);
+      
+      // Check if metric has calculation inputs (connected nodes)
+      const hasCalculationInputs = edges.some(edge => edge.target === metricNode.id);
+      
+      // For metrics that rely on variables (useCalculated=false), validate variable configuration
+      if (!metricData.useCalculated) {
+        if (!metricData.budgetVariableId) {
+          warnings.push(`METRIC node ${metricNode.id} has no budget variable configured - budget values will be null`);
+        }
+        if (!metricData.historicalVariableId) {
+          warnings.push(`METRIC node ${metricNode.id} has no historical variable configured - historical values will be null`);
+        }
+      } else {
+        // For calculated metrics, variables are optional but warn if missing
+        if (!metricData.budgetVariableId) {
+          warnings.push(`METRIC node ${metricNode.id} uses calculated values but has no budget variable fallback`);
+        }
+        if (!metricData.historicalVariableId) {
+          warnings.push(`METRIC node ${metricNode.id} uses calculated values but has no historical variable fallback`);
+        }
       }
-      if (!metricData.historicalVariableId) {
-        errors.push(`METRIC node ${metricNode.id} missing required historicalVariableId`);
-      }
+      
       if (!metricData.label) {
         warnings.push(`METRIC node ${metricNode.id} missing label`);
       }

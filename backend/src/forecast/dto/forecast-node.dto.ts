@@ -15,11 +15,13 @@ export interface NodePosition {
 }
 
 export interface DataNodeAttributes {
+  name: string;
   variableId: string;
   offsetMonths: number;
 }
 
 export interface ConstantNodeAttributes {
+  name: string;
   value: number;
 }
 

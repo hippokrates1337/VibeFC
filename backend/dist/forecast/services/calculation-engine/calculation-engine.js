@@ -11,6 +11,8 @@ class CalculationEngine {
             this.logger.log('[CalculationEngine] Starting forecast calculation');
             this.logger.log(`[CalculationEngine] Period: ${forecastStartDate.toISOString()} to ${forecastEndDate.toISOString()}`);
             this.logger.log(`[CalculationEngine] Processing ${trees.length} calculation trees`);
+            const orderedTrees = this.orderTreesByDependencies(trees);
+            this.logger.log(`[CalculationEngine] Tree processing order: [${orderedTrees.map(t => t.rootMetricNodeId).join(', ')}]`);
             const context = {
                 variables,
                 forecastStartDate,
@@ -19,10 +21,10 @@ class CalculationEngine {
                 monthlyCache: new Map(),
             };
             const metrics = [];
-            for (let i = 0; i < trees.length; i++) {
-                const tree = trees[i];
-                this.logger.log(`[CalculationEngine] Processing tree ${i + 1}/${trees.length} (metric: ${tree.rootMetricNodeId})`);
-                const metricResult = await this.calculateMetricTree(tree, context, trees);
+            for (let i = 0; i < orderedTrees.length; i++) {
+                const tree = orderedTrees[i];
+                this.logger.log(`[CalculationEngine] Processing tree ${i + 1}/${orderedTrees.length} (metric: ${tree.rootMetricNodeId})`);
+                const metricResult = await this.calculateMetricTree(tree, context, orderedTrees);
                 metrics.push(metricResult);
             }
             return {
@@ -171,7 +173,7 @@ class CalculationEngine {
                 if (node.children.length > 0) {
                     return this.evaluateNode(node.children[0], targetDate, calculationType, context, allTrees);
                 }
-                if (metricAttributes.budgetVariableId) {
+                if (metricAttributes.budgetVariableId && metricAttributes.budgetVariableId.trim() !== '') {
                     return this.variableDataService.getVariableValueForMonth(metricAttributes.budgetVariableId, targetDate, context.variables);
                 }
                 return null;
@@ -179,7 +181,7 @@ class CalculationEngine {
                 if (metricAttributes.useCalculated && node.children.length > 0) {
                     return this.evaluateNode(node.children[0], targetDate, calculationType, context, allTrees);
                 }
-                if (metricAttributes.budgetVariableId) {
+                if (metricAttributes.budgetVariableId && metricAttributes.budgetVariableId.trim() !== '') {
                     return this.variableDataService.getVariableValueForMonth(metricAttributes.budgetVariableId, targetDate, context.variables);
                 }
                 return null;
@@ -187,7 +189,7 @@ class CalculationEngine {
                 if (metricAttributes.useCalculated && node.children.length > 0) {
                     return this.evaluateNode(node.children[0], targetDate, calculationType, context, allTrees);
                 }
-                if (metricAttributes.historicalVariableId) {
+                if (metricAttributes.historicalVariableId && metricAttributes.historicalVariableId.trim() !== '') {
                     return this.variableDataService.getVariableValueForMonth(metricAttributes.historicalVariableId, targetDate, context.variables);
                 }
                 return null;
@@ -210,7 +212,7 @@ class CalculationEngine {
             const referencedMetricTree = allTrees?.find(tree => tree.rootMetricNodeId === seedAttributes.sourceMetricId);
             if (referencedMetricTree) {
                 const metricNodeData = referencedMetricTree.tree.nodeData;
-                if (metricNodeData.historicalVariableId) {
+                if (metricNodeData.historicalVariableId && metricNodeData.historicalVariableId.trim() !== '') {
                     this.logger.log(`[CalculationEngine] - Looking up historical variable: ${metricNodeData.historicalVariableId}`);
                     const value = this.variableDataService.getVariableValueForMonth(metricNodeData.historicalVariableId, prevMonthDate, context.variables);
                     if (value !== null) {
@@ -220,7 +222,8 @@ class CalculationEngine {
                     else {
                         const historicalVariable = context.variables.find(v => v.id === metricNodeData.historicalVariableId);
                         if (!historicalVariable) {
-                            throw new Error(`Historical variable ${metricNodeData.historicalVariableId} not found. Please ensure the variable exists and data is loaded.`);
+                            this.logger.warn(`[CalculationEngine] - Historical variable ${metricNodeData.historicalVariableId} not found - using null value`);
+                            return null;
                         }
                         const typedVariable = historicalVariable;
                         let availableDates = [];
@@ -241,11 +244,13 @@ class CalculationEngine {
                         const datesDisplay = availableDates.length > 0
                             ? availableDates.slice(0, 10).join(', ') + (availableDates.length > 10 ? ` (and ${availableDates.length - 10} more)` : '')
                             : 'No valid dates found in variable data';
-                        throw new Error(`Historical data for ${expectedDate} not found in variable '${typedVariable.name}' (${metricNodeData.historicalVariableId}). Available dates: ${datesDisplay}. Please ensure historical data exists for the month prior to the forecast start date (${expectedDate}), or adjust your forecast start date to begin after the latest available historical data.`);
+                        this.logger.warn(`[CalculationEngine] - Historical data for ${expectedDate} not found in variable '${typedVariable.name}' (${metricNodeData.historicalVariableId}). Available dates: ${datesDisplay} - using null value`);
+                        return null;
                     }
                 }
                 else {
-                    throw new Error(`Metric node ${seedAttributes.sourceMetricId} has no historical variable configured. Please configure a historical variable for this metric.`);
+                    this.logger.warn(`[CalculationEngine] - Metric node ${seedAttributes.sourceMetricId} has no historical variable configured - using null value`);
+                    return null;
                 }
             }
             else {
@@ -310,6 +315,78 @@ class CalculationEngine {
     }
     normalizeToFirstOfMonth(date) {
         return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+    orderTreesByDependencies(trees) {
+        this.logger.log('[CalculationEngine] Analyzing tree dependencies');
+        const dependencies = this.analyzeCrossTreeDependencies(trees);
+        dependencies.forEach((deps, treeId) => {
+            if (deps.length > 0) {
+                this.logger.log(`[CalculationEngine] Tree ${treeId} depends on: [${deps.join(', ')}]`);
+            }
+        });
+        const ordered = this.topologicalSortTrees(trees, dependencies);
+        this.logger.log('[CalculationEngine] Dependency analysis complete');
+        return ordered;
+    }
+    analyzeCrossTreeDependencies(trees) {
+        const dependencies = new Map();
+        trees.forEach(tree => {
+            dependencies.set(tree.rootMetricNodeId, []);
+        });
+        trees.forEach(tree => {
+            const seedNodes = this.findSeedNodesInTree(tree.tree);
+            const crossTreeDeps = [];
+            seedNodes.forEach(seedNode => {
+                const seedData = seedNode.nodeData;
+                if (seedData.sourceMetricId && seedData.sourceMetricId !== tree.rootMetricNodeId) {
+                    if (!crossTreeDeps.includes(seedData.sourceMetricId)) {
+                        crossTreeDeps.push(seedData.sourceMetricId);
+                    }
+                }
+            });
+            dependencies.set(tree.rootMetricNodeId, crossTreeDeps);
+        });
+        return dependencies;
+    }
+    findSeedNodesInTree(node) {
+        const seedNodes = [];
+        if (node.nodeType === 'SEED') {
+            seedNodes.push(node);
+        }
+        node.children.forEach(child => {
+            seedNodes.push(...this.findSeedNodesInTree(child));
+        });
+        return seedNodes;
+    }
+    topologicalSortTrees(trees, dependencies) {
+        const sorted = [];
+        const visited = new Set();
+        const visiting = new Set();
+        const visit = (treeId) => {
+            if (visiting.has(treeId)) {
+                throw new Error(`Circular dependency detected involving metric: ${treeId}`);
+            }
+            if (visited.has(treeId)) {
+                return;
+            }
+            visiting.add(treeId);
+            const deps = dependencies.get(treeId) || [];
+            deps.forEach(depId => {
+                visit(depId);
+            });
+            visiting.delete(treeId);
+            visited.add(treeId);
+            const tree = trees.find(t => t.rootMetricNodeId === treeId);
+            if (tree) {
+                sorted.push(tree);
+            }
+        };
+        trees.forEach(tree => {
+            if (!visited.has(tree.rootMetricNodeId)) {
+                visit(tree.rootMetricNodeId);
+            }
+        });
+        return sorted;
     }
 }
 exports.CalculationEngine = CalculationEngine;

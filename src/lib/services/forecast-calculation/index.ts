@@ -1,8 +1,5 @@
-// Main forecast calculation services
-export { ForecastService, forecastService } from './forecast-service';
+// Frontend forecast calculation services - UI validation only
 export { GraphConverter } from './graph-converter';
-export { CalculationEngine } from './calculation-engine';
-export { VariableDataService } from './variable-data-service';
 
 // Re-export types for convenience
 export type {

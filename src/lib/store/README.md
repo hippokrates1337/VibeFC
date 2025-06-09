@@ -150,10 +150,10 @@ interface ForecastEdgeClient extends Edge {}
 
 Each node type has specific attributes stored in its `data` property:
 
-- **DATA Node**: Connects to a variable with an offset (`{ variableId: string; offsetMonths: number }`)
-- **CONSTANT Node**: Represents a fixed value (`{ value: number }`)
+- **DATA Node**: Connects to a variable with an offset (`{ name: string; variableId: string; offsetMonths: number }`)
+- **CONSTANT Node**: Represents a fixed value with a label (`{ name: string; value: number }`)
 - **OPERATOR Node**: Performs math operations (`{ op: '+' | '-' | '*' | '/' | '^'; inputOrder?: string[] }`)
-- **METRIC Node**: Computes values based on historical data and budget targets (`{ label: string; budgetVariableId: string; historicalVariableId: string }`)
+- **METRIC Node**: Computes values based on historical data and budget targets (`{ label: string; budgetVariableId: string; historicalVariableId: string; useCalculated: boolean }`). Budget and historical variables are optional - empty values result in null calculation results rather than errors.
 - **SEED Node**: Used to initialize forecast calculation (`{ sourceMetricId: string }`)
 
 ## State

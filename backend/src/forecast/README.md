@@ -34,13 +34,15 @@ User Graph → Data Validation → Tree Conversion → Monthly Calculation → R
 ### 2. Node Types & Evaluation
 
 #### DATA Nodes
-- Reference variables for time-series data
+- Reference variables for time-series data with user-defined labels
 - Support offset months for historical lookups
 - Automatically handle different data types (forecast/budget/historical)
+- Include a `name` field for better identification in complex graphs
 
 #### CONSTANT Nodes
-- Provide fixed numeric values
+- Provide fixed numeric values with user-defined labels
 - Remain constant across all calculation types and months
+- Include a `name` field for better identification in complex graphs
 
 #### OPERATOR Nodes
 - Perform mathematical operations (+, -, *, /, ^)
@@ -51,6 +53,8 @@ User Graph → Data Validation → Tree Conversion → Monthly Calculation → R
 - Root nodes that define calculation outputs
 - Control whether to use calculated values or direct variable references
 - Manage historical, budget, and forecast value sources
+- **Graceful Handling**: Budget and historical variables are optional - missing or empty variables result in null values instead of calculation errors
+- Support partial forecasts when only some variables are configured
 
 #### SEED Nodes
 - Provide time-series dependencies between calculations
@@ -62,6 +66,26 @@ User Graph → Data Validation → Tree Conversion → Monthly Calculation → R
 - Processes each month sequentially from forecast start to end date
 - Maintains calculation cache for performance optimization
 - Stores monthly results for each metric node
+
+### 4. Graceful Error Handling for Missing Variables
+
+#### METRIC Node Behavior
+When budget or historical variables are not configured for a METRIC node:
+- **Budget Calculation**: Returns `null` when `budgetVariableId` is empty
+- **Historical Calculation**: Returns `null` when `historicalVariableId` is empty
+- **Forecast Calculation**: Falls back to budget variable if available, otherwise returns `null`
+- **Warning Logs**: Missing variables generate warnings but do not halt calculation
+
+#### SEED Node Behavior
+When the connected metric has no historical variable:
+- **First Month**: Returns `null` for historical lookup instead of throwing error
+- **Subsequent Months**: Uses previous month's calculated results normally
+- **Graceful Degradation**: Allows forecasts to continue with partial data
+
+#### Validation Changes
+- Graph validation now generates **warnings** instead of **errors** for missing variables
+- Calculations proceed even with incomplete variable configuration
+- Users receive informative warnings about missing data in calculation results
 
 ## Error Handling
 
@@ -175,6 +199,27 @@ CREATE TABLE forecast_calculation_results (
 - Lazy loading of variable data
 - Efficient date range filtering
 - Minimal data transformation overhead
+
+## Node Configuration Features
+
+### Enhanced Node Attributes
+
+All node types now support enhanced configuration options for better user experience:
+
+#### Variable Selection with Grouping
+- Variable dropdowns automatically group variables by type (ACTUAL, BUDGET, INPUT, UNKNOWN)
+- Provides better organization and easier selection in large variable datasets
+- Maintains alphabetical ordering within each group
+
+#### Node Labeling
+- **DATA Nodes**: Custom names for better identification (`name` field)
+- **CONSTANT Nodes**: Custom names alongside values (`name` field) 
+- **METRIC Nodes**: Descriptive labels for calculation outputs (`label` field)
+
+#### Persistence
+- All node attributes are persisted in the JSONB `attributes` field
+- Frontend Zustand store maintains real-time state
+- Changes are saved to the database via the forecast graph API
 
 ## Usage Examples
 

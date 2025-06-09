@@ -57,6 +57,10 @@ export class CalculationEngine implements ICalculationEngineService {
       this.logger.log(`[CalculationEngine] Period: ${forecastStartDate.toISOString()} to ${forecastEndDate.toISOString()}`);
       this.logger.log(`[CalculationEngine] Processing ${trees.length} calculation trees`);
 
+      // Order trees by dependencies to handle cross-tree references
+      const orderedTrees = this.orderTreesByDependencies(trees);
+      this.logger.log(`[CalculationEngine] Tree processing order: [${orderedTrees.map(t => t.rootMetricNodeId).join(', ')}]`);
+
       const context: CalculationContext = {
         variables,
         forecastStartDate,
@@ -67,11 +71,11 @@ export class CalculationEngine implements ICalculationEngineService {
 
       const metrics: MetricCalculationResult[] = [];
 
-      for (let i = 0; i < trees.length; i++) {
-        const tree = trees[i];
-        this.logger.log(`[CalculationEngine] Processing tree ${i + 1}/${trees.length} (metric: ${tree.rootMetricNodeId})`);
+      for (let i = 0; i < orderedTrees.length; i++) {
+        const tree = orderedTrees[i];
+        this.logger.log(`[CalculationEngine] Processing tree ${i + 1}/${orderedTrees.length} (metric: ${tree.rootMetricNodeId})`);
         
-        const metricResult = await this.calculateMetricTree(tree, context, trees);
+        const metricResult = await this.calculateMetricTree(tree, context, orderedTrees);
         metrics.push(metricResult);
       }
 
@@ -311,8 +315,8 @@ export class CalculationEngine implements ICalculationEngineService {
         if (node.children.length > 0) {
           return this.evaluateNode(node.children[0], targetDate, calculationType, context, allTrees);
         }
-        // Fallback to budget variable if no children
-        if (metricAttributes.budgetVariableId) {
+        // Fallback to budget variable if no children and budget variable is configured
+        if (metricAttributes.budgetVariableId && metricAttributes.budgetVariableId.trim() !== '') {
           return this.variableDataService.getVariableValueForMonth(
             metricAttributes.budgetVariableId,
             targetDate,
@@ -327,8 +331,8 @@ export class CalculationEngine implements ICalculationEngineService {
           // Use calculated value from children
           return this.evaluateNode(node.children[0], targetDate, calculationType, context, allTrees);
         }
-        // Use budget variable
-        if (metricAttributes.budgetVariableId) {
+        // Use budget variable if configured
+        if (metricAttributes.budgetVariableId && metricAttributes.budgetVariableId.trim() !== '') {
           return this.variableDataService.getVariableValueForMonth(
             metricAttributes.budgetVariableId,
             targetDate,
@@ -343,8 +347,8 @@ export class CalculationEngine implements ICalculationEngineService {
           // Use calculated value from children
           return this.evaluateNode(node.children[0], targetDate, calculationType, context, allTrees);
         }
-        // Use historical variable
-        if (metricAttributes.historicalVariableId) {
+        // Use historical variable if configured
+        if (metricAttributes.historicalVariableId && metricAttributes.historicalVariableId.trim() !== '') {
           return this.variableDataService.getVariableValueForMonth(
             metricAttributes.historicalVariableId,
             targetDate,
@@ -386,7 +390,7 @@ export class CalculationEngine implements ICalculationEngineService {
       const referencedMetricTree = allTrees?.find(tree => tree.rootMetricNodeId === seedAttributes.sourceMetricId);
       if (referencedMetricTree) {
         const metricNodeData = referencedMetricTree.tree.nodeData as MetricNodeAttributes;
-        if (metricNodeData.historicalVariableId) {
+        if (metricNodeData.historicalVariableId && metricNodeData.historicalVariableId.trim() !== '') {
           this.logger.log(`[CalculationEngine] - Looking up historical variable: ${metricNodeData.historicalVariableId}`);
           
           const value = this.variableDataService.getVariableValueForMonth(metricNodeData.historicalVariableId, prevMonthDate, context.variables);
@@ -395,10 +399,11 @@ export class CalculationEngine implements ICalculationEngineService {
             this.logger.log(`[CalculationEngine] - SEED first month historical value from ${metricNodeData.historicalVariableId}: ${value}`);
             return value;
           } else {
-            // Provide detailed error message for missing historical data
+            // Provide detailed warning message for missing historical data but don't throw error
             const historicalVariable = context.variables.find(v => v.id === metricNodeData.historicalVariableId);
             if (!historicalVariable) {
-              throw new Error(`Historical variable ${metricNodeData.historicalVariableId} not found. Please ensure the variable exists and data is loaded.`);
+              this.logger.warn(`[CalculationEngine] - Historical variable ${metricNodeData.historicalVariableId} not found - using null value`);
+              return null;
             }
             
             // Extract available dates from the variable's timeSeries
@@ -425,10 +430,12 @@ export class CalculationEngine implements ICalculationEngineService {
               ? availableDates.slice(0, 10).join(', ') + (availableDates.length > 10 ? ` (and ${availableDates.length - 10} more)` : '')
               : 'No valid dates found in variable data';
             
-            throw new Error(`Historical data for ${expectedDate} not found in variable '${typedVariable.name}' (${metricNodeData.historicalVariableId}). Available dates: ${datesDisplay}. Please ensure historical data exists for the month prior to the forecast start date (${expectedDate}), or adjust your forecast start date to begin after the latest available historical data.`);
+            this.logger.warn(`[CalculationEngine] - Historical data for ${expectedDate} not found in variable '${typedVariable.name}' (${metricNodeData.historicalVariableId}). Available dates: ${datesDisplay} - using null value`);
+            return null;
           }
         } else {
-          throw new Error(`Metric node ${seedAttributes.sourceMetricId} has no historical variable configured. Please configure a historical variable for this metric.`);
+          this.logger.warn(`[CalculationEngine] - Metric node ${seedAttributes.sourceMetricId} has no historical variable configured - using null value`);
+          return null;
         }
       } else {
         throw new Error(`Referenced metric node ${seedAttributes.sourceMetricId} not found in calculation trees.`);
@@ -511,5 +518,129 @@ export class CalculationEngine implements ICalculationEngineService {
 
   private normalizeToFirstOfMonth(date: Date): Date {
     return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+
+  /**
+   * Orders calculation trees by their dependencies to ensure that referenced
+   * metrics are calculated before metrics that depend on them via SEED nodes
+   */
+  private orderTreesByDependencies(trees: readonly CalculationTree[]): CalculationTree[] {
+    this.logger.log('[CalculationEngine] Analyzing tree dependencies');
+    
+    // Build dependency map: treeId -> [dependsOnTreeIds]
+    const dependencies = this.analyzeCrossTreeDependencies(trees);
+    
+    // Log dependencies for debugging
+    dependencies.forEach((deps, treeId) => {
+      if (deps.length > 0) {
+        this.logger.log(`[CalculationEngine] Tree ${treeId} depends on: [${deps.join(', ')}]`);
+      }
+    });
+    
+    // Perform topological sort
+    const ordered = this.topologicalSortTrees(trees, dependencies);
+    
+    this.logger.log('[CalculationEngine] Dependency analysis complete');
+    return ordered;
+  }
+
+  /**
+   * Analyzes cross-tree dependencies by finding SEED nodes that reference
+   * other metric trees
+   */
+  private analyzeCrossTreeDependencies(trees: readonly CalculationTree[]): Map<string, string[]> {
+    const dependencies = new Map<string, string[]>();
+    
+    // Initialize all trees with empty dependencies
+    trees.forEach(tree => {
+      dependencies.set(tree.rootMetricNodeId, []);
+    });
+    
+    // Find SEED nodes and their cross-tree references
+    trees.forEach(tree => {
+      const seedNodes = this.findSeedNodesInTree(tree.tree);
+      const crossTreeDeps: string[] = [];
+      
+      seedNodes.forEach(seedNode => {
+        const seedData = seedNode.nodeData as SeedNodeAttributes;
+        if (seedData.sourceMetricId && seedData.sourceMetricId !== tree.rootMetricNodeId) {
+          // This is a cross-tree dependency
+          if (!crossTreeDeps.includes(seedData.sourceMetricId)) {
+            crossTreeDeps.push(seedData.sourceMetricId);
+          }
+        }
+      });
+      
+      dependencies.set(tree.rootMetricNodeId, crossTreeDeps);
+    });
+    
+    return dependencies;
+  }
+
+  /**
+   * Recursively finds all SEED nodes in a calculation tree
+   */
+  private findSeedNodesInTree(node: CalculationTreeNode): CalculationTreeNode[] {
+    const seedNodes: CalculationTreeNode[] = [];
+    
+    if (node.nodeType === 'SEED') {
+      seedNodes.push(node);
+    }
+    
+    // Recursively search children
+    node.children.forEach(child => {
+      seedNodes.push(...this.findSeedNodesInTree(child));
+    });
+    
+    return seedNodes;
+  }
+
+  /**
+   * Performs topological sort on trees based on their dependencies
+   * Throws error if circular dependencies are detected
+   */
+  private topologicalSortTrees(
+    trees: readonly CalculationTree[], 
+    dependencies: Map<string, string[]>
+  ): CalculationTree[] {
+    const sorted: CalculationTree[] = [];
+    const visited = new Set<string>();
+    const visiting = new Set<string>(); // For cycle detection
+    
+    const visit = (treeId: string): void => {
+      if (visiting.has(treeId)) {
+        throw new Error(`Circular dependency detected involving metric: ${treeId}`);
+      }
+      
+      if (visited.has(treeId)) {
+        return; // Already processed
+      }
+      
+      visiting.add(treeId);
+      
+      // Visit all dependencies first
+      const deps = dependencies.get(treeId) || [];
+      deps.forEach(depId => {
+        visit(depId);
+      });
+      
+      visiting.delete(treeId);
+      visited.add(treeId);
+      
+      // Add this tree to sorted list
+      const tree = trees.find(t => t.rootMetricNodeId === treeId);
+      if (tree) {
+        sorted.push(tree);
+      }
+    };
+    
+    // Visit all trees
+    trees.forEach(tree => {
+      if (!visited.has(tree.rootMetricNodeId)) {
+        visit(tree.rootMetricNodeId);
+      }
+    });
+    
+    return sorted;
   }
 } 

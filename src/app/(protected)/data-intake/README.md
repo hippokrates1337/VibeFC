@@ -54,9 +54,11 @@ The module supports three types of variables:
 ### Import Management
 
 When importing data, users can:
-- **Add as New**: Add imported variables as new entries
-- **Update Existing**: Update existing variables with new time series data
-- **Skip**: Ignore variables from the import
+- **Add as New**: Add imported variables as new entries (creates new variables in backend database)
+- **Update Existing**: Update existing variables with new time series data (updates existing variables in backend database via PUT API)
+- **Skip**: Ignore variables from the import (no backend action taken)
+
+All import actions maintain synchronization between the frontend Zustand store and the backend database.
 
 ## User Interface
 
@@ -122,6 +124,7 @@ Variable data management combines local state with backend synchronization:
 - **Fetching Variables**: When data for the selected organization is needed and not available locally, the application fetches it via a `GET` request to `{NEXT_PUBLIC_BACKEND_URL}/data-intake/variables/{userId}`. This requires user authentication (JWT token). The `variableStore` manages the loading and error states for this operation.
 - **Saving New Variables**: Variables added via the CSV import modal (action: 'add') are sent to the backend via a `POST` request, likely to an endpoint like `/api/data-intake/variables` (handled by `api-hooks.ts`). This persists new variables server-side.
 - **Updates/Deletions**: Variable updates (name, type, values) and deletions performed in the data table trigger API calls (e.g., `PUT`, `DELETE`) to update the backend, managed by `api-hooks.ts`. The local Zustand store is updated optimistically or upon successful API response.
+- **Import Updates**: When users select "update existing" during CSV import, the system sends the updated variable data to the backend via `PUT /data-intake/variables` to ensure database persistence.
 
 ## Component Structure
 
