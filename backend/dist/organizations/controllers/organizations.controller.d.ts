@@ -13,7 +13,7 @@ export declare class OrganizationsController {
     create(req: RequestWithUser, createOrganizationDto: CreateOrganizationDto): Promise<OrganizationDto>;
     findAll(req: RequestWithUser): Promise<OrganizationDto[]>;
     findOne(orgId: string, req: RequestWithUser): Promise<OrganizationDto>;
-    update(orgId: string, updateOrganizationDto: UpdateOrganizationDto): Promise<void>;
-    remove(orgId: string): Promise<void>;
+    update(orgId: string, updateOrganizationDto: UpdateOrganizationDto, req: RequestWithUser): Promise<void>;
+    remove(orgId: string, req: RequestWithUser): Promise<void>;
 }
 export {};

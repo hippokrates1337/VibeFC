@@ -132,6 +132,16 @@ export class SupabaseService {
           return this.supabaseClient;
         } else {
           this.logger.warn('Test environment but no user in request - creating anonymous client');
+          
+          // Create an anonymous client for test environment without user
+          this.supabaseClient = createClient(supabaseUrl, keyToUse, {
+            auth: {
+              autoRefreshToken: false,
+              persistSession: false,
+            },
+          });
+          
+          return this.supabaseClient;
         }
       }
       

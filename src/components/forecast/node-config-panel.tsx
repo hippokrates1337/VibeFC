@@ -23,7 +23,7 @@ import {
   SeedNodeAttributes,
   ForecastNodeClient
 } from '@/lib/store/forecast-graph-store';
-import { useVariableStore } from '@/lib/store/variables';
+import { useVariableStore, Variable } from '@/lib/store/variables';
 import { X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toggle } from '@/components/ui/toggle';
@@ -32,6 +32,95 @@ interface NodeConfigPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+// Helper component for grouped variable selection
+interface GroupedVariableSelectProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  id?: string;
+  disabled?: boolean;
+  variables: Variable[];
+}
+
+const GroupedVariableSelect: React.FC<GroupedVariableSelectProps> = ({
+  value,
+  onValueChange,
+  placeholder,
+  id,
+  disabled = false,
+  variables
+}) => {
+  // Group variables by type with proper ordering
+  const groupedVariables = useMemo(() => {
+    const groups = variables.reduce((acc, variable) => {
+      const type = variable.type;
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(variable);
+      return acc;
+    }, {} as Record<string, Variable[]>);
+
+    // Sort variables within each group by name
+    Object.keys(groups).forEach(type => {
+      groups[type].sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    return groups;
+  }, [variables]);
+
+  const typeOrder = ['ACTUAL', 'BUDGET', 'INPUT', 'UNKNOWN'];
+  const typeLabels = {
+    ACTUAL: 'Actual Data',
+    BUDGET: 'Budget Data', 
+    INPUT: 'Input Data',
+    UNKNOWN: 'Other Data'
+  };
+
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger 
+        id={id} 
+        className={`bg-slate-700 border-slate-600 text-slate-200 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        disabled={disabled}
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent className="bg-slate-800 border-slate-600">
+        {variables.length > 0 ? (
+          typeOrder.map(type => {
+            const typeVariables = groupedVariables[type];
+            if (!typeVariables || typeVariables.length === 0) return null;
+            
+            return (
+              <div key={type}>
+                {/* Group header */}
+                <div className="px-2 py-1.5 text-xs font-medium text-slate-400 bg-slate-700/50 border-b border-slate-600">
+                  {typeLabels[type as keyof typeof typeLabels]}
+                </div>
+                {/* Group items */}
+                {typeVariables.map(variable => (
+                  <SelectItem 
+                    key={variable.id} 
+                    value={variable.id} 
+                    className="text-slate-200 hover:bg-slate-700 pl-4"
+                  >
+                    {variable.name}
+                  </SelectItem>
+                ))}
+              </div>
+            );
+          })
+        ) : (
+          <SelectItem value="no-vars" disabled className="text-slate-400">
+            No variables available for this organization
+          </SelectItem>
+        )}
+      </SelectContent>
+    </Select>
+  );
+};
 
 // Custom hook for debounced store updates
 const useDebouncedUpdate = (delay: number = 300) => {
@@ -169,27 +258,13 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         
         <div className="space-y-1">
           <label htmlFor="variableId" className="text-sm font-medium text-slate-300">Variable</label>
-          <Select 
-            value={localFormData.variableId || ''} 
+          <GroupedVariableSelect
+            id="variableId"
+            value={localFormData.variableId || ''}
             onValueChange={(value) => handleInputChange('variableId', value)}
-          >
-            <SelectTrigger id="variableId" className="bg-slate-700 border-slate-600 text-slate-200">
-              <SelectValue placeholder="Select variable" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
-              {organizationVariables.length > 0 ? (
-                organizationVariables.map(variable => (
-                  <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
-                    {variable.name}
-                  </SelectItem>
-                ))
-              ) : (
-                <SelectItem value="no-vars" disabled className="text-slate-400">
-                  {selectedOrgIdForVariables ? 'No variables for this organization' : 'Please select an organization first'}
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+            placeholder="Select variable"
+            variables={organizationVariables}
+          />
         </div>
         
         <div className="space-y-1">
@@ -209,15 +284,26 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const renderConstantNodeForm = (node: ForecastNodeClient) => {
     const data = node.data as ConstantNodeAttributes;
     return (
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-300">Value</label>
-        <Input 
-          type="number" 
-          value={localFormData.value || 0}
-          onChange={(e) => handleInputChange('value', parseFloat(e.target.value) || 0)}
-          className="bg-slate-700 border-slate-600 text-slate-200"
-        />
-      </div>
+      <>
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300">Name</label>
+          <Input 
+            value={localFormData.name || ''}
+            onChange={(e) => handleInputChange('name', e.target.value)}
+            placeholder="Constant node name"
+            className="bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300">Value</label>
+          <Input 
+            type="number" 
+            value={localFormData.value || 0}
+            onChange={(e) => handleInputChange('value', parseFloat(e.target.value) || 0)}
+            className="bg-slate-700 border-slate-600 text-slate-200"
+          />
+        </div>
+      </>
     );
   };
 
@@ -276,42 +362,24 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-300">Budget Variable</label>
-          <Select 
-            value={localFormData.budgetVariableId || ''} 
+          <GroupedVariableSelect
+            value={localFormData.budgetVariableId || ''}
             onValueChange={(value) => handleInputChange('budgetVariableId', value)}
+            placeholder="Select budget variable"
             disabled={isCalculated}
-          >
-            <SelectTrigger className={`bg-slate-700 border-slate-600 text-slate-200 ${isCalculated ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              <SelectValue placeholder="Select budget variable" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
-              {organizationVariables.map(variable => (
-                <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
-                  {variable.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            variables={organizationVariables}
+          />
         </div>
         
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-300">Historical Variable</label>
-          <Select 
-            value={localFormData.historicalVariableId || ''} 
+          <GroupedVariableSelect
+            value={localFormData.historicalVariableId || ''}
             onValueChange={(value) => handleInputChange('historicalVariableId', value)}
+            placeholder="Select historical variable"
             disabled={isCalculated}
-          >
-            <SelectTrigger className={`bg-slate-700 border-slate-600 text-slate-200 ${isCalculated ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              <SelectValue placeholder="Select historical variable" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
-              {organizationVariables.map(variable => (
-                <SelectItem key={variable.id} value={variable.id} className="text-slate-200 hover:bg-slate-700">
-                  {variable.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            variables={organizationVariables}
+          />
         </div>
       </>
     );
@@ -319,29 +387,39 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
   const renderSeedNodeForm = (node: ForecastNodeClient) => {
     const data = node.data as SeedNodeAttributes;
+    
+    // Get all METRIC nodes from the current forecast graph (excluding the current node)
+    const metricNodes = nodes.filter(n => n.type === 'METRIC' && n.id !== node.id);
+    
     return (
       <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-300">Source Metric</label>
+        <label className="text-sm font-medium text-slate-300">Source Metric Node</label>
         <Select 
           value={localFormData.sourceMetricId || ''} 
           onValueChange={(value) => handleInputChange('sourceMetricId', value)}
         >
           <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
-            <SelectValue placeholder="Select source metric" />
+            <SelectValue placeholder="Select source metric node" />
           </SelectTrigger>
           <SelectContent className="bg-slate-800 border-slate-600">
-            {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').map(metric => (
-              <SelectItem key={metric.id} value={metric.id} className="text-slate-200 hover:bg-slate-700">
-                {metric.name}
-              </SelectItem>
-            ))}
-            {organizationVariables.filter(v => v.type === 'ACTUAL' || v.type === 'BUDGET').length === 0 && (
-                <SelectItem value="no-metrics" disabled className="text-slate-400">
-                  No metrics available for this organization
+            {metricNodes.length > 0 ? (
+              metricNodes.map(metricNode => (
+                <SelectItem key={metricNode.id} value={metricNode.id} className="text-slate-200 hover:bg-slate-700">
+                  {(metricNode.data as MetricNodeAttributes)?.label || `Metric ${metricNode.id.slice(0, 8)}...`}
                 </SelectItem>
+              ))
+            ) : (
+              <SelectItem value="no-metrics" disabled className="text-slate-400">
+                No metric nodes available in this forecast
+              </SelectItem>
             )}
           </SelectContent>
         </Select>
+        {metricNodes.length === 0 && (
+          <p className="text-xs text-slate-400 mt-1">
+            Create a METRIC node first to use as a source for this SEED node.
+          </p>
+        )}
       </div>
     );
   };

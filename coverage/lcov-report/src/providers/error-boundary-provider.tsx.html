@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">39.18% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>29/74</span>
+                <span class='fraction'>37/74</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">66.66% </span>
+                <span class="strong">80% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>2/3</span>
+                <span class='fraction'>4/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">40% </span>
+                <span class="strong">80% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>2/5</span>
+                <span class='fraction'>4/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">39.18% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>29/74</span>
+                <span class='fraction'>37/74</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line medium'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -151,24 +151,24 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">93x</span>
-<span class="cline-any cline-yes">93x</span>
-<span class="cline-any cline-yes">93x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
+<span class="cline-any cline-yes">114x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">110x</span>
+<span class="cline-any cline-yes">130x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -206,9 +206,9 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-yes">110x</span>
-<span class="cline-any cline-yes">110x</span>
-<span class="cline-any cline-yes">110x</span>
+<span class="cline-any cline-yes">130x</span>
+<span class="cline-any cline-yes">130x</span>
+<span class="cline-any cline-yes">130x</span>
 <span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">"use client"
 &nbsp;
 import React, { Component, ErrorInfo, ReactNode } from 'react';
@@ -228,17 +228,17 @@ export class ErrorBoundaryProvider extends Component&lt;Props, State&gt; {
     hasError: false,
   };
 &nbsp;
-  public static <span class="fstat-no" title="function not covered" >getDerivedStateFromError(error: Error): State {</span>
-<span class="cstat-no" title="statement not covered" >    // Update state so the next render will show the fallback UI</span>
-<span class="cstat-no" title="statement not covered" >    return { hasError: true, error };</span>
-<span class="cstat-no" title="statement not covered" >  }</span>
+  public static getDerivedStateFromError(error: Error): State {
+    // Update state so the next render will show the fallback UI
+    return { hasError: true, error };
+  }
 &nbsp;
-  public <span class="fstat-no" title="function not covered" >componentDidCatch(error: Error, errorInfo: ErrorInfo) {</span>
-<span class="cstat-no" title="statement not covered" >    console.error('ErrorBoundary caught an error:', error, errorInfo);</span>
-<span class="cstat-no" title="statement not covered" >    </span>
-<span class="cstat-no" title="statement not covered" >    // You can log the error to an error reporting service here</span>
-<span class="cstat-no" title="statement not covered" >    // Example: logErrorToService(error, errorInfo);</span>
-<span class="cstat-no" title="statement not covered" >  }</span>
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
+    // You can log the error to an error reporting service here
+    // Example: logErrorToService(error, errorInfo);
+  }
 &nbsp;
   public render() {
     if (this.state.hasError) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
@@ -289,7 +289,7 @@ export class ErrorBoundaryProvider extends Component&lt;Props, State&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-06-01T20:28:39.059Z
+                at 2025-06-10T10:52:53.396Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

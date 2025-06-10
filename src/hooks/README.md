@@ -1,161 +1,100 @@
 # Custom Hooks (`src/hooks/`)
 
-This directory is reserved for reusable custom React hooks that provide shared functionality across the application.
+This directory follows a **distributed hook architecture** where hooks are co-located with their related features or components for better encapsulation.
 
-**Current Status**: This directory is currently empty, following a distributed hook architecture where hooks are co-located with their related features or UI components.
+**Current Status**: This directory is intentionally empty. All custom hooks are organized as follows:
 
-## Overview
+## Hook Organization
 
-Custom hooks in this directory follow React best practices:
-- **Naming Convention**: All hooks start with `use` prefix (e.g., `useToast`)
-- **Reusability**: Hooks are designed to be used across multiple components
-- **Single Responsibility**: Each hook has a focused, specific purpose
-- **TypeScript**: Full type safety with proper interfaces and return types
+### UI Component Hooks
+**Location**: `@/components/ui/`
+- **`use-toast`**: Global toast notification management
 
-## Available Hooks
-
-Currently, this directory contains no global hooks. All custom hooks are either:
-- **Co-located with features**: For feature-specific functionality
-- **Part of UI components**: For component-related state management (e.g., `@/components/ui/use-toast`)
-- **Store-based**: Using Zustand stores in `@/lib/store/`
-
-### Toast Hook (Relocated)
-The toast notification hook has been moved to `@/components/ui/use-toast.ts` to be co-located with the toast UI components for better organization.
-
-**Usage**:
 ```typescript
 import { useToast } from '@/components/ui/use-toast';
 
-function MyComponent() {
-  const { toast } = useToast();
-  
-  const showSuccess = () => {
-    toast({
-      title: "Success!",
-      description: "Your action was completed successfully.",
-      variant: "default"
-    });
-  };
-  
-  const showError = () => {
-    toast({
-      title: "Error",
-      description: "Something went wrong.",
-      variant: "destructive"
-    });
-  };
-  
-  return (
-    <div>
-      <button onClick={showSuccess}>Show Success</button>
-      <button onClick={showError}>Show Error</button>
-    </div>
-  );
-}
+const { toast } = useToast();
+toast({ title: "Success!", description: "Action completed." });
 ```
 
-## Hook Architecture
+### Store Hooks
+**Location**: `@/lib/store/`
 
-This directory follows a distributed hook architecture:
+#### Forecast Store (`forecast-graph-store.ts`)
+Complete forecast graph state management with 30+ specialized hooks:
+- **Data Access**: `useForecastNodes`, `useForecastEdges`, `useForecastMetadata`
+- **State**: `useIsForecastDirty`, `useIsForecastLoading`, `useSelectedNode`
+- **Actions**: `useAddNode`, `useDeleteNode`, `useDuplicateNodeWithEdges`
+- **Validation**: `useGraphValidation`, `useValidateGraph`
+- **Calculation**: `useCalculationResults`, `useCalculateForecast`
 
-### Global Hooks (Future)
-- Reserved for truly cross-feature, reusable hooks
-- Should have minimal dependencies
-- Must be well-documented and tested
+#### Variable Store (`variables.ts`)
+Variable data management:
+- **`useVariableStore`**: Main store access
+- **`useFetchVariables`**: Data fetching
+- **`useIsVariablesLoading`**, **`useVariableError`**: Loading states
+- **`useSetSelectedOrganizationId`**: Organization context
 
-### Feature-Specific Hooks
-- Co-located with their related components/features
-- Contain business logic specific to that feature
-- Easier to maintain and modify
-
-### UI Component Hooks
-- Co-located with UI components in `@/components/ui/`
-- Handle component-specific state and interactions
-- Example: `use-toast` for toast notifications
-
-## Feature-Specific Hooks
-
-Some hooks are co-located with their related features for better encapsulation:
-
-### Data Intake Hooks (`src/app/(protected)/data-intake/_components/api-hooks.ts`)
-- **`useVariableApi`**: Manages variable CRUD operations with backend API
-- **`useCsvProcessor`**: Handles CSV file parsing and data processing
-- **Purpose**: These hooks are specific to the data intake feature and contain business logic for variable management
-
-### Store Hooks (`src/lib/store/`)
-The application uses Zustand for state management with dedicated store hooks:
-
-#### Forecast Store Hooks (`forecast-graph-store.ts`)
-- **`useForecastGraphStore`**: Main store for forecast graph state
-- **`useForecastNodes`**, **`useForecastEdges`**: Access graph elements
-- **`useForecastMetadata`**, **`useIsForecastDirty`**: Forecast metadata and state
-- **`useAddNode`**, **`useDeleteNode`**: Node manipulation actions
-- **`useDuplicateNodeWithEdges`**: Advanced node operations
-
-#### Variable Store Hooks (`variables.ts`)
-- **`useVariableStore`**: Main store for variable data management
-- **`useIsVariablesLoading`**, **`useVariableError`**: Loading and error states
-- **`useFetchVariables`**: Data fetching actions
-- **`useSetSelectedOrganizationId`**: Organization context management
-
-#### Organization Store Hooks (`organization.ts`)
+#### Organization Store (`organization.ts`)
 - **`useOrganizationStore`**: Organization selection and management
 
-### Benefits of Co-location
-- **Feature Encapsulation**: Keeps related code together
-- **Reduced Coupling**: Avoids unnecessary dependencies between features
-- **Easier Maintenance**: Changes to feature logic don't affect global hooks
-- **Store Organization**: Zustand stores provide focused state management for specific domains
+### Feature-Specific Hooks
+**Location**: Co-located with features
+
+#### Data Intake (`src/app/(protected)/data-intake/_components/api-hooks.ts`)
+- **`useVariableApi`**: Variable CRUD operations with backend
+- **`useCsvProcessor`**: CSV file parsing and validation
+
+## Architecture Benefits
+
+### Co-location Strategy
+- **Feature Encapsulation**: Related hooks stay with their features
+- **Reduced Coupling**: Avoids global dependencies
+- **Easier Maintenance**: Changes don't affect unrelated code
+- **Better Organization**: Clear ownership and responsibility
+
+### Store-Based Hooks
+- **Focused State Management**: Domain-specific Zustand stores
+- **Type Safety**: Full TypeScript support with selectors
+- **Performance**: Granular subscriptions with `useShallow`
+- **Developer Experience**: Intuitive hook naming and exports
 
 ## Adding New Hooks
 
-When creating new custom hooks:
+### Placement Guidelines
+1. **Global UI hooks** → `@/components/ui/`
+2. **Feature-specific hooks** → Co-locate with feature components
+3. **Store hooks** → `@/lib/store/` with related store
+4. **Truly global hooks** → `@/hooks/` (rare, consider alternatives first)
 
-1. **Determine Location**:
-   - Use `src/hooks/` for truly reusable, cross-feature hooks (rare)
-   - Use `src/components/ui/` for UI component-related hooks
-   - Co-locate with features for feature-specific hooks (recommended)
+### Naming Convention
+- Start with `use` prefix
+- Be descriptive: `useFetchVariables`, `useCalculationResults`
+- Group related hooks: `useIsLoading`, `useIsFetching`, `useError`
 
-2. **Follow Naming Conventions**:
-   - Start with `use` prefix
-   - Use descriptive names (e.g., `useApiData`, `useLocalStorage`)
+## Integration Points
 
-3. **Include Proper Types**:
-   ```typescript
-   interface UseMyHookReturn {
-     data: MyData | null;
-     loading: boolean;
-     error: string | null;
-     refetch: () => void;
-   }
-   
-   export function useMyHook(): UseMyHookReturn {
-     // Implementation
-   }
-   ```
+### Authentication
+```typescript
+import { useAuth } from '@/providers/auth-provider';
+const { user, signOut } = useAuth();
+```
 
-4. **Handle Side Effects**:
-   - Use `useEffect` for cleanup
-   - Implement proper dependency arrays
-   - Handle component unmounting
+### Organizations
+```typescript
+import { useOrganizationStore } from '@/lib/store/organization';
+const currentOrg = useOrganizationStore(state => state.currentOrganization);
+```
 
-5. **Document Usage**:
-   - Include JSDoc comments
-   - Provide usage examples
-   - Document parameters and return values
+### Variables
+```typescript
+import { useVariableStore, useFetchVariables } from '@/lib/store/variables';
+const variables = useVariableStore(state => state.variables);
+const fetchVariables = useFetchVariables();
+```
 
-## Best Practices
-
-- **Separation of Concerns**: Keep hooks focused on a single responsibility
-- **Error Handling**: Implement proper error boundaries and fallbacks
-- **Performance**: Use `useCallback` and `useMemo` when appropriate
-- **Testing**: Write unit tests for complex hook logic
-- **Dependencies**: Minimize external dependencies and clearly document them
-
-## Integration with UI Components
-
-Hooks in this directory are designed to work seamlessly with:
-- **shadcn/ui components**: Especially toast and notification components
-- **Form components**: For validation and state management
-- **Data fetching**: Integration with API services and state stores
-- **Authentication**: User session and permission management 
+### Toast Notifications
+```typescript
+import { useToast } from '@/components/ui/use-toast';
+const { toast } = useToast();
+``` 

@@ -7,6 +7,7 @@ import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../../dto/for
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto, ForecastNodeKind } from '../../dto/forecast-node.dto';
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../../dto/forecast-edge.dto';
 import { NotFoundException } from '@nestjs/common';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 
 describe('ForecastController', () => {
   let controller: ForecastController;
@@ -45,7 +46,7 @@ describe('ForecastController', () => {
     id: testNodeId,
     forecastId: testForecastId,
     kind: ForecastNodeKind.CONSTANT,
-    attributes: { value: 100 },
+    attributes: { name: 'Test Node', value: 100 },
     position: { x: 100, y: 100 },
     createdAt: new Date('2023-01-01T00:00:00.000Z'),
     updatedAt: new Date('2023-01-01T00:00:00.000Z'),
@@ -95,7 +96,12 @@ describe('ForecastController', () => {
         { provide: ForecastNodeService, useValue: mockNodeService },
         { provide: ForecastEdgeService, useValue: mockEdgeService },
       ],
-    }).compile();
+    })
+    .overrideGuard(JwtAuthGuard)
+    .useValue({
+      canActivate: jest.fn(() => true), // Mock the guard to always allow access
+    })
+    .compile();
 
     controller = module.get<ForecastController>(ForecastController);
     forecastService = module.get<ForecastService>(ForecastService);
@@ -122,7 +128,7 @@ describe('ForecastController', () => {
         
         const result = await controller.create(mockRequest as any, createDto);
         
-        expect(forecastService.create).toHaveBeenCalledWith(testUserId, createDto);
+        expect(forecastService.create).toHaveBeenCalledWith(testUserId, createDto, mockRequest);
         expect(result).toEqual(mockForecast);
       });
     });
@@ -133,7 +139,7 @@ describe('ForecastController', () => {
         
         const result = await controller.findAll(mockRequest as any, testOrgId);
         
-        expect(forecastService.findAll).toHaveBeenCalledWith(testUserId, testOrgId);
+        expect(forecastService.findAll).toHaveBeenCalledWith(testUserId, testOrgId, mockRequest);
         expect(result).toEqual([mockForecast]);
       });
     });
@@ -144,7 +150,7 @@ describe('ForecastController', () => {
         
         const result = await controller.findOne(mockRequest as any, testForecastId);
         
-        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
         expect(result).toEqual(mockForecast);
       });
 
@@ -164,9 +170,9 @@ describe('ForecastController', () => {
       it('should update a forecast', async () => {
         mockForecastService.update.mockResolvedValue(undefined);
         
-        await controller.update(testForecastId, updateDto);
+        await controller.update(mockRequest as any, testForecastId, updateDto);
         
-        expect(forecastService.update).toHaveBeenCalledWith(testForecastId, updateDto);
+        expect(forecastService.update).toHaveBeenCalledWith(testForecastId, testUserId, updateDto, mockRequest);
       });
     });
 
@@ -174,9 +180,9 @@ describe('ForecastController', () => {
       it('should remove a forecast', async () => {
         mockForecastService.remove.mockResolvedValue(undefined);
         
-        await controller.remove(testForecastId);
+        await controller.remove(mockRequest as any, testForecastId);
         
-        expect(forecastService.remove).toHaveBeenCalledWith(testForecastId);
+        expect(forecastService.remove).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
       });
     });
   });
@@ -187,64 +193,74 @@ describe('ForecastController', () => {
       const createNodeDto: CreateForecastNodeDto = {
         forecastId: testForecastId,
         kind: ForecastNodeKind.CONSTANT,
-        attributes: { value: 100 },
+        attributes: { name: 'Test Node', value: 100 },
         position: { x: 100, y: 100 },
       };
 
       it('should create a new node', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockNodeService.create.mockResolvedValue(mockNode);
         
-        const result = await controller.createNode(testForecastId, createNodeDto);
+        const result = await controller.createNode(mockRequest as any, testForecastId, createNodeDto);
         
-        expect(nodeService.create).toHaveBeenCalledWith(createNodeDto);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(nodeService.create).toHaveBeenCalledWith({ ...createNodeDto, forecastId: testForecastId }, mockRequest);
         expect(result).toEqual(mockNode);
       });
     });
 
     describe('findNodes', () => {
       it('should return an array of nodes for a forecast', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockNodeService.findByForecast.mockResolvedValue([mockNode]);
         
-        const result = await controller.findNodes(testForecastId);
+        const result = await controller.findNodes(mockRequest as any, testForecastId);
         
-        expect(nodeService.findByForecast).toHaveBeenCalledWith(testForecastId);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(nodeService.findByForecast).toHaveBeenCalledWith(testForecastId, mockRequest);
         expect(result).toEqual([mockNode]);
       });
     });
 
     describe('findNode', () => {
       it('should return a single node', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockNodeService.findOne.mockResolvedValue(mockNode);
         
-        const result = await controller.findNode(testNodeId);
+        const result = await controller.findNode(mockRequest as any, testForecastId, testNodeId);
         
-        expect(nodeService.findOne).toHaveBeenCalledWith(testNodeId);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(nodeService.findOne).toHaveBeenCalledWith(testNodeId, mockRequest);
         expect(result).toEqual(mockNode);
       });
     });
 
     describe('updateNode', () => {
       const updateNodeDto: UpdateForecastNodeDto = {
-        attributes: { value: 200 },
+        attributes: { name: 'Updated Node', value: 200 },
         position: { x: 200, y: 200 },
       };
 
       it('should update a node', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockNodeService.update.mockResolvedValue(undefined);
         
-        await controller.updateNode(testNodeId, updateNodeDto);
+        await controller.updateNode(mockRequest as any, testForecastId, testNodeId, updateNodeDto);
         
-        expect(nodeService.update).toHaveBeenCalledWith(testNodeId, updateNodeDto);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(nodeService.update).toHaveBeenCalledWith(testNodeId, updateNodeDto, mockRequest);
       });
     });
 
     describe('removeNode', () => {
       it('should remove a node', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockNodeService.remove.mockResolvedValue(undefined);
         
-        await controller.removeNode(testNodeId);
+        await controller.removeNode(mockRequest as any, testForecastId, testNodeId);
         
-        expect(nodeService.remove).toHaveBeenCalledWith(testNodeId);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(nodeService.remove).toHaveBeenCalledWith(testNodeId, mockRequest);
       });
     });
   });
@@ -259,44 +275,52 @@ describe('ForecastController', () => {
       };
 
       it('should create a new edge', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockEdgeService.create.mockResolvedValue(mockEdge);
         
-        const result = await controller.createEdge(testForecastId, createEdgeDto);
+        const result = await controller.createEdge(mockRequest as any, testForecastId, createEdgeDto);
         
-        expect(edgeService.create).toHaveBeenCalledWith(createEdgeDto);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(edgeService.create).toHaveBeenCalledWith({ ...createEdgeDto, forecastId: testForecastId }, mockRequest);
         expect(result).toEqual(mockEdge);
       });
     });
 
     describe('findEdges', () => {
       it('should return an array of edges for a forecast', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockEdgeService.findByForecast.mockResolvedValue([mockEdge]);
         
-        const result = await controller.findEdges(testForecastId);
+        const result = await controller.findEdges(mockRequest as any, testForecastId);
         
-        expect(edgeService.findByForecast).toHaveBeenCalledWith(testForecastId);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(edgeService.findByForecast).toHaveBeenCalledWith(testForecastId, mockRequest);
         expect(result).toEqual([mockEdge]);
       });
     });
 
     describe('findEdge', () => {
       it('should return a single edge', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockEdgeService.findOne.mockResolvedValue(mockEdge);
         
-        const result = await controller.findEdge(testEdgeId);
+        const result = await controller.findEdge(mockRequest as any, testForecastId, testEdgeId);
         
-        expect(edgeService.findOne).toHaveBeenCalledWith(testEdgeId);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(edgeService.findOne).toHaveBeenCalledWith(testEdgeId, mockRequest);
         expect(result).toEqual(mockEdge);
       });
     });
 
     describe('removeEdge', () => {
       it('should remove an edge', async () => {
+        mockForecastService.findOne.mockResolvedValue(mockForecast);
         mockEdgeService.remove.mockResolvedValue(undefined);
         
-        await controller.removeEdge(testEdgeId);
+        await controller.removeEdge(mockRequest as any, testForecastId, testEdgeId);
         
-        expect(edgeService.remove).toHaveBeenCalledWith(testEdgeId);
+        expect(forecastService.findOne).toHaveBeenCalledWith(testForecastId, testUserId, mockRequest);
+        expect(edgeService.remove).toHaveBeenCalledWith(testEdgeId, mockRequest);
       });
     });
   });

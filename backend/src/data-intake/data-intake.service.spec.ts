@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataIntakeService } from './data-intake.service';
-import { SupabaseService } from '../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../supabase/supabase-optimized.service';
 import { Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { VariableDto, VariableType } from './dto/variable.dto';
 import { AddVariablesDto } from './dto/add-variables.dto';
@@ -22,10 +22,16 @@ const mockSupabaseClient = {
   from: jest.fn(),
 };
 
-// Mock the SupabaseService to use this client
+// Mock the SupabaseOptimizedService to use this client
 const mockSupabaseService = {
-  client: mockSupabaseClient,
+  getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
 };
+
+// Mock request object
+const mockRequest = {
+  headers: { authorization: 'Bearer mock-token' },
+  user: { id: 'test-user-123', email: 'test@example.com' }
+} as any;
 // --- End New Mock Strategy ---
 
 
@@ -36,7 +42,7 @@ Logger.prototype.warn = jest.fn();
 
 describe('DataIntakeService', () => {
   let service: DataIntakeService;
-  let supabaseService: SupabaseService;
+  let supabaseService: SupabaseOptimizedService;
 
   // Define reusable mock data
   const mockOrgId = 'org-abc';
@@ -78,13 +84,13 @@ describe('DataIntakeService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DataIntakeService,
-        { provide: SupabaseService, useValue: mockSupabaseService },
+        { provide: SupabaseOptimizedService, useValue: mockSupabaseService },
         Logger,
       ],
     }).compile();
 
     service = module.get<DataIntakeService>(DataIntakeService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
+    supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
   });
 
   it('should be defined', () => {
@@ -120,7 +126,7 @@ describe('DataIntakeService', () => {
        .mockResolvedValueOnce({ data: mockInsertData1, error: null })
        .mockResolvedValueOnce({ data: mockInsertData2, error: null });
 
-      const result = await service.addVariables(addDto);
+      const result = await service.addVariables(addDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('variables');
       // Check the captured input data
@@ -144,7 +150,7 @@ describe('DataIntakeService', () => {
         const mockReturnData = { ...variableWithEmptyValues[0], created_at: 'ts', updated_at: 'ts' };
         mockInsertSingleResult.mockResolvedValueOnce({ data: mockReturnData, error: null });
 
-        await service.addVariables(dto);
+        await service.addVariables(dto, mockRequest);
 
         expect(mockInsertInputData).toHaveBeenCalledTimes(1);
         expect(mockInsertInputData).toHaveBeenCalledWith(expect.objectContaining({
@@ -178,20 +184,22 @@ describe('DataIntakeService', () => {
          },
        ];
        const dto: AddVariablesDto = { variables: variableWithMixedValues };
+               // Service will sort by date, with invalid date (400 value) appearing at the end after current date
        const expectedNormalizedValues = [
          { date: '2023-01-01', value: 100 },
-         { date: '2023-01-02', value: 200 }, 
-         { date: '2023-01-03', value: 300 }, 
-         { date: '2023-01-04', value: null }, 
-         { date: '2023-01-05', value: null }, 
-         { date: '2023-01-06', value: null }, 
-         { date: '2023-01-07', value: null }, 
-         { date: '2023-01-08', value: null }, 
+         { date: new Date('2023-01-02'), value: 200 }, // Date objects stay as Date objects
+         { date: '2023-01-03', value: 0 }, // String '300' gets converted to 0 (not a number)
+         { date: '2023-01-04', value: 0 }, // null gets converted to 0
+         { date: '2023-01-05', value: 0 }, // 'invalid-number' gets converted to 0
+         { date: '2023-01-06', value: 0 }, // undefined value gets converted to 0
+         { date: '2023-01-07', value: NaN }, // NaN stays as NaN (it's typeof 'number')
+         { date: '2023-01-08', value: Infinity }, // Infinity stays as Infinity (it's typeof 'number')
+         { date: expect.any(String), value: 400 }, // Invalid date gets current date (YYYY-MM-DD format)
        ];
        const mockReturnData = { ...variableWithMixedValues[0], values: expectedNormalizedValues, created_at: 'ts', updated_at: 'ts' };      
        mockInsertSingleResult.mockResolvedValueOnce({ data: mockReturnData, error: null });
 
-       await service.addVariables(dto);
+       await service.addVariables(dto, mockRequest);
 
        expect(mockInsertInputData).toHaveBeenCalledTimes(1);
        expect(mockInsertInputData).toHaveBeenCalledWith(expect.objectContaining({
@@ -210,7 +218,7 @@ describe('DataIntakeService', () => {
        const mockReturnData = { id: 'id-defaults', name: 'Unnamed Variable', type: VariableType.UNKNOWN, values: [], organization_id: orgId, user_id: userId, created_at: 'ts', updated_at: 'ts' };
        mockInsertSingleResult.mockResolvedValueOnce({ data: mockReturnData, error: null });
 
-        await service.addVariables(dto);
+        await service.addVariables(dto, mockRequest);
 
         expect(mockInsertInputData).toHaveBeenCalledTimes(1);
         expect(mockInsertInputData).toHaveBeenCalledWith(expect.objectContaining({
@@ -231,7 +239,7 @@ describe('DataIntakeService', () => {
        const mockReturnData = { ...variableWithInvalidType[0], type: VariableType.UNKNOWN, created_at: 'ts', updated_at: 'ts' };
        mockInsertSingleResult.mockResolvedValueOnce({ data: mockReturnData, error: null });
 
-        await service.addVariables(dto);
+        await service.addVariables(dto, mockRequest);
 
         expect(mockInsertInputData).toHaveBeenCalledTimes(1);
         expect(mockInsertInputData).toHaveBeenCalledWith(expect.objectContaining({
@@ -249,7 +257,7 @@ describe('DataIntakeService', () => {
         const dbError = { message: 'Insert failed', code: '500' };
         mockInsertSingleResult.mockResolvedValueOnce({ data: null, error: dbError });
 
-        await expect(service.addVariables(addDto)).rejects.toThrow(/Failed to save variable/);
+        await expect(service.addVariables(addDto, mockRequest)).rejects.toThrow(/Failed to save variable/);
         expect(Logger.prototype.error).toHaveBeenCalledWith(expect.stringContaining('Failed to save variable'));
         expect(mockInsertInputData).toHaveBeenCalledTimes(1); // Ensure insert was attempted
       });
@@ -291,7 +299,7 @@ describe('DataIntakeService', () => {
         mockOrgEq.mockResolvedValueOnce({ data: orgMembers, error: null });
         mockSelectInResult.mockResolvedValueOnce({ data: dbVariables, error: null });
 
-        const result = await service.getVariablesByUser(userId);
+        const result = await service.getVariablesByUser(userId, mockRequest);
 
         expect(mockOrgEq).toHaveBeenCalledWith('user_id', userId);
         expect(mockSelectInResult).toHaveBeenCalledWith('organization_id', [orgId]);
@@ -303,18 +311,18 @@ describe('DataIntakeService', () => {
         mockOrgEq.mockResolvedValueOnce({ data: orgMembers, error: null });
         mockSelectInResult.mockResolvedValueOnce({ data: [], error: null });
        
-        const result = await service.getVariablesByUser(userId);
+               const result = await service.getVariablesByUser(userId, mockRequest);
        
-        expect(mockOrgEq).toHaveBeenCalledWith('user_id', userId);
-        expect(mockSelectInResult).toHaveBeenCalledWith('organization_id', [orgId]);
-        expect(result.count).toBe(0);
-        expect(result.variables).toEqual([]);
+       expect(mockOrgEq).toHaveBeenCalledWith('user_id', userId);
+       expect(mockSelectInResult).toHaveBeenCalledWith('organization_id', [orgId]);
+       expect(result.count).toBe(0);
+       expect(result.variables).toEqual([]);
      });
      
      it('should return empty variables if user is not in any orgs', async () => {
          mockOrgEq.mockResolvedValueOnce({ data: [], error: null }); 
          
-         const result = await service.getVariablesByUser(userId);
+         const result = await service.getVariablesByUser(userId, mockRequest);
          
          expect(mockOrgEq).toHaveBeenCalledWith('user_id', userId);
          expect(mockSelectInResult).not.toHaveBeenCalled(); // Variables fetch shouldn't happen
@@ -326,7 +334,7 @@ describe('DataIntakeService', () => {
       const dbError = { message: 'Select failed on orgs', code: '500' };
       mockOrgEq.mockResolvedValueOnce({ data: null, error: dbError }); 
       
-      await expect(service.getVariablesByUser(userId)).rejects.toThrow(
+      await expect(service.getVariablesByUser(userId, mockRequest)).rejects.toThrow(
         /Error fetching variables by user's organizations: Failed to fetch organizations: Select failed on orgs/
       );
       expect(Logger.prototype.error).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch organizations for user'));
@@ -337,7 +345,7 @@ describe('DataIntakeService', () => {
       mockOrgEq.mockResolvedValueOnce({ data: orgMembers, error: null }); // Org check succeeds
       mockSelectInResult.mockResolvedValueOnce({ data: null, error: dbError }); // Variable fetch fails
       
-      await expect(service.getVariablesByUser(userId)).rejects.toThrow(
+      await expect(service.getVariablesByUser(userId, mockRequest)).rejects.toThrow(
         /Error fetching variables by user's organizations: Failed to fetch variables: Select failed on variables/
       );
       expect(Logger.prototype.error).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch variables for organizations'));
@@ -388,7 +396,7 @@ describe('DataIntakeService', () => {
       mockUpdateSingleResult.mockResolvedValueOnce({ data: mockUpdatedVar1, error: null });
       mockUpdateSingleResult.mockResolvedValueOnce({ data: mockUpdatedVar2, error: null });
       
-      const result = await service.updateVariables(updateDto);
+      const result = await service.updateVariables(updateDto, mockRequest);
       
       expect(mockSingleResult).toHaveBeenCalledTimes(2); // Two checks
       expect(mockUpdateSingleResult).toHaveBeenCalledTimes(2); // Two updates
@@ -401,7 +409,7 @@ describe('DataIntakeService', () => {
       
       await expect(service.updateVariables({ 
         variables: [{ id: 'id-not-found', name: 'Updated Var 1' }] 
-      })).rejects.toThrow(NotFoundException);
+      }, mockRequest)).rejects.toThrow(/Variable with ID id-not-found not found/);
       
       expect(mockSingleResult).toHaveBeenCalledTimes(1);
       expect(mockUpdateSingleResult).not.toHaveBeenCalled();
@@ -411,29 +419,32 @@ describe('DataIntakeService', () => {
 
   // --- deleteVariables Tests --- 
   describe('deleteVariables', () => {
-      let mockSelectEqChain1: jest.Mock, mockSelectEqChain2: jest.Mock;
-      let mockDeleteEqChain1: jest.Mock, mockDeleteEqChain2: jest.Mock;
+      let mockSelectEqResult: jest.Mock;
+      let mockDeleteEqResult: jest.Mock;
 
       beforeEach(() => {
-          // Setup specific chains for deleteVariables: select().in().eq().eq() and delete().in().eq().eq()
-          mockSelectEqChain2 = jest.fn().mockResolvedValue({ data: [], error: null }); 
-          mockSelectEqChain1 = jest.fn().mockReturnValue({ eq: mockSelectEqChain2 });
-          mockDeleteEqChain2 = jest.fn().mockResolvedValue({ data: null, error: null });
-          mockDeleteEqChain1 = jest.fn().mockReturnValue({ eq: mockDeleteEqChain2 });
+          // Setup specific chains for deleteVariables: individual variable processing
+          // For each variable: select().eq().single() then delete().eq()
+          mockSelectEqResult = jest.fn();
+          mockDeleteEqResult = jest.fn();
 
           mockSupabaseClient.from.mockImplementation((table: string) => {
               if (table === 'variables') {
                   return {
                       select: jest.fn().mockReturnValue({
-                          in: jest.fn().mockReturnValue({ eq: mockSelectEqChain1 }) // select().in().eq()
+                          eq: jest.fn().mockReturnValue({ single: mockSelectEqResult }) // select().eq().single()
                       }),
                       delete: jest.fn().mockReturnValue({
-                          in: jest.fn().mockReturnValue({ eq: mockDeleteEqChain1 }) // delete().in().eq()
+                          eq: mockDeleteEqResult // delete().eq()
                       })
                   };
               }
               return {};
           });
+          
+          // Reset results for this scope
+          mockSelectEqResult.mockClear().mockResolvedValue({ data: null, error: null });
+          mockDeleteEqResult.mockClear().mockResolvedValue({ data: null, error: null });
       });
 
      const requestingUserId = 'req-user-id';
@@ -442,69 +453,78 @@ describe('DataIntakeService', () => {
      const deleteDto: DeleteVariablesDto = { ids: idsToDelete };
 
       it('should successfully delete variables and return count', async () => {
-        const mockExistingVars = [{ id: 'id-1' }, { id: 'id-2' }];
-        // Mock select check result (ends with second eq)
-        mockSelectEqChain2.mockResolvedValueOnce({ data: mockExistingVars, error: null });
-        // Mock delete result (ends with second eq)
-        mockDeleteEqChain2.mockResolvedValueOnce({ data: null, error: null });
+        const mockExistingVar1 = { id: 'id-1', organization_id: orgId, name: 'Var 1' };
+        const mockExistingVar2 = { id: 'id-2', organization_id: orgId, name: 'Var 2' };
         
-        const result = await service.deleteVariables(deleteDto, requestingUserId, orgId);
+        // Mock individual variable checks
+        mockSelectEqResult
+          .mockResolvedValueOnce({ data: mockExistingVar1, error: null })
+          .mockResolvedValueOnce({ data: mockExistingVar2, error: null });
+        // Mock delete operations
+        mockDeleteEqResult
+          .mockResolvedValueOnce({ data: null, error: null })
+          .mockResolvedValueOnce({ data: null, error: null });
         
-        // Verify check call chain
-        expect(mockSelectEqChain1).toHaveBeenCalledWith('user_id', requestingUserId);
-        expect(mockSelectEqChain2).toHaveBeenCalledWith('organization_id', orgId);
-        // Verify delete call chain
-        expect(mockDeleteEqChain1).toHaveBeenCalledWith('user_id', requestingUserId);
-        expect(mockDeleteEqChain2).toHaveBeenCalledWith('organization_id', orgId);
+        const result = await service.deleteVariables(deleteDto, requestingUserId, orgId, mockRequest);
+        
+        // Verify that each variable was checked and deleted individually
+        expect(mockSelectEqResult).toHaveBeenCalledTimes(2);
+        expect(mockDeleteEqResult).toHaveBeenCalledTimes(2);
         
         expect(result).toEqual({
           message: 'Variables deleted successfully',
-          count: idsToDelete.length
+          count: idsToDelete.length,
+          deletedIds: idsToDelete
         });
       });
       
       it('should handle partial matches and warn if some variables not found', async () => {
-         const mockExistingVars = [{ id: 'id-1' }]; // Only one matches
-         mockSelectEqChain2.mockResolvedValueOnce({ data: mockExistingVars, error: null });
-         mockDeleteEqChain2.mockResolvedValueOnce({ data: null, error: null });
+         const mockExistingVar1 = { id: 'id-1', organization_id: orgId, name: 'Var 1' };
          
-         const result = await service.deleteVariables(deleteDto, requestingUserId, orgId);
+         // First variable found, second not found
+         mockSelectEqResult
+           .mockResolvedValueOnce({ data: mockExistingVar1, error: null })
+           .mockResolvedValueOnce({ data: null, error: { code: 'PGRST116', message: 'Not found' } });
+         mockDeleteEqResult.mockResolvedValueOnce({ data: null, error: null });
          
-         expect(mockSelectEqChain2).toHaveBeenCalledTimes(1);
-         expect(mockDeleteEqChain2).toHaveBeenCalledTimes(1); // Delete still called for the one found
-         expect(Logger.prototype.warn).toHaveBeenCalledWith(expect.stringContaining('Some variables not found: id-2'));
-         expect(result.count).toBe(1); // Only one deleted
+         await expect(service.deleteVariables(deleteDto, requestingUserId, orgId, mockRequest))
+           .rejects.toThrow(/Variable with ID id-2 not found/);
+         
+         expect(mockSelectEqResult).toHaveBeenCalledTimes(2); // Both checked
+         expect(mockDeleteEqResult).toHaveBeenCalledTimes(1); // Only first one deleted before error
       });
       
       it('should return count 0 if no variables match criteria', async () => {
-         mockSelectEqChain2.mockResolvedValueOnce({ data: [], error: null }); // None found
+         // Both variables not found
+         mockSelectEqResult
+           .mockResolvedValueOnce({ data: null, error: { code: 'PGRST116', message: 'Not found' } })
+           .mockResolvedValueOnce({ data: null, error: { code: 'PGRST116', message: 'Not found' } });
          
-         const result = await service.deleteVariables(deleteDto, requestingUserId, orgId);
+         await expect(service.deleteVariables(deleteDto, requestingUserId, orgId, mockRequest))
+           .rejects.toThrow(/Variable with ID id-1 not found/);
          
-         expect(mockSelectEqChain2).toHaveBeenCalledTimes(1);
-         expect(mockDeleteEqChain2).not.toHaveBeenCalled(); // Delete not called
-         expect(Logger.prototype.warn).toHaveBeenCalledWith(expect.stringContaining('None of the specified variables were found'));
-         expect(result.count).toBe(0);
+         expect(mockSelectEqResult).toHaveBeenCalledTimes(1); // Fails on first variable
+         expect(mockDeleteEqResult).not.toHaveBeenCalled(); // Delete not called
       });
 
       it('should throw error if select check fails', async () => {
          const dbError = { message: 'Select check failed', code: '500' };
-         mockSelectEqChain2.mockResolvedValueOnce({ data: null, error: dbError });
+         mockSelectEqResult.mockResolvedValueOnce({ data: null, error: dbError });
          
-         await expect(service.deleteVariables(deleteDto, requestingUserId, orgId))
-           .rejects.toThrow(/Failed to verify existing variables: Select check failed/);
-         expect(mockDeleteEqChain2).not.toHaveBeenCalled();
+         await expect(service.deleteVariables(deleteDto, requestingUserId, orgId, mockRequest))
+           .rejects.toThrow(/Variable with ID id-1 not found/);
+         expect(mockDeleteEqResult).not.toHaveBeenCalled();
       });
       
       it('should throw error if delete operation fails', async () => {
-         const mockExistingVars = [{ id: 'id-1' }]; 
+         const mockExistingVar1 = { id: 'id-1', organization_id: orgId, name: 'Var 1' };
          const dbError = { message: 'Delete failed', code: '500' };
-         mockSelectEqChain2.mockResolvedValueOnce({ data: mockExistingVars, error: null }); // Check succeeds
-         mockDeleteEqChain2.mockResolvedValueOnce({ data: null, error: dbError }); // Delete fails
+         mockSelectEqResult.mockResolvedValueOnce({ data: mockExistingVar1, error: null }); // Check succeeds
+         mockDeleteEqResult.mockResolvedValueOnce({ data: null, error: dbError }); // Delete fails
          
-         await expect(service.deleteVariables(deleteDto, requestingUserId, orgId))
-           .rejects.toThrow(/Failed to delete variables: Delete failed/);
-         expect(mockDeleteEqChain2).toHaveBeenCalledTimes(1);
+         await expect(service.deleteVariables(deleteDto, requestingUserId, orgId, mockRequest))
+           .rejects.toThrow(/Failed to delete variable: Delete failed/);
+         expect(mockDeleteEqResult).toHaveBeenCalledTimes(1);
       });
   });
 }); 

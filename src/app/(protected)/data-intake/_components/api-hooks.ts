@@ -31,14 +31,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
     }
   }, [session])
 
-  // Helper to get backend base URL
-  const getBackendUrl = useCallback(() => {
-    const backendUrlBase = process.env.NEXT_PUBLIC_BACKEND_URL;
-    if (!backendUrlBase) {
-      throw new Error('Backend API URL is not configured. Set NEXT_PUBLIC_BACKEND_URL environment variable.');
-    }
-    return backendUrlBase;
-  }, []);
+
 
   const resetSuccessStatus = useCallback(() => {
     setTimeout(() => {
@@ -51,8 +44,13 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
   ): Promise<void> => {
     const newVariables = [...variables]
     const variablesToAdd = decisions.filter(d => d.action === 'add').map(d => d.variable)
+    const variablesToUpdate = decisions.filter(d => d.action === 'update' && d.replaceId).map(d => ({ 
+      variable: d.variable, 
+      replaceId: d.replaceId! 
+    }))
     
     logger.log('Variables to be added locally:', variablesToAdd.length)
+    logger.log('Variables to be updated:', variablesToUpdate.length)
     logger.log('Decision actions:', decisions.map(d => d.action))
     
     // Map of frontend variable IDs to their original variable objects
@@ -107,9 +105,8 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           })),
         }
         
-        const backendUrl = getBackendUrl();
-        const importUrl = `${backendUrl}/data-intake/variables`;
-        logger.log('Sending payload to Backend API:', importUrl);
+        const importUrl = `/api/data-intake/variables`;
+        logger.log('Sending payload to Next.js API:', importUrl);
         logger.log('Payload:', JSON.stringify(apiPayload, null, 2));
         
         const response = await fetch(importUrl, {
@@ -143,18 +140,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           success: true
         })
 
-        // Fetch variables again after successful import to ensure sync
-        if (user && session?.access_token) {
-          logger.log('[handleImportVariables] Import successful, refetching variables...');
-          await fetchVariables(user.id, session.access_token);
-        } else {
-          logger.warn('[handleImportVariables] Cannot refetch variables: missing user or token.');
-        }
-
         resetSuccessStatus()
         
       } catch (error) {
-        logger.error('Error in API request:', error)
+        logger.error('Error in add variables API request:', error)
         setApiStatus({
           loading: false,
           error: error instanceof Error ? error.message : 'An unknown error occurred',
@@ -162,7 +151,84 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         })
       }
     }
-  }, [variables, setVariables, resetSuccessStatus, session, user, currentOrganization, getAuthHeaders, getBackendUrl, fetchVariables])
+
+    // Send variables marked as 'update' to the backend API
+    if (variablesToUpdate.length > 0) {
+      setApiStatus({ loading: true, error: null, success: false })
+      
+      // Check for user and organization context
+      if (!user || !currentOrganization) {
+        setApiStatus({
+          loading: false,
+          error: 'User or organization context is missing. Cannot update variables.',
+          success: false,
+        })
+        logger.error('Missing user or organization context for update')
+        return
+      }
+
+      try {
+        const headers = getAuthHeaders()
+
+        // Format variables for the update API
+        const updatePayload = {
+          variables: variablesToUpdate.map(({ variable, replaceId }) => ({
+            id: replaceId, // Use the existing variable's ID
+            name: variable.name,
+            type: variable.type,
+            values: variable.timeSeries.map(ts => ({
+              date: `${ts.date.getFullYear()}-${String(ts.date.getMonth() + 1).padStart(2, '0')}-${String(ts.date.getDate()).padStart(2, '0')}`,
+              value: ts.value,
+            })),
+          })),
+        }
+        
+                 const updateUrl = `/api/data-intake/variables`;
+         logger.log('Sending update payload to Next.js API:', updateUrl);
+        logger.log('Update Payload:', JSON.stringify(updatePayload, null, 2));
+        
+        const response = await fetch(updateUrl, {
+          method: 'PUT',
+          headers: headers,
+          body: JSON.stringify(updatePayload)
+        })
+        
+        logger.log('Update API response status:', response.status)
+        const responseData = await response.json()
+        logger.log('Update API response data:', responseData)
+        
+        if (!response.ok) {
+          throw new Error(responseData.message || 'Failed to update variables on the server')
+        }
+        
+        logger.log('Variables updated successfully in backend:', responseData.variables?.length || 0)
+        
+        setApiStatus({
+          loading: false,
+          error: null,
+          success: true
+        })
+
+        resetSuccessStatus()
+        
+      } catch (error) {
+        logger.error('Error in update variables API request:', error)
+        setApiStatus({
+          loading: false,
+          error: error instanceof Error ? error.message : 'An unknown error occurred during update',
+          success: false
+        })
+      }
+    }
+
+    // Fetch variables again after successful operations to ensure sync
+    if ((variablesToAdd.length > 0 || variablesToUpdate.length > 0) && user && session?.access_token) {
+      logger.log('[handleImportVariables] Operations successful, refetching variables...');
+      await fetchVariables(user.id, session.access_token);
+    } else if (variablesToAdd.length > 0 || variablesToUpdate.length > 0) {
+      logger.warn('[handleImportVariables] Cannot refetch variables: missing user or token.');
+    }
+  }, [variables, setVariables, resetSuccessStatus, session, user, currentOrganization, getAuthHeaders, fetchVariables])
 
   const handleDeleteVariable = useCallback(async (variableId: string, organizationId: string | null): Promise<void> => {
     // Validate organizationId before proceeding
@@ -192,11 +258,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         throw new Error('Variable not found in local store')
       }
       
-      // Backend expects DELETE /api/data-intake/variables with body { ids: [...], organizationId: "..." }
-      const backendUrl = getBackendUrl();
-      const deleteUrl = `${backendUrl}/data-intake/variables`;
+      // Call Next.js API route which will forward to backend
+      const deleteUrl = `/api/data-intake/variables`;
       const payload = { ids: [variableId], organizationId: organizationId }
-      logger.log('Calling Backend API endpoint:', deleteUrl, 'with payload:', payload)
+      logger.log('Calling Next.js API endpoint:', deleteUrl, 'with payload:', payload)
       
       // Call backend API to delete the variable
       const response = await fetch(deleteUrl, {
@@ -264,7 +329,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       })
       logger.log('==== DELETE OPERATION FAILED ====')
     }
-  }, [variables, setVariables, resetSuccessStatus, session, getAuthHeaders, getBackendUrl])
+  }, [variables, setVariables, resetSuccessStatus, session, getAuthHeaders])
 
   const handleUpdateVariable = useCallback(async (
     variableId: string, 
@@ -328,9 +393,8 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         ]
       }
       
-      const backendUrl = getBackendUrl();
-      const updateUrl = `${backendUrl}/data-intake/variables`;
-      logger.log('Sending payload to Backend API:', updateUrl);
+      const updateUrl = `/api/data-intake/variables`;
+      logger.log('Sending payload to Next.js API:', updateUrl);
       logger.log('Payload:', JSON.stringify(payload, null, 2));
       
       const response = await fetch(updateUrl, {
@@ -393,7 +457,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       })
       logger.log('==== UPDATE OPERATION FAILED ====')
     }
-  }, [variables, setVariables, resetSuccessStatus, session, user, getAuthHeaders, getBackendUrl])
+  }, [variables, setVariables, resetSuccessStatus, session, user, getAuthHeaders])
 
   return {
     apiStatus,

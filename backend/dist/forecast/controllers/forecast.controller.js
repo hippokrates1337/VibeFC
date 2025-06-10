@@ -21,6 +21,7 @@ const forecast_edge_service_1 = require("../services/forecast-edge.service");
 const forecast_dto_1 = require("../dto/forecast.dto");
 const forecast_node_dto_1 = require("../dto/forecast-node.dto");
 const forecast_edge_dto_1 = require("../dto/forecast-edge.dto");
+const bulk_save_graph_dto_1 = require("../dto/bulk-save-graph.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 let ForecastController = ForecastController_1 = class ForecastController {
     constructor(forecastService, nodeService, edgeService) {
@@ -39,7 +40,7 @@ let ForecastController = ForecastController_1 = class ForecastController {
         this.logger.debug(`Extracted userId: ${userId}`);
         this.logger.debug(`Received CreateForecastDto: ${JSON.stringify(createForecastDto)}`);
         try {
-            const result = await this.forecastService.create(userId, createForecastDto);
+            const result = await this.forecastService.create(userId, createForecastDto, req);
             this.logger.debug(`Forecast creation successful in controller, returning result.`);
             return result;
         }
@@ -50,66 +51,71 @@ let ForecastController = ForecastController_1 = class ForecastController {
     }
     async findAll(req, organizationId) {
         const userId = req.user.userId;
-        return this.forecastService.findAll(userId, organizationId);
+        return this.forecastService.findAll(userId, organizationId, req);
     }
     async findOne(req, id) {
         const userId = req.user.userId;
-        return this.forecastService.findOne(id, userId);
+        return this.forecastService.findOne(id, userId, req);
     }
     async update(req, id, updateForecastDto) {
         const userId = req.user.userId;
-        return this.forecastService.update(id, userId, updateForecastDto);
+        return this.forecastService.update(id, userId, updateForecastDto, req);
     }
     async remove(req, id) {
         const userId = req.user.userId;
-        return this.forecastService.remove(id, userId);
+        return this.forecastService.remove(id, userId, req);
+    }
+    async bulkSaveGraph(req, forecastId, bulkSaveDto) {
+        const userId = req.user.userId;
+        this.logger.log(`Bulk save graph request for forecast ${forecastId} by user ${userId}`);
+        return this.forecastService.bulkSaveGraph(forecastId, userId, bulkSaveDto, req);
     }
     async createNode(req, forecastId, createNodeDto) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
+        await this.forecastService.findOne(forecastId, userId, req);
         createNodeDto.forecastId = forecastId;
-        return this.nodeService.create(createNodeDto);
+        return this.nodeService.create(createNodeDto, req);
     }
     async findNodes(req, forecastId) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
-        return this.nodeService.findByForecast(forecastId);
+        await this.forecastService.findOne(forecastId, userId, req);
+        return this.nodeService.findByForecast(forecastId, req);
     }
     async findNode(req, forecastId, nodeId) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
-        return this.nodeService.findOne(nodeId);
+        await this.forecastService.findOne(forecastId, userId, req);
+        return this.nodeService.findOne(nodeId, req);
     }
     async updateNode(req, forecastId, nodeId, updateNodeDto) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
-        return this.nodeService.update(nodeId, updateNodeDto);
+        await this.forecastService.findOne(forecastId, userId, req);
+        return this.nodeService.update(nodeId, updateNodeDto, req);
     }
     async removeNode(req, forecastId, nodeId) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
-        return this.nodeService.remove(nodeId);
+        await this.forecastService.findOne(forecastId, userId, req);
+        return this.nodeService.remove(nodeId, req);
     }
     async createEdge(req, forecastId, createEdgeDto) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
+        await this.forecastService.findOne(forecastId, userId, req);
         createEdgeDto.forecastId = forecastId;
-        return this.edgeService.create(createEdgeDto);
+        return this.edgeService.create(createEdgeDto, req);
     }
     async findEdges(req, forecastId) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
-        return this.edgeService.findByForecast(forecastId);
+        await this.forecastService.findOne(forecastId, userId, req);
+        return this.edgeService.findByForecast(forecastId, req);
     }
     async findEdge(req, forecastId, edgeId) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
-        return this.edgeService.findOne(edgeId);
+        await this.forecastService.findOne(forecastId, userId, req);
+        return this.edgeService.findOne(edgeId, req);
     }
     async removeEdge(req, forecastId, edgeId) {
         const userId = req.user.userId;
-        await this.forecastService.findOne(forecastId, userId);
-        return this.edgeService.remove(edgeId);
+        await this.forecastService.findOne(forecastId, userId, req);
+        return this.edgeService.remove(edgeId, req);
     }
 };
 exports.ForecastController = ForecastController;
@@ -156,6 +162,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ForecastController.prototype, "remove", null);
+__decorate([
+    (0, common_1.Post)(':forecastId/bulk-save'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('forecastId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, bulk_save_graph_dto_1.BulkSaveGraphDto]),
+    __metadata("design:returntype", Promise)
+], ForecastController.prototype, "bulkSaveGraph", null);
 __decorate([
     (0, common_1.Post)(':forecastId/nodes'),
     __param(0, (0, common_1.Request)()),

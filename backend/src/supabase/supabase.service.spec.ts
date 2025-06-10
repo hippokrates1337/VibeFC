@@ -37,6 +37,7 @@ jest.mock('@supabase/supabase-js', () => ({
 Logger.prototype.log = jest.fn();
 Logger.prototype.error = jest.fn();
 Logger.prototype.warn = jest.fn();
+Logger.prototype.debug = jest.fn();
 
 
 describe('SupabaseService', () => {
@@ -51,12 +52,16 @@ describe('SupabaseService', () => {
   beforeEach(async () => {
     // Reset mocks before each test
     jest.clearAllMocks();
+    
+    // Set test environment by default for most tests
+    process.env.IS_TEST_ENVIRONMENT = 'true';
 
     // Default mock request - customize in specific tests if needed
     mockRequest = {
       headers: {
         authorization: `Bearer ${mockJwt}`,
       },
+      user: { userId: 'test-user-123', organizationId: 'test-org-456' }
       // Add other request properties if your service uses them
     };
 
@@ -69,6 +74,7 @@ describe('SupabaseService', () => {
             get: jest.fn((key: string) => {
               if (key === 'SUPABASE_URL') return mockSupabaseUrl;
               if (key === 'SUPABASE_ANON_KEY') return mockSupabaseAnonKey;
+              if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
               return null;
             }),
           },
@@ -98,7 +104,7 @@ describe('SupabaseService', () => {
       expect(createClient).toHaveBeenCalledTimes(1);
       expect(createClient).toHaveBeenCalledWith(
         mockSupabaseUrl,
-        mockSupabaseAnonKey,
+        'test-service-role-key', // In test environment with user, uses service role key
         expect.objectContaining({
           global: {
             headers: { Authorization: `Bearer ${mockJwt}` },
@@ -111,8 +117,8 @@ describe('SupabaseService', () => {
       );
       // Check config service calls
       expect(configService.get).toHaveBeenCalledWith('SUPABASE_URL');
-      expect(configService.get).toHaveBeenCalledWith('SUPABASE_ANON_KEY');
-      expect(Logger.prototype.log).toHaveBeenCalledWith('Request-scoped Supabase client initialized for user.');
+      expect(configService.get).toHaveBeenCalledWith('SUPABASE_SERVICE_ROLE_KEY');
+      expect(Logger.prototype.log).toHaveBeenCalledWith('Test environment with user test-user-123 - creating authenticated client');
     });
 
     it('should return the same client instance on subsequent accesses', () => {
@@ -132,7 +138,7 @@ describe('SupabaseService', () => {
       });
 
       expect(() => service.client).toThrow('Supabase credentials are not properly configured.');
-      expect(Logger.prototype.error).toHaveBeenCalledWith('Supabase URL or Anon Key not configured');
+      expect(Logger.prototype.error).toHaveBeenCalledWith('Supabase URL or API keys not configured');
       expect(createClient).not.toHaveBeenCalled();
     });
 
@@ -144,7 +150,7 @@ describe('SupabaseService', () => {
        });
 
        expect(() => service.client).toThrow('Supabase credentials are not properly configured.');
-       expect(Logger.prototype.error).toHaveBeenCalledWith('Supabase URL or Anon Key not configured');
+       expect(Logger.prototype.error).toHaveBeenCalledWith('Supabase URL or API keys not configured');
        expect(createClient).not.toHaveBeenCalled();
     });
 
@@ -197,16 +203,22 @@ describe('SupabaseService', () => {
        process.env.IS_TEST_ENVIRONMENT = 'true';
     });
     
-    it('should create a test client in test environment', async () => {
+    it('should create a test client in test environment with user', async () => {
       // Ensure test environment is enabled
       process.env.IS_TEST_ENVIRONMENT = 'true';
       
-      // Modify the request mock for this specific test case - no auth header needed in test mode
+      // Create a request with a user object for test environment
+      const testRequestWithUser = {
+        headers: {},
+        user: { userId: 'test-user-123', organizationId: 'test-org-456' }
+      };
+      
+      // Modify the request mock for this specific test case
       const moduleRef = await Test.createTestingModule({
         providers: [
           SupabaseService,
           { provide: ConfigService, useValue: configService }, // Use the existing mocked config
-          { provide: REQUEST, useValue: { headers: {} } }, // Empty headers is fine in test mode
+          { provide: REQUEST, useValue: testRequestWithUser }, // Request with user in test mode
         ],
       }).compile();
       
@@ -218,7 +230,7 @@ describe('SupabaseService', () => {
       expect(client).toBeDefined();
       expect(createClient).toHaveBeenCalledWith(
         mockSupabaseUrl,
-        mockSupabaseAnonKey,
+        'test-service-role-key', // Should use service role key in test environment
         expect.objectContaining({
           auth: expect.objectContaining({
             autoRefreshToken: false,
@@ -226,8 +238,45 @@ describe('SupabaseService', () => {
           }),
         })
       );
-      expect(Logger.prototype.log).toHaveBeenCalledWith('Test environment detected - creating admin client');
-      expect(Logger.prototype.log).toHaveBeenCalledWith('Test-mode Supabase client initialized with admin privileges');
+      expect(Logger.prototype.log).toHaveBeenCalledWith('Test environment with user test-user-123 - creating authenticated client');
+    });
+
+    it('should create anonymous client in test environment without user', async () => {
+      // Ensure test environment is enabled
+      process.env.IS_TEST_ENVIRONMENT = 'true';
+      
+             // Create a request without user object for test environment
+       const testRequestWithoutUser = {
+         headers: {},
+         // No user object
+       };
+      
+      // Modify the request mock for this specific test case
+      const moduleRef = await Test.createTestingModule({
+        providers: [
+          SupabaseService,
+          { provide: ConfigService, useValue: configService }, // Use the existing mocked config
+          { provide: REQUEST, useValue: testRequestWithoutUser }, // Request without user in test mode
+        ],
+      }).compile();
+      
+      // Use resolve for the scoped service within this custom context
+      const testService = await moduleRef.resolve<SupabaseService>(SupabaseService);
+      
+      // This should not throw in test environment
+      const client = testService.client;
+      expect(client).toBeDefined();
+      expect(createClient).toHaveBeenCalledWith(
+        mockSupabaseUrl,
+        'test-service-role-key', // Should use service role key in test environment
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            autoRefreshToken: false,
+            persistSession: false,
+          }),
+        })
+      );
+      expect(Logger.prototype.warn).toHaveBeenCalledWith('Test environment but no user in request - creating anonymous client');
     });
   });
 

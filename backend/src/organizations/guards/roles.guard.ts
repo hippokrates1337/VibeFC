@@ -36,6 +36,7 @@ export class RolesGuard implements CanActivate {
       const userRole = await this.organizationsService.getUserRoleInOrganization(
         user.id,
         organizationId,
+        request,
       );
 
       if (!userRole) {

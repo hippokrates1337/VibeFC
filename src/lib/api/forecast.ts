@@ -6,13 +6,20 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 // Define response and data types
 export interface Forecast {
   id: string;
-  name: string;
-  forecastStartDate: string;
-  forecastEndDate: string;
   organizationId: string;
+  userId: string;
+  name: string;
+  forecastStartDate: string | null;
+  forecastEndDate: string | null;
   createdAt: string;
   updatedAt: string;
-  userId: string;
+}
+
+// New interface for forecast with graph summary statistics
+export interface ForecastWithSummary extends Forecast {
+  nodeCount: number;
+  edgeCount: number;
+  nodeTypes: string[];
 }
 
 export interface ForecastNode {
@@ -187,34 +194,7 @@ export function mapForecastToClientFormat(combinedData: FlattenedForecastWithDet
   };
 }
 
-// Helper to convert client forecast to API format - This function is no longer used after refactoring saveForecastGraph
-/*
-export function mapClientToApiFormat(
-  forecastId: string,
-  name: string,
-  startDate: string,
-  endDate: string,
-  nodes: ForecastNodeClient[],
-  edges: ForecastEdgeClient[]
-) {
-  return {
-    forecast: {
-      name,
-      forecastStartDate: startDate,
-      forecastEndDate: endDate,
-    },
-    nodes: nodes.map((node: any) => ({
-      kind: node.type,
-      attributes: node.data,
-      position: node.position,
-    })),
-    edges: edges.map((edge: any) => ({
-      source_node_id: edge.source,
-      target_node_id: edge.target,
-    })),
-  };
-}
-*/
+
 
 // Forecast API endpoints
 export const forecastApi = {
@@ -225,6 +205,13 @@ export const forecastApi = {
       return { error: { message: 'Organization ID is required to fetch forecasts.' } };
     }
     return fetchWithAuth<Forecast[]>(`/forecasts?organizationId=${organizationId}`, {
+      method: 'GET',
+    });
+  },
+
+  // Get all forecasts for an organization with graph summary data
+  getForecastsWithSummary: async (organizationId: string): Promise<ApiResponse<ForecastWithSummary[]>> => {
+    return fetchWithAuth<ForecastWithSummary[]>(`/organizations/${organizationId}/forecasts/summary`, {
       method: 'GET',
     });
   },
@@ -317,8 +304,8 @@ export const forecastApi = {
     });
   },
 
-  // Save the entire forecast graph (nodes and edges)
-  saveForecastGraph: async (
+  // Save the entire forecast graph (nodes and edges) - LEGACY VERSION
+  saveForecastGraphLegacy: async (
     forecastId: string,
     name: string,
     startDate: string,
@@ -380,10 +367,13 @@ export const forecastApi = {
       const nodeIdMap = new Map<string, string>(); // Map from old client ID to new server ID
 
       for (const nodeClient of nodes) {
+        // For SEED nodes, we need to update sourceMetricId references after all nodes are created
+        let nodeData = nodeClient.data;
+        
         const addNodeResponse = await forecastApi.addNode(
           forecastId,
           nodeClient.type as string,
-          nodeClient.data,
+          nodeData,
           nodeClient.position
         );
         if (addNodeResponse.error || !addNodeResponse.data) {
@@ -393,6 +383,66 @@ export const forecastApi = {
         createdNodes.push(addNodeResponse.data);
         // Store the mapping from the original client ID to the new server ID
         nodeIdMap.set(nodeClient.id, addNodeResponse.data.id);
+      }
+
+      // 5.1. Update SEED node references to point to new metric IDs
+      const seedNodes = createdNodes.filter(node => node.kind === 'SEED');
+      for (const seedNode of seedNodes) {
+        const seedData = seedNode.attributes as any;
+        if (seedData.sourceMetricId) {
+          const newMetricId = nodeIdMap.get(seedData.sourceMetricId);
+          if (newMetricId) {
+            // Update the SEED node with the correct metric reference
+            const updateResponse = await forecastApi.updateNode(
+              forecastId,
+              seedNode.id,
+              {
+                attributes: {
+                  ...seedData,
+                  sourceMetricId: newMetricId
+                }
+              }
+            );
+            if (updateResponse.error) {
+              console.error(`Failed to update SEED node ${seedNode.id} reference:`, updateResponse.error);
+              return { error: { message: `Failed to update SEED node reference: ${updateResponse.error.message}` } };
+            }
+            // Update the local node data for the response
+            seedNode.attributes = { ...seedData, sourceMetricId: newMetricId };
+          }
+        }
+      }
+
+      // 5.2. Update OPERATOR node inputOrder to point to new node IDs
+      const operatorNodes = createdNodes.filter(node => node.kind === 'OPERATOR');
+      for (const operatorNode of operatorNodes) {
+        const operatorData = operatorNode.attributes as any;
+        if (operatorData.inputOrder && Array.isArray(operatorData.inputOrder)) {
+          // Map old node IDs to new node IDs in inputOrder
+          const updatedInputOrder = operatorData.inputOrder
+            .map((oldNodeId: string) => nodeIdMap.get(oldNodeId))
+            .filter((newNodeId: string | undefined) => newNodeId !== undefined);
+          
+          if (updatedInputOrder.length > 0) {
+            // Update the OPERATOR node with the correct inputOrder
+            const updateResponse = await forecastApi.updateNode(
+              forecastId,
+              operatorNode.id,
+              {
+                attributes: {
+                  ...operatorData,
+                  inputOrder: updatedInputOrder
+                }
+              }
+            );
+            if (updateResponse.error) {
+              console.error(`Failed to update OPERATOR node ${operatorNode.id} inputOrder:`, updateResponse.error);
+              return { error: { message: `Failed to update OPERATOR node inputOrder: ${updateResponse.error.message}` } };
+            }
+            // Update the local node data for the response
+            operatorNode.attributes = { ...operatorData, inputOrder: updatedInputOrder };
+          }
+        }
       }
 
       // 6. Add new edges
@@ -439,6 +489,57 @@ export const forecastApi = {
     } catch (error: any) {
       console.error('Error in saveForecastGraph:', error);
       return { error: { message: `Error saving forecast graph: ${error.message || 'Unknown error'}` } };
+    }
+  },
+
+  saveForecastGraphBulk: async (
+    forecastId: string,
+    name: string,
+    startDate: string,
+    endDate: string,
+    nodes: ForecastNodeClient[],
+    edges: ForecastEdgeClient[]
+  ): Promise<ApiResponse<FlattenedForecastWithDetails>> => {
+    const requestBody = {
+      forecast: {
+        name,
+        forecastStartDate: startDate,
+        forecastEndDate: endDate
+      },
+      nodes: nodes.map(node => ({
+        clientId: node.id,
+        kind: node.type,
+        attributes: node.data,
+        position: node.position
+      })),
+      edges: edges.map(edge => ({
+        sourceClientId: edge.source,
+        targetClientId: edge.target
+      }))
+    };
+
+    return fetchWithAuth<FlattenedForecastWithDetails>(`/forecasts/${forecastId}/bulk-save`, {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+  },
+
+  // Save the entire forecast graph (nodes and edges) - FEATURE FLAGGED
+  saveForecastGraph: async (
+    forecastId: string,
+    name: string,
+    startDate: string,
+    endDate: string,
+    nodes: ForecastNodeClient[],
+    edges: ForecastEdgeClient[]
+  ): Promise<ApiResponse<FlattenedForecastWithDetails>> => {
+    // Feature flag: Use bulk save by default, fallback to legacy if needed
+    const useBulkSave = process.env.NEXT_PUBLIC_ENABLE_BULK_SAVE !== 'false'; // Default to true
+    
+    if (useBulkSave) {
+      return forecastApi.saveForecastGraphBulk(forecastId, name, startDate, endDate, nodes, edges);
+    } else {
+      return forecastApi.saveForecastGraphLegacy(forecastId, name, startDate, endDate, nodes, edges);
     }
   },
 
@@ -504,5 +605,60 @@ export const forecastApi = {
     return fetchWithAuth<void>(`/forecasts/${forecastId}/edges/${edgeId}`, {
       method: 'DELETE',
     });
+  },
+
+  // Real-time individual operations (optimized for UI responsiveness)
+  realtime: {
+    // Add node with immediate UI feedback (no server roundtrip for UI updates)
+    addNodeOptimistic: async (
+      forecastId: string,
+      kind: string,
+      attributes: Record<string, any>,
+      position: { x: number; y: number }
+    ): Promise<ApiResponse<ForecastNode>> => {
+      // Use debounced/batched approach for better performance
+      return fetchWithAuth<ForecastNode>(`/forecasts/${forecastId}/nodes?optimistic=true`, {
+        method: 'POST',
+        body: JSON.stringify({ forecastId, kind, attributes, position }),
+      });
+    },
+
+    // Update node position with batching support
+    updateNodePosition: async (
+      forecastId: string,
+      nodeId: string,
+      position: { x: number; y: number }
+    ): Promise<ApiResponse<ForecastNode>> => {
+      return fetchWithAuth<ForecastNode>(`/forecasts/${forecastId}/nodes/${nodeId}/position`, {
+        method: 'PATCH',
+        body: JSON.stringify({ position }),
+      });
+    },
+
+    // Update node attributes separately from position for better caching
+    updateNodeAttributes: async (
+      forecastId: string,
+      nodeId: string,
+      attributes: Record<string, any>
+    ): Promise<ApiResponse<ForecastNode>> => {
+      return fetchWithAuth<ForecastNode>(`/forecasts/${forecastId}/nodes/${nodeId}/attributes`, {
+        method: 'PATCH',
+        body: JSON.stringify({ attributes }),
+      });
+    },
+
+    // Batch multiple operations for efficiency
+    batchOperations: async (
+      forecastId: string,
+      operations: Array<{
+        type: 'addNode' | 'updateNode' | 'deleteNode' | 'addEdge' | 'deleteEdge';
+        data: any;
+      }>
+    ): Promise<ApiResponse<any>> => {
+      return fetchWithAuth<any>(`/forecasts/${forecastId}/batch`, {
+        method: 'POST',
+        body: JSON.stringify({ operations }),
+      });
+    },
   },
 }; 

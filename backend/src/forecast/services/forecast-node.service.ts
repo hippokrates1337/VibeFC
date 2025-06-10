@@ -1,18 +1,20 @@
 import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto, ForecastNodeKind } from '../dto/forecast-node.dto';
+import { Request } from 'express';
 
 @Injectable()
 export class ForecastNodeService {
   private readonly logger = new Logger(ForecastNodeService.name);
 
   constructor(
-    private supabaseService: SupabaseService,
+    private supabaseService: SupabaseOptimizedService,
   ) {}
 
-  async create(dto: CreateForecastNodeDto): Promise<ForecastNodeDto> {
+  async create(dto: CreateForecastNodeDto, request: Request): Promise<ForecastNodeDto> {
     try {
-      const { data: insertedNode, error: insertError } = await this.supabaseService.client
+      const client = this.supabaseService.getClientForRequest(request);
+      const { data: insertedNode, error: insertError } = await client
         .from('forecast_nodes')
         .insert({
           forecast_id: dto.forecastId,
@@ -46,8 +48,9 @@ export class ForecastNodeService {
     }
   }
 
-  async findByForecast(forecastId: string): Promise<ForecastNodeDto[]> {
-    const { data, error } = await this.supabaseService.client
+  async findByForecast(forecastId: string, request: Request): Promise<ForecastNodeDto[]> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecast_nodes')
       .select('*')
       .eq('forecast_id', forecastId);
@@ -60,8 +63,9 @@ export class ForecastNodeService {
     return data.map(node => this.mapDbEntityToDto(node));
   }
 
-  async findOne(id: string, forecastId?: string): Promise<ForecastNodeDto> {
-    let query = this.supabaseService.client
+  async findOne(id: string, request: Request, forecastId?: string): Promise<ForecastNodeDto> {
+    const client = this.supabaseService.getClientForRequest(request);
+    let query = client
       .from('forecast_nodes')
       .select('*')
       .eq('id', id);
@@ -97,7 +101,7 @@ export class ForecastNodeService {
     return this.mapDbEntityToDto(data);
   }
 
-  async update(id: string, dto: UpdateForecastNodeDto): Promise<void> {
+  async update(id: string, dto: UpdateForecastNodeDto, request: Request): Promise<void> {
     // Check if there's anything to update before proceeding
     if (Object.keys(dto).length === 0) {
       return; // Nothing to update
@@ -125,7 +129,8 @@ export class ForecastNodeService {
       return;
     }
 
-    const { data, error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecast_nodes')
       .update(updateData)
       .eq('id', id)
@@ -153,7 +158,7 @@ export class ForecastNodeService {
     this.logger.log(`Forecast node updated: ${id}`);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, request: Request): Promise<void> {
     this.logger.debug(`Attempting to remove forecast node with id: ${id}`);
 
     // Step 1: Verify the node exists before attempting to delete.
@@ -161,10 +166,11 @@ export class ForecastNodeService {
     // We don't need to pass forecastId here as deletion is by node ID only, 
     // but RLS on the forecast_nodes table should prevent unauthorized deletion.
     // However, the controller should verify forecast ownership before calling this.
-    await this.findOne(id); // This will now correctly use the single-argument version if called by other parts of this service
+    await this.findOne(id, request); // This will now correctly use the single-argument version if called by other parts of this service
 
     // Step 2: If findOne succeeded, the node exists, so proceed with deletion.
-    const { error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { error } = await client
       .from('forecast_nodes')
       .delete()
       .eq('id', id);

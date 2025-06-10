@@ -106,7 +106,7 @@ describe('MembersController (Integration)', () => {
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       // RolesGuard might be called implicitly if globally applied or on the controller
       // expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1); 
-      expect(mockMembersService.findAllInOrganization).toHaveBeenCalledWith(orgId);
+      expect(mockMembersService.findAllInOrganization).toHaveBeenCalledWith(orgId, expect.any(Object));
     });
     
     it('should return 401 if JWT guard denies', async () => {
@@ -156,7 +156,7 @@ describe('MembersController (Integration)', () => {
         
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1); // Expect admin role check
-      expect(mockMembersService.addMember).toHaveBeenCalledWith(orgId, inviteDto);
+      expect(mockMembersService.addMember).toHaveBeenCalledWith(orgId, inviteDto, expect.any(Object));
     });
 
     it('should return 400 on invalid DTO', async () => {
@@ -225,7 +225,7 @@ describe('MembersController (Integration)', () => {
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockMembersService.updateMemberRole).toHaveBeenCalledWith(orgId, memberUserId, updateDto);
+      expect(mockMembersService.updateMemberRole).toHaveBeenCalledWith(orgId, memberUserId, updateDto, expect.any(Object));
     });
 
     it('should return 400 on invalid DTO', async () => {
@@ -291,7 +291,7 @@ describe('MembersController (Integration)', () => {
         
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockMembersService.removeMember).toHaveBeenCalledWith(orgId, memberUserId);
+      expect(mockMembersService.removeMember).toHaveBeenCalledWith(orgId, memberUserId, expect.any(Object));
     });
 
     it('should return 401 if JWT guard denies', async () => {

@@ -1,16 +1,20 @@
 import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger, ForbiddenException } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../dto/forecast.dto';
+import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
+import { PerformanceService } from '../../common/services/performance.service';
+import { Request } from 'express';
 
 @Injectable()
 export class ForecastService {
   private readonly logger = new Logger(ForecastService.name);
 
   constructor(
-    private supabaseService: SupabaseService,
+    private supabaseService: SupabaseOptimizedService, // Direct injection
+    private performanceService: PerformanceService,
   ) {}
 
-  async create(userId: string, dto: CreateForecastDto): Promise<ForecastDto> {
+  async create(userId: string, dto: CreateForecastDto, request: Request): Promise<ForecastDto> {
     this.logger.debug(`ForecastService.create called by userId: ${userId}`);
     this.logger.debug(`CreateForecastDto: ${JSON.stringify(dto)}`);
 
@@ -21,7 +25,8 @@ export class ForecastService {
 
     try {
       this.logger.debug('Attempting to insert forecast into Supabase...');
-      const { data: insertedForecast, error: insertError } = await this.supabaseService.client
+      const client = this.supabaseService.getClientForRequest(request);
+      const { data: insertedForecast, error: insertError } = await client
         .from('forecasts')
         .insert({
           name: dto.name,
@@ -72,14 +77,15 @@ export class ForecastService {
     }
   }
 
-  async findAll(userId: string, organizationId: string): Promise<ForecastDto[]> {
+  async findAll(userId: string, organizationId: string, request: Request): Promise<ForecastDto[]> {
     if (!userId) {
       this.logger.warn('Attempt to find forecasts without providing a userId');
       return []; // Return empty array for security
     }
 
     // Build the filter conditions in a separate step
-    const { data, error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecasts')
       .select('*')
       .eq('organization_id', organizationId)
@@ -93,7 +99,7 @@ export class ForecastService {
     return data.map(forecast => this.mapDbEntityToDto(forecast));
   }
 
-  async findOne(id: string, userId: string): Promise<ForecastDto> {
+  async findOne(id: string, userId: string, request: Request): Promise<ForecastDto> {
     // Log the request for debugging purposes
     this.logger.debug(`Finding forecast ${id} for user ${userId}`);
     
@@ -103,7 +109,8 @@ export class ForecastService {
     }
 
     // First filter by ID
-    const { data, error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecasts')
       .select('*')
       .eq('id', id)
@@ -130,9 +137,9 @@ export class ForecastService {
     return this.mapDbEntityToDto(data);
   }
 
-  async update(id: string, userId: string, dto: UpdateForecastDto): Promise<void> {
+  async update(id: string, userId: string, dto: UpdateForecastDto, request: Request): Promise<void> {
     // First check if the forecast belongs to this user
-    await this.findOne(id, userId);
+    await this.findOne(id, userId, request);
     
     // Check if there's anything to update before proceeding
     if (Object.keys(dto).length === 0) {
@@ -162,7 +169,8 @@ export class ForecastService {
     }
 
     // Use match for combined filtering of id and user_id
-    const { data, error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecasts')
       .update(updateData)
       .match({ id, user_id: userId }) // Match on both id and user_id instead of chained eq calls
@@ -182,10 +190,10 @@ export class ForecastService {
     this.logger.log(`Forecast updated: ${id} by user: ${userId}`);
   }
 
-  async remove(id: string, userId: string): Promise<void> {
+  async remove(id: string, userId: string, request: Request): Promise<void> {
     // First verify the forecast exists and belongs to this user
     try {
-      await this.findOne(id, userId);
+      await this.findOne(id, userId, request);
     } catch (error) {
       // Re-throw the NotFoundException
       if (error instanceof NotFoundException) {
@@ -198,7 +206,8 @@ export class ForecastService {
     
     // If we get here, the forecast exists and belongs to the user
     // Use match for combined filtering of id and user_id
-    const { error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { error } = await client
       .from('forecasts')
       .delete()
       .match({ id, user_id: userId }); // Match on both id and user_id instead of chained eq calls
@@ -209,6 +218,59 @@ export class ForecastService {
     }
     
     this.logger.log(`Forecast deleted: ${id} by user: ${userId}`);
+  }
+
+  async bulkSaveGraph(
+    forecastId: string,
+    userId: string,
+    dto: BulkSaveGraphDto,
+    request: Request
+  ): Promise<FlattenedForecastWithDetailsDto> {
+    return this.performanceService.trackOperation(
+      'forecast.bulkSaveGraph',
+      async () => {
+        // Single ownership check
+        await this.findOne(forecastId, userId, request);
+        
+        try {
+          this.logger.log(`Starting bulk save for forecast ${forecastId} with ${dto.nodes.length} nodes and ${dto.edges.length} edges`);
+          
+          const client = this.supabaseService.getClientForRequest(request);
+          const { data, error } = await client
+            .rpc('bulk_save_forecast_graph', {
+              p_forecast_id: forecastId,
+              p_forecast_data: dto.forecast,
+              p_nodes_data: dto.nodes,
+              p_edges_data: dto.edges
+            });
+
+          if (error) {
+            this.logger.error(`Bulk save failed for forecast ${forecastId}: ${error.message}`, error.stack);
+            throw new InternalServerErrorException(`Failed to save forecast: ${error.message}`);
+          }
+
+          if (!data) {
+            this.logger.error(`Bulk save returned no data for forecast ${forecastId}`);
+            throw new InternalServerErrorException('Failed to save forecast: No data returned');
+          }
+
+          this.logger.log(`Forecast ${forecastId} bulk saved successfully`);
+          return data as FlattenedForecastWithDetailsDto;
+        } catch (error) {
+          if (error instanceof InternalServerErrorException || error instanceof NotFoundException) {
+            throw error;
+          }
+          this.logger.error(`Unexpected error in bulk save: ${error.message}`, error.stack);
+          throw new InternalServerErrorException('Failed to save forecast graph');
+        }
+      },
+      {
+        forecastId,
+        userId,
+        nodeCount: dto.nodes.length,
+        edgeCount: dto.edges.length
+      }
+    );
   }
 
   private mapDbEntityToDto(entity: any): ForecastDto {

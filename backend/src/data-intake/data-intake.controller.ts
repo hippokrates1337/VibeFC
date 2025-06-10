@@ -65,7 +65,7 @@ export class DataIntakeController {
       }
       
       // Process the request
-      const result = await this.dataIntakeService.addVariables(addVariablesDto);
+      const result = await this.dataIntakeService.addVariables(addVariablesDto, req);
       return result;
     } catch (error) {
       // Determine if this is already an HTTP exception
@@ -90,7 +90,7 @@ export class DataIntakeController {
 
   // READ - Get variables by user ID
   @Get('variables/:userId')
-  async getVariablesByUser(@Param('userId') userId: string) {
+  async getVariablesByUser(@Req() req: RequestWithUser, @Param('userId') userId: string) {
     try {
       this.logger.log(`Fetching variables for user: ${userId}`);
       
@@ -99,7 +99,7 @@ export class DataIntakeController {
         throw new HttpException('User ID is required', HttpStatus.BAD_REQUEST);
       }
       
-      const result = await this.dataIntakeService.getVariablesByUser(userId);
+      const result = await this.dataIntakeService.getVariablesByUser(userId, req);
       return result;
     } catch (error) {
       if (error instanceof HttpException) {
@@ -130,7 +130,7 @@ export class DataIntakeController {
         throw new HttpException('No variables provided for update', HttpStatus.BAD_REQUEST);
       }
       
-      const result = await this.dataIntakeService.updateVariables(updateVariablesDto /*, req.user?.userId */);
+      const result = await this.dataIntakeService.updateVariables(updateVariablesDto, req);
       return result;
     } catch (error) {
       if (error instanceof HttpException) {
@@ -180,7 +180,8 @@ export class DataIntakeController {
       const result = await this.dataIntakeService.deleteVariables(
         { ids }, // Pass only {ids} if service only needs that from DTO
         req.user.userId,
-        organizationId // Use organizationId from DTO
+        organizationId, // Use organizationId from DTO
+        req
       );
       return result;
     } catch (error) {

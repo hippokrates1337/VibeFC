@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MembersService } from './members.service';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { Logger, NotFoundException, InternalServerErrorException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InviteMemberDto, UpdateMemberRoleDto, OrganizationRole, MemberDto } from '../dto/member.dto';
 
@@ -31,11 +31,17 @@ Logger.prototype.warn = jest.fn();
 
 describe('MembersService', () => {
   let service: MembersService;
-  let supabaseService: SupabaseService;
+  let supabaseService: SupabaseOptimizedService;
 
   const mockSupabaseService = {
-    client: mockSupabaseClient,
+    getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
   };
+
+  // Mock request object
+  const mockRequest = {
+    headers: { authorization: 'Bearer mock-token' },
+    user: { id: 'test-user-123', email: 'test@example.com' }
+  } as any;
 
   // Shared mocks for different .from() calls
   let mockFromAuthUsers: jest.Mock;
@@ -112,13 +118,13 @@ describe('MembersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MembersService,
-        { provide: SupabaseService, useValue: mockSupabaseService },
+        { provide: SupabaseOptimizedService, useValue: mockSupabaseService },
         Logger,
       ],
     }).compile();
 
     service = module.get<MembersService>(MembersService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
+    supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
   });
 
   it('should be defined', () => {
@@ -141,7 +147,7 @@ describe('MembersService', () => {
       // Mock insert success (returns void)
       mockMembersInsert.mockResolvedValue({ error: null });
 
-      await service.addMember(orgId, inviteDto);
+      await service.addMember(orgId, inviteDto, mockRequest);
 
       // Verify user lookup
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('auth.users');
@@ -170,7 +176,7 @@ describe('MembersService', () => {
       // Mock user lookup failure
       mockAuthSingle.mockResolvedValue({ data: null, error: { message: 'Not found', code: 'PGRST116'} }); // Simulate Supabase not found
 
-      await expect(service.addMember(orgId, inviteDto))
+      await expect(service.addMember(orgId, inviteDto, mockRequest))
         .rejects.toThrow(new NotFoundException(`User with email ${emailToAdd} not found`));
         
       expect(mockMembersInsert).not.toHaveBeenCalled();
@@ -182,7 +188,7 @@ describe('MembersService', () => {
         // Mock existing member check (found)
         mockMembersMaybeSingle.mockResolvedValue({ data: { id: 'existing-member'}, error: null });
 
-        await expect(service.addMember(orgId, inviteDto))
+        await expect(service.addMember(orgId, inviteDto, mockRequest))
             .rejects.toThrow(new ConflictException(`User is already a member of this organization`));
             
         expect(mockMembersInsert).not.toHaveBeenCalled();
@@ -195,7 +201,7 @@ describe('MembersService', () => {
         const checkError = { message: 'Check failed', code: 'DB500' };
         mockMembersMaybeSingle.mockResolvedValue({ data: null, error: checkError });
 
-        await expect(service.addMember(orgId, inviteDto))
+        await expect(service.addMember(orgId, inviteDto, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to check existing membership: ${checkError.message}`));
             
         expect(mockMembersInsert).not.toHaveBeenCalled();
@@ -210,7 +216,7 @@ describe('MembersService', () => {
         const insertError = { message: 'Insert failed', code: 'DB500' };
         mockMembersInsert.mockResolvedValue({ error: insertError });
 
-        await expect(service.addMember(orgId, inviteDto))
+        await expect(service.addMember(orgId, inviteDto, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to add member: ${insertError.message}`));
     });
   });
@@ -235,7 +241,7 @@ describe('MembersService', () => {
     });
 
     it('should return mapped members of the organization', async () => {
-      const result = await service.findAllInOrganization(orgId);
+      const result = await service.findAllInOrganization(orgId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organization_members');
       expect(mockMembersSelect).toHaveBeenCalledWith(expect.stringContaining('user:user_id'));
@@ -245,14 +251,14 @@ describe('MembersService', () => {
 
     it('should return an empty array if organization has no members', async () => {
         mockMembersEqOrg.mockResolvedValue({ data: [], error: null });
-        const result = await service.findAllInOrganization(orgId);
+        const result = await service.findAllInOrganization(orgId, mockRequest);
         expect(result).toEqual([]);
     });
 
     it('should throw InternalServerErrorException if select fails', async () => {
         const dbError = { message: 'Select failed', code: 'DB500' };
         mockMembersEqOrg.mockResolvedValue({ data: null, error: dbError });
-        await expect(service.findAllInOrganization(orgId))
+        await expect(service.findAllInOrganization(orgId, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to fetch members: ${dbError.message}`));
     });
   });
@@ -283,7 +289,7 @@ describe('MembersService', () => {
     });
 
     it('should update the member role if member exists and not last admin', async () => {
-      await service.updateMemberRole(orgId, userId, updateDto);
+      await service.updateMemberRole(orgId, userId, updateDto, mockRequest);
 
       // Verify member check
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organization_members');
@@ -305,7 +311,7 @@ describe('MembersService', () => {
       mockMembersMaybeSingle.mockResolvedValue({ data: { id: 'member-id', role: OrganizationRole.ADMIN }, error: null });
       const adminDto: UpdateMemberRoleDto = { role: OrganizationRole.ADMIN };
 
-      await service.updateMemberRole(orgId, userId, adminDto);
+      await service.updateMemberRole(orgId, userId, adminDto, mockRequest);
 
       expect(mockMembersUpdate).toHaveBeenCalledWith({ role: adminDto.role });
       expect(mockUpdateEqUser).toHaveBeenCalledTimes(1);
@@ -315,7 +321,7 @@ describe('MembersService', () => {
 
     it('should throw NotFoundException if member to update is not found', async () => {
         mockMembersMaybeSingle.mockResolvedValue({ data: null, error: null }); // Simulate no match
-        await expect(service.updateMemberRole(orgId, userId, updateDto))
+        await expect(service.updateMemberRole(orgId, userId, updateDto, mockRequest))
             .rejects.toThrow(new NotFoundException(`User is not a member of this organization`));
         expect(mockMembersUpdate).not.toHaveBeenCalled();
     });
@@ -327,7 +333,7 @@ describe('MembersService', () => {
       // Mock admin count to be 1
       mockSelectEqAdminCount.mockResolvedValue({ data: [{id: 'admin1'}], error: null });
 
-      await expect(service.updateMemberRole(orgId, userId, demoteDto))
+      await expect(service.updateMemberRole(orgId, userId, demoteDto, mockRequest))
           .rejects.toThrow(new BadRequestException(`Cannot demote the last admin of the organization`));
 
       // Verify admin count was checked
@@ -341,7 +347,7 @@ describe('MembersService', () => {
     it('should throw InternalServerErrorException if checking membership fails', async () => {
         const checkError = { message: 'Check failed', code: 'DB500' };
         mockMembersMaybeSingle.mockResolvedValue({ data: null, error: checkError });
-        await expect(service.updateMemberRole(orgId, userId, updateDto))
+        await expect(service.updateMemberRole(orgId, userId, updateDto, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to check membership: ${checkError.message}`));
     });
     
@@ -353,14 +359,14 @@ describe('MembersService', () => {
       const countError = { message: 'Count failed', code: 'DB500' };
       mockSelectEqAdminCount.mockResolvedValue({ data: null, error: countError });
 
-      await expect(service.updateMemberRole(orgId, userId, demoteDto))
+      await expect(service.updateMemberRole(orgId, userId, demoteDto, mockRequest))
           .rejects.toThrow(new InternalServerErrorException(`Failed to check admin count: ${countError.message}`));
     });
 
     it('should throw InternalServerErrorException if update query fails', async () => {
         const updateError = { message: 'Update failed', code: 'DB500' };
         mockUpdateEqUser.mockResolvedValue({ error: updateError }); // Simulate update error
-        await expect(service.updateMemberRole(orgId, userId, updateDto))
+        await expect(service.updateMemberRole(orgId, userId, updateDto, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to update member role: ${updateError.message}`));
     });
   });
@@ -392,7 +398,7 @@ describe('MembersService', () => {
     });
 
     it('should remove the member if found and not last admin', async () => {
-      await service.removeMember(orgId, userId);
+      await service.removeMember(orgId, userId, mockRequest);
       
       // Verify member check
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organization_members');
@@ -413,7 +419,7 @@ describe('MembersService', () => {
        mockMembersMaybeSingle.mockResolvedValue({ data: { role: OrganizationRole.ADMIN }, error: null });
        // Admin count is > 1 (default mock)
        
-       await service.removeMember(orgId, userId);
+       await service.removeMember(orgId, userId, mockRequest);
        
        expect(mockMembersMaybeSingle).toHaveBeenCalledTimes(1);
        // Verify admin count was checked
@@ -427,7 +433,7 @@ describe('MembersService', () => {
 
     it('should throw NotFoundException if member to remove is not found', async () => {
         mockMembersMaybeSingle.mockResolvedValue({ data: null, error: null }); // Simulate member not found
-        await expect(service.removeMember(orgId, userId))
+        await expect(service.removeMember(orgId, userId, mockRequest))
             .rejects.toThrow(new NotFoundException(`User is not a member of this organization`));
         expect(mockMembersDelete).not.toHaveBeenCalled();
     });
@@ -438,7 +444,7 @@ describe('MembersService', () => {
       // Mock admin count to be 1
       mockSelectEqAdminCount.mockResolvedValue({ data: [{id: 'admin1'}], error: null });
 
-      await expect(service.removeMember(orgId, userId))
+      await expect(service.removeMember(orgId, userId, mockRequest))
           .rejects.toThrow(new BadRequestException(`Cannot remove the last admin of the organization`));
           
        // Verify admin count was checked
@@ -453,7 +459,7 @@ describe('MembersService', () => {
     it('should throw InternalServerErrorException if checking membership fails', async () => {
         const checkError = { message: 'Check failed', code: 'DB500' };
         mockMembersMaybeSingle.mockResolvedValue({ data: null, error: checkError });
-        await expect(service.removeMember(orgId, userId))
+        await expect(service.removeMember(orgId, userId, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to check membership: ${checkError.message}`));
     });
     
@@ -464,7 +470,7 @@ describe('MembersService', () => {
       const countError = { message: 'Count failed', code: 'DB500' };
       mockSelectEqAdminCount.mockResolvedValue({ data: null, error: countError });
 
-      await expect(service.removeMember(orgId, userId))
+      await expect(service.removeMember(orgId, userId, mockRequest))
           .rejects.toThrow(new InternalServerErrorException(`Failed to check admin count: ${countError.message}`));
     });
 
@@ -475,7 +481,7 @@ describe('MembersService', () => {
         // Mock delete failure
         mockDeleteEqUser.mockResolvedValue({ error: deleteError }); 
         
-        await expect(service.removeMember(orgId, userId))
+        await expect(service.removeMember(orgId, userId, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to remove member: ${deleteError.message}`));
     });
   });

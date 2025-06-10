@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForecastService } from '../forecast.service';
-import { SupabaseService } from '../../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../../supabase/supabase-optimized.service';
+import { PerformanceService } from '../../../common/services/performance.service';
 import { Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../../dto/forecast.dto';
 
@@ -27,13 +28,19 @@ Logger.prototype.warn = jest.fn();
 
 describe('ForecastService', () => {
   let service: ForecastService;
-  let supabaseService: SupabaseService;
+  let supabaseService: SupabaseOptimizedService;
   const testUserId = 'test-user-123';
   const testOrgId = 'test-org-123';
 
   const mockSupabaseService = {
-    client: mockSupabaseClient,
+    getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
   };
+
+  // Mock request object
+  const mockRequest = {
+    headers: { authorization: 'Bearer mock-token' },
+    user: { id: 'test-user-123', email: 'test@example.com' }
+  } as any;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -52,6 +59,8 @@ describe('ForecastService', () => {
 
     mockSupabaseSelect.mockReturnValue({
       eq: jest.fn().mockReturnThis(),
+      filter: jest.fn().mockReturnThis(),
+      match: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue({ data: null, error: null }),
     });
 
@@ -62,24 +71,32 @@ describe('ForecastService', () => {
 
     mockSupabaseUpdate.mockReturnValue({
       eq: jest.fn().mockReturnThis(),
+      match: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue({ data: { id: 'updated-forecast-id' }, error: null })
     });
 
     mockSupabaseDelete.mockReturnValue({
       eq: jest.fn().mockResolvedValue({ count: 1, error: null }),
+      match: jest.fn().mockResolvedValue({ count: 1, error: null }),
     });
+
+    const mockPerformanceService = {
+      measureTime: jest.fn(),
+      logPerformance: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ForecastService,
-        { provide: SupabaseService, useValue: mockSupabaseService },
+        { provide: SupabaseOptimizedService, useValue: mockSupabaseService },
+        { provide: PerformanceService, useValue: mockPerformanceService },
         Logger,
       ],
     }).compile();
 
     service = module.get<ForecastService>(ForecastService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
+    supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
 
     // Clear logger mocks before each test
     (Logger.prototype.log as jest.Mock).mockClear();
@@ -116,7 +133,7 @@ describe('ForecastService', () => {
       const mockInsertSingle = jest.fn().mockResolvedValue({ data: newForecast, error: null });
       mockSupabaseInsert.mockReturnValue({ select: jest.fn().mockReturnThis(), single: mockInsertSingle });
 
-      const result = await service.create(userId, createDto);
+      const result = await service.create(userId, createDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
       expect(mockSupabaseInsert).toHaveBeenCalledWith({
@@ -137,7 +154,7 @@ describe('ForecastService', () => {
         createdAt: new Date(newForecast.created_at),
         updatedAt: new Date(newForecast.updated_at),
       });
-      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast created: ${newForecast.id} by user ${userId}`);
+      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast created successfully via service: ${newForecast.id} by user ${userId}`);
     });
 
     it('should throw InternalServerErrorException if forecast creation fails', async () => {
@@ -147,8 +164,8 @@ describe('ForecastService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.create(userId, createDto))
-        .rejects.toThrow(new InternalServerErrorException(`Failed to create forecast: ${dbError.message}`));
+      await expect(service.create(userId, createDto, mockRequest))
+        .rejects.toThrow(new InternalServerErrorException(`Failed to create forecast due to database error: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
 
@@ -158,8 +175,8 @@ describe('ForecastService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: null })
       });
 
-      await expect(service.create(userId, createDto))
-        .rejects.toThrow(new InternalServerErrorException('Failed to create forecast, data missing after insert.'));
+      await expect(service.create(userId, createDto, mockRequest))
+        .rejects.toThrow(new InternalServerErrorException('Failed to create forecast, data missing after insert and no explicit error from database.'));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
   });
@@ -214,24 +231,26 @@ describe('ForecastService', () => {
     ];
 
     it('should return all forecasts for the specified organization', async () => {
-      const mockSelectEq = jest.fn().mockResolvedValue({ data: mockDbResult, error: null });
+      const mockFilter = jest.fn().mockResolvedValue({ data: mockDbResult, error: null });
+      const mockSelectEq = jest.fn().mockReturnValue({ filter: mockFilter });
       mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
 
-      const result = await service.findAll(userId, organizationId);
+      const result = await service.findAll(userId, organizationId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
       expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
       expect(mockSelectEq).toHaveBeenCalledWith('organization_id', organizationId);
+      expect(mockFilter).toHaveBeenCalledWith('user_id', 'eq', userId);
       expect(result).toEqual(expectedForecasts);
     });
 
     it('should throw InternalServerErrorException if DB query fails', async () => {
       const dbError = { message: 'Query failed', code: 'DB500' };
-      mockSupabaseSelect.mockReturnValue({
-        eq: jest.fn().mockResolvedValue({ data: null, error: dbError })
-      });
+      const mockFilter = jest.fn().mockResolvedValue({ data: null, error: dbError });
+      const mockSelectEq = jest.fn().mockReturnValue({ filter: mockFilter });
+      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
 
-      await expect(service.findAll(userId, organizationId))
+      await expect(service.findAll(userId, organizationId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to fetch forecasts: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -263,37 +282,40 @@ describe('ForecastService', () => {
     };
 
     it('should return a specific forecast by ID', async () => {
-      mockSupabaseSelect.mockReturnValue({
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: mockDbResult, error: null })
-      });
+      const mockSingle = jest.fn().mockResolvedValue({ data: mockDbResult, error: null });
+      const mockMatch = jest.fn().mockReturnValue({ single: mockSingle });
+      const mockSelectEq = jest.fn().mockReturnValue({ match: mockMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
 
-      const result = await service.findOne(forecastId, userId);
+      const result = await service.findOne(forecastId, userId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
       expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
+      expect(mockSelectEq).toHaveBeenCalledWith('id', forecastId);
+      expect(mockMatch).toHaveBeenCalledWith({ user_id: userId });
+      expect(mockSingle).toHaveBeenCalled();
       expect(result).toEqual(expectedForecast);
     });
 
     it('should throw NotFoundException if forecast does not exist', async () => {
-      mockSupabaseSelect.mockReturnValue({
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: null, error: null })
-      });
+      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+      const mockMatch = jest.fn().mockReturnValue({ single: mockSingle });
+      const mockSelectEq = jest.fn().mockReturnValue({ match: mockMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
 
-      await expect(service.findOne(forecastId, userId))
+      await expect(service.findOne(forecastId, userId, mockRequest))
         .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
       expect(Logger.prototype.warn).toHaveBeenCalled();
     });
 
     it('should throw InternalServerErrorException if DB query fails', async () => {
       const dbError = { message: 'Query failed', code: 'DB500' };
-      mockSupabaseSelect.mockReturnValue({
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: null, error: dbError })
-      });
+      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: dbError });
+      const mockMatch = jest.fn().mockReturnValue({ single: mockSingle });
+      const mockSelectEq = jest.fn().mockReturnValue({ match: mockMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
 
-      await expect(service.findOne(forecastId, userId))
+      await expect(service.findOne(forecastId, userId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to retrieve forecast details: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -309,13 +331,31 @@ describe('ForecastService', () => {
     };
 
     it('should update a forecast successfully', async () => {
-      mockSupabaseUpdate.mockReturnValue({
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: { id: forecastId }, error: null })
+      // First mock findOne to return the existing forecast
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
+        data: { 
+          id: forecastId, 
+          name: 'Old name', 
+          forecast_start_date: '2023-01-01',
+          forecast_end_date: '2023-12-31',
+          organization_id: testOrgId,
+          user_id: testUserId,
+          created_at: '2023-01-01T00:00:00.000Z',
+          updated_at: '2023-01-01T00:00:00.000Z'
+        }, 
+        error: null 
       });
+      const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      await service.update(forecastId, updateDto);
+      // Then mock the update operation
+      const mockUpdateSingle = jest.fn().mockResolvedValue({ data: { id: forecastId }, error: null });
+      const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
+      const mockUpdateMatch = jest.fn().mockReturnValue({ select: mockUpdateSelect });
+      mockSupabaseUpdate.mockReturnValue({ match: mockUpdateMatch });
+
+      await service.update(forecastId, testUserId, updateDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
       expect(mockSupabaseUpdate).toHaveBeenCalledWith(expect.objectContaining({
@@ -324,14 +364,33 @@ describe('ForecastService', () => {
         forecast_end_date: updateDto.forecastEndDate,
         updated_at: expect.any(String)
       }));
-      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast updated: ${forecastId}`);
+      expect(mockUpdateMatch).toHaveBeenCalledWith({ id: forecastId, user_id: testUserId });
+      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast updated: ${forecastId} by user: ${testUserId}`);
     });
 
     it('should do nothing if no update data is provided', async () => {
-      await service.update(forecastId, {});
+      // First mock findOne to return the existing forecast (since update() calls findOne first)
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
+        data: { 
+          id: forecastId, 
+          name: 'Test name', 
+          forecast_start_date: '2023-01-01',
+          forecast_end_date: '2023-12-31',
+          organization_id: testOrgId,
+          user_id: testUserId,
+          created_at: '2023-01-01T00:00:00.000Z',
+          updated_at: '2023-01-01T00:00:00.000Z'
+        }, 
+        error: null 
+      });
+      const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      expect(mockSupabaseClient.from).not.toHaveBeenCalled();
-      expect(mockSupabaseUpdate).not.toHaveBeenCalled();
+      await service.update(forecastId, testUserId, {}, mockRequest);
+
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts'); // Called for findOne
+      expect(mockSupabaseUpdate).not.toHaveBeenCalled(); // Update not called due to empty dto
     });
 
     it('should throw NotFoundException if forecast does not exist', async () => {
@@ -341,20 +400,38 @@ describe('ForecastService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: null })
       });
 
-      await expect(service.update(forecastId, updateDto))
+      await expect(service.update(forecastId, testUserId, updateDto, mockRequest))
         .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
       expect(Logger.prototype.warn).toHaveBeenCalled();
     });
 
     it('should throw InternalServerErrorException if DB update fails', async () => {
-      const dbError = { message: 'Update failed', code: 'DB500' };
-      mockSupabaseUpdate.mockReturnValue({
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: null, error: dbError })
+      // First mock successful findOne
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
+        data: { 
+          id: forecastId, 
+          name: 'Old name', 
+          forecast_start_date: '2023-01-01',
+          forecast_end_date: '2023-12-31',
+          organization_id: testOrgId,
+          user_id: testUserId,
+          created_at: '2023-01-01T00:00:00.000Z',
+          updated_at: '2023-01-01T00:00:00.000Z'
+        }, 
+        error: null 
       });
+      const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      await expect(service.update(forecastId, updateDto))
+      // Then mock update failure
+      const dbError = { message: 'Update failed', code: 'DB500' };
+      const mockUpdateSingle = jest.fn().mockResolvedValue({ data: null, error: dbError });
+      const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
+      const mockUpdateMatch = jest.fn().mockReturnValue({ select: mockUpdateSelect });
+      mockSupabaseUpdate.mockReturnValue({ match: mockUpdateMatch });
+
+      await expect(service.update(forecastId, testUserId, updateDto, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to update forecast ${forecastId}: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -365,35 +442,50 @@ describe('ForecastService', () => {
     const forecastId = 'forecast-123';
 
     it('should delete a forecast successfully', async () => {
-      mockSupabaseDelete.mockReturnValue({
-        eq: jest.fn().mockResolvedValue({ count: 1, error: null })
-      });
+      // First mock the findOne call (to check forecast exists)
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ data: { id: forecastId }, error: null });
+      const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      await service.remove(forecastId);
+      // Then mock the delete call
+      const mockDeleteMatch = jest.fn().mockResolvedValue({ error: null });
+      mockSupabaseDelete.mockReturnValue({ match: mockDeleteMatch });
+
+      await service.remove(forecastId, testUserId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
       expect(mockSupabaseDelete).toHaveBeenCalled();
-      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast deleted: ${forecastId}`);
+      expect(mockDeleteMatch).toHaveBeenCalledWith({ id: forecastId, user_id: testUserId });
+      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast deleted: ${forecastId} by user: ${testUserId}`);
     });
 
     it('should throw NotFoundException if forecast does not exist', async () => {
-      mockSupabaseDelete.mockReturnValue({
-        eq: jest.fn().mockResolvedValue({ count: 0, error: null })
-      });
+      // Mock findOne to throw NotFoundException (forecast doesn't exist)
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+      const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      await expect(service.remove(forecastId))
+      await expect(service.remove(forecastId, testUserId, mockRequest))
         .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
       expect(Logger.prototype.warn).toHaveBeenCalled();
     });
 
     it('should throw InternalServerErrorException if DB delete fails', async () => {
-      const dbError = { message: 'Delete failed', code: 'DB500' };
-      mockSupabaseDelete.mockReturnValue({
-        eq: jest.fn().mockResolvedValue({ count: 0, error: dbError })
-      });
+      // First mock successful findOne
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ data: { id: forecastId }, error: null });
+      const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      await expect(service.remove(forecastId))
-        .rejects.toThrow(new InternalServerErrorException(`Failed to delete forecast ${forecastId}: ${dbError.message}`));
+      // Then mock delete failure
+      const dbError = { message: 'Delete failed', code: 'DB500' };
+      const mockDeleteMatch = jest.fn().mockResolvedValue({ error: dbError });
+      mockSupabaseDelete.mockReturnValue({ match: mockDeleteMatch });
+
+      await expect(service.remove(forecastId, testUserId, mockRequest))
+        .rejects.toThrow(new InternalServerErrorException(`Failed to delete forecast: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
   });

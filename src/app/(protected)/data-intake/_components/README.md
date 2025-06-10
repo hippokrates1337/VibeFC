@@ -33,7 +33,16 @@ A component used to display status notifications for API operations, indicating 
 These hooks encapsulate specific logic related to API interactions and data processing.
 
 ### `useVariableApi` (from `api-hooks.ts`)
-This hook manages all backend API interactions for variables. It handles creating (importing), updating (name, type, time-series values), and deleting variables. It also manages API loading, success, and error states.
+This hook manages all backend API interactions for variables. It handles:
+
+- **Creating (importing)**: Sends new variables to backend via `POST /api/data-intake/variables` → backend
+- **Updating via import**: When users select "update existing" during CSV import, sends variable updates to backend via `PUT /api/data-intake/variables` → backend
+- **Updating individual variables**: Direct variable editing through the details modal via `PUT /api/data-intake/variables` → backend
+- **Deleting**: Removes variables via `DELETE /api/data-intake/variables` → backend
+
+**Architecture**: The hook calls Next.js API routes (not backend directly) to avoid CORS issues and ensure proper authentication handling. All requests flow through the API proxy layer.
+
+The hook ensures both frontend Zustand store and backend database remain synchronized for all operations. It also manages API loading, success, and error states.
 
 ### `useCsvProcessor` (from `api-hooks.ts`)
 Responsible for client-side CSV file processing. It parses the uploaded CSV file, validates its structure and content, and prepares the data for the import modal or for direct addition via the API.

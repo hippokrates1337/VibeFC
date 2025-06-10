@@ -22,6 +22,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { forecastApi, mapForecastToClientFormat } from '@/lib/api/forecast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useOrganizationStore } from '@/lib/store/organization';
+import { CalculationResultsTable } from '@/components/forecast/calculation-results-table';
 
 export default function ForecastEditorPage() {
   const { forecastId } = useParams<{ forecastId: string }>();
@@ -117,6 +118,13 @@ export default function ForecastEditorPage() {
         throw new Error(saveError.message);
       }
       
+      // Reload the saved data to get the correct node IDs and updated references
+      if (data) {
+        const clientData = mapForecastToClientFormat(data);
+        loadForecastToStore(clientData);
+        console.log('[ForecastEditorPage] Reloaded forecast with updated node IDs after save');
+      }
+      
       setDirtyState(false);
       toast({
         title: 'Success',
@@ -193,8 +201,15 @@ export default function ForecastEditorPage() {
       </div>
       
       {/* Canvas */}
-      <div className="flex-1 relative bg-slate-900">
-        <ForecastCanvas />
+      <div className="flex-1 relative bg-slate-900 flex flex-col">
+        <div className="flex-1">
+          <ForecastCanvas />
+        </div>
+        
+        {/* Simple scrollable table for calculation results (interim) */}
+        <div className="p-4 max-h-96 overflow-y-auto border-t border-slate-700">
+          <CalculationResultsTable />
+        </div>
       </div>
       
       <Toaster />

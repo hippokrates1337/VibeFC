@@ -5,6 +5,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { useShallow } from 'zustand/react/shallow';
 import type { Forecast as ClientForecastSummary } from '@/lib/api/forecast';
 import { logger } from '@/lib/utils/logger';
+import type { GraphValidationResult, ForecastCalculationResult } from '@/types/forecast';
+import { GraphConverter } from '@/lib/services/forecast-calculation/graph-converter';
+import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
+import { useVariableStore } from './variables';
 
 // Define node types
 export type ForecastNodeKind = 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
@@ -17,6 +21,7 @@ export interface DataNodeAttributes {
 }
 
 export interface ConstantNodeAttributes {
+  name: string;
   value: number;
 }
 
@@ -63,6 +68,19 @@ interface ForecastGraphState {
   isLoading: boolean;
   error: string | null;
   organizationForecasts: ClientForecastSummary[];
+  
+  // NEW: Last edited node position tracking
+  lastEditedNodePosition: { x: number; y: number } | null;
+  
+  // NEW: Graph validation state
+  graphValidation: GraphValidationResult | null;
+  isValidatingGraph: boolean;
+  
+  // NEW: Calculation results
+  calculationResults: ForecastCalculationResult | null;
+  isCalculating: boolean;
+  calculationError: string | null;
+  lastCalculatedAt: Date | null;
 }
 
 // Store actions
@@ -102,6 +120,23 @@ interface ForecastGraphActions {
   setError: (error: string | null) => void;
   duplicateNodeWithEdges: (nodeId: string) => string | null;
   loadOrganizationForecasts: (forecasts: ClientForecastSummary[]) => void;
+  
+  // Last edited node position tracking
+  updateLastEditedNodePosition: (position: { x: number; y: number }) => void;
+  
+  // Graph validation actions
+  validateGraph: () => Promise<GraphValidationResult>;
+  setGraphValidation: (validation: GraphValidationResult) => void;
+  clearGraphValidation: () => void;
+  setValidatingGraph: (isValidating: boolean) => void;
+  
+  // Calculation actions (only allowed when graph is valid)
+  calculateForecast: () => Promise<void>;
+  loadCalculationResults: () => Promise<void>;
+  setCalculationResults: (results: ForecastCalculationResult) => void;
+  clearCalculationResults: () => void;
+  setCalculating: (isCalculating: boolean) => void;
+  setCalculationError: (error: string | null) => void;
 }
 
 // Helper functions
@@ -110,15 +145,15 @@ const getDefaultNodeData = (type: ForecastNodeKind): ForecastNodeData => {
     case 'DATA':
       return { name: 'New Data Node', variableId: '', offsetMonths: 0 };
     case 'CONSTANT':
-      return { value: 0 };
+      return { name: 'New Constant', value: 0 };
     case 'OPERATOR':
       return { op: '+', inputOrder: [] };
     case 'METRIC':
-      return { label: '', budgetVariableId: '', historicalVariableId: '', useCalculated: false };
+      return { label: 'New Metric', budgetVariableId: '', historicalVariableId: '', useCalculated: false };
     case 'SEED':
       return { sourceMetricId: '' };
     default:
-      return { value: 0 };
+      return { name: 'New Constant', value: 0 };
   }
 };
 
@@ -149,6 +184,49 @@ const updateOperatorInputOrders = (nodes: ForecastNodeClient[], edges: ForecastE
   });
 };
 
+/**
+ * Clean up orphaned SEED node references and return cleaned nodes
+ * Only cleans if the referenced metric ID is a placeholder pattern or definitely invalid
+ */
+const cleanOrphanedReferences = (
+  nodes: ForecastNodeClient[], 
+  edges: ForecastEdgeClient[]
+): { cleanedNodes: ForecastNodeClient[]; hadOrphanedRefs: boolean } => {
+  const metricNodeIds = new Set(nodes.filter(n => n.type === 'METRIC').map(n => n.id));
+  let hadOrphanedRefs = false;
+  
+  const cleanedNodes = nodes.map(node => {
+    if (node.type === 'SEED') {
+      const seedData = node.data as SeedNodeAttributes;
+      
+      // Check if the referenced metric exists
+      if (seedData.sourceMetricId && !metricNodeIds.has(seedData.sourceMetricId)) {
+        // Only clean up if this is clearly a stale reference (UUID pattern but not found)
+        // This prevents accidentally clearing legitimate temporary references
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seedData.sourceMetricId);
+        
+        if (isValidUUID) {
+          hadOrphanedRefs = true;
+          console.warn(`[ForecastGraphStore] Cleaning orphaned SEED reference: ${seedData.sourceMetricId} not found in current metrics`);
+          
+          // Reset the sourceMetricId to empty string
+          const cleanedData: SeedNodeAttributes = {
+            sourceMetricId: ''
+          };
+          
+          return {
+            ...node,
+            data: cleanedData
+          };
+        }
+      }
+    }
+    return node;
+  });
+  
+  return { cleanedNodes, hadOrphanedRefs };
+};
+
 // Initial state
 const initialState: ForecastGraphState = {
   forecastId: null,
@@ -164,6 +242,19 @@ const initialState: ForecastGraphState = {
   isLoading: false,
   error: null,
   organizationForecasts: [],
+  
+  // NEW: Last edited node position tracking
+  lastEditedNodePosition: null,
+  
+  // NEW: Graph validation state
+  graphValidation: null,
+  isValidatingGraph: false,
+  
+  // NEW: Calculation results
+  calculationResults: null,
+  isCalculating: false,
+  calculationError: null,
+  lastCalculatedAt: null,
 };
 
 // Create store with persist middleware
@@ -175,15 +266,23 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
       // Actions
       loadForecast: (data) => {
         logger.log('[ForecastGraphStore] loadForecast called with:', data);
+        
+        // Clean up orphaned references before loading
+        const { cleanedNodes, hadOrphanedRefs } = cleanOrphanedReferences(data.nodes, data.edges);
+        
+        if (hadOrphanedRefs) {
+          logger.warn('[ForecastGraphStore] Cleaned up orphaned SEED node references during load');
+        }
+        
         set({
           forecastId: data.id,
           forecastName: data.name,
           forecastStartDate: data.startDate,
           forecastEndDate: data.endDate,
           organizationId: data.organizationId,
-          nodes: data.nodes,
+          nodes: cleanedNodes,
           edges: data.edges,
-          isDirty: false,
+          isDirty: false, // Fresh data from server should not be dirty
           isLoading: false,
           error: null,
         });
@@ -222,6 +321,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
           return {
             nodes: newNodes,
             isDirty: true,
+            lastEditedNodePosition: position,
           };
         });
 
@@ -230,14 +330,18 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
 
       updateNodeData: (nodeId, dataUpdates) => {
         logger.log(`[ForecastGraphStore] updateNodeData called for nodeId: ${nodeId} with updates:`, dataUpdates);
-        set((state) => ({
-          nodes: state.nodes.map((node) => 
-            node.id === nodeId 
-              ? { ...node, data: { ...node.data, ...dataUpdates } } 
-              : node
-          ),
-          isDirty: true,
-        }));
+        set((state) => {
+          const targetNode = state.nodes.find(node => node.id === nodeId);
+          return {
+            nodes: state.nodes.map((node) => 
+              node.id === nodeId 
+                ? { ...node, data: { ...node.data, ...dataUpdates } } 
+                : node
+            ),
+            isDirty: true,
+            lastEditedNodePosition: targetNode ? targetNode.position : state.lastEditedNodePosition,
+          };
+        });
         logger.log(`[ForecastGraphStore] Node data updated for nodeId: ${nodeId}`);
       },
 
@@ -250,6 +354,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
               : node
           ),
           isDirty: true,
+          lastEditedNodePosition: position,
         }));
         logger.log(`[ForecastGraphStore] Node position updated for nodeId: ${nodeId}`);
       },
@@ -316,18 +421,40 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         // logger.log('[ForecastGraphStore] onNodesChange called with changes:', changes); // Can be very noisy
         set((state) => {
           const newNodes = applyNodeChanges(changes, state.nodes) as ForecastNodeClient[];
+          
+          // Only mark as dirty for structural changes that affect calculation
+          // Position, dimensions, and selection don't affect graph calculation results
           const dirty = changes.some(change => 
-            change.type === 'position' || 
-            change.type === 'dimensions' || 
             change.type === 'remove' ||
-            change.type === 'select'
+            change.type === 'add'
           );
-          if (dirty) {
-            // logger.log('[ForecastGraphStore] Nodes changed, setting isDirty to true.');
+          
+          // Track position changes for smart node placement
+          let lastEditedNodePosition = state.lastEditedNodePosition;
+          
+          // Find position changes that have a defined position
+          // We track both during dragging and when dragging ends to ensure we capture the position
+          const positionChanges = changes.filter(change => 
+            change.type === 'position' && 
+            change.position !== undefined
+          );
+          
+          if (positionChanges.length > 0) {
+            // Take the position of the last moved node
+            const lastPositionChange = positionChanges[positionChanges.length - 1];
+            if (lastPositionChange.type === 'position' && lastPositionChange.position) {
+              lastEditedNodePosition = lastPositionChange.position;
+            }
           }
+          
+          if (dirty) {
+            // logger.log('[ForecastGraphStore] Nodes structurally changed, setting isDirty to true.');
+          }
+          
           return {
             nodes: newNodes,
             isDirty: dirty ? true : state.isDirty,
+            lastEditedNodePosition,
           };
         });
       },
@@ -448,6 +575,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
             nodes: updatedNodes,
             edges: newEdges,
             isDirty: true,
+            lastEditedNodePosition: duplicatedNode.position,
           };
         });
         logger.log(`[ForecastGraphStore] Node duplicated: ${nodeId} -> ${newNodeId} with ${duplicatedEdges.length} edges.`);
@@ -462,6 +590,153 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
           error: null,
         });
         logger.log('[ForecastGraphStore] Organization forecasts loaded.');
+      },
+
+      updateLastEditedNodePosition: (position) => {
+        logger.log('[ForecastGraphStore] updateLastEditedNodePosition called with:', position);
+        set({ lastEditedNodePosition: position });
+      },
+
+      // Graph validation actions
+      validateGraph: async () => {
+        logger.log('[ForecastGraphStore] validateGraph called');
+        const state = get();
+        
+        try {
+          set({ isValidatingGraph: true });
+          
+          // Use GraphConverter directly for immediate UI validation
+          const graphConverter = new GraphConverter();
+          const validation = graphConverter.validateGraph(state.nodes, state.edges);
+          
+          set({ graphValidation: validation, isValidatingGraph: false });
+          return validation;
+        } catch (error) {
+          logger.error('[ForecastGraphStore] Graph validation failed:', error);
+          const errorResult = {
+            isValid: false,
+            errors: [`Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            warnings: []
+          };
+          set({ graphValidation: errorResult, isValidatingGraph: false });
+          return errorResult;
+        }
+      },
+
+      setGraphValidation: (validation) => {
+        logger.log('[ForecastGraphStore] setGraphValidation called with:', validation);
+        set({ graphValidation: validation });
+      },
+
+      clearGraphValidation: () => {
+        logger.log('[ForecastGraphStore] clearGraphValidation called');
+        set({ graphValidation: null });
+      },
+
+      setValidatingGraph: (isValidating) => {
+        logger.log('[ForecastGraphStore] setValidatingGraph called with:', isValidating);
+        set({ isValidatingGraph: isValidating });
+      },
+
+      // Calculation actions
+      calculateForecast: async () => {
+        logger.log('[ForecastGraphStore] calculateForecast called');
+        const state = get();
+        
+        // Validate required data
+        if (!state.forecastId) {
+          throw new Error('Forecast ID is required for calculation');
+        }
+        
+        try {
+          set({ isCalculating: true, calculationError: null });
+          
+          logger.log(`[ForecastGraphStore] Triggering calculation for forecast ${state.forecastId}`);
+          
+          // Use the API client to trigger calculation on backend
+          const result = await forecastCalculationApi.calculateForecast(state.forecastId);
+          
+          set({ 
+            calculationResults: result,
+            lastCalculatedAt: new Date(),
+            isCalculating: false,
+            calculationError: null
+          });
+          
+          logger.log('[ForecastGraphStore] Forecast calculation completed successfully');
+        } catch (error) {
+          logger.error('[ForecastGraphStore] Forecast calculation failed:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown calculation error';
+          set({ 
+            calculationError: errorMessage,
+            isCalculating: false
+          });
+          throw error;
+        }
+      },
+
+      loadCalculationResults: async () => {
+        logger.log('[ForecastGraphStore] loadCalculationResults called');
+        const state = get();
+        
+        if (!state.forecastId) {
+          logger.warn('[ForecastGraphStore] Cannot load calculation results without forecast ID');
+          return;
+        }
+        
+        try {
+          logger.log(`[ForecastGraphStore] Loading calculation results for forecast ${state.forecastId}`);
+          
+          const result = await forecastCalculationApi.getCalculationResults(state.forecastId);
+          
+          if (result) {
+            set({ 
+              calculationResults: result,
+              lastCalculatedAt: result.calculatedAt,
+              calculationError: null
+            });
+            logger.log('[ForecastGraphStore] Calculation results loaded successfully');
+          } else {
+            logger.log('[ForecastGraphStore] No calculation results found');
+            set({ 
+              calculationResults: null,
+              lastCalculatedAt: null,
+              calculationError: null
+            });
+          }
+        } catch (error) {
+          logger.error('[ForecastGraphStore] Failed to load calculation results:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to load calculation results';
+          set({ calculationError: errorMessage });
+        }
+      },
+
+      setCalculationResults: (results) => {
+        logger.log('[ForecastGraphStore] setCalculationResults called with:', results);
+        set({
+          calculationResults: results,
+          lastCalculatedAt: new Date(),
+          calculationError: null,
+        });
+      },
+
+      clearCalculationResults: () => {
+        logger.log('[ForecastGraphStore] clearCalculationResults called');
+        set({
+          calculationResults: null,
+          lastCalculatedAt: null,
+          calculationError: null,
+        });
+      },
+
+      setCalculating: (isCalculating) => {
+        logger.log('[ForecastGraphStore] setCalculating called with:', isCalculating);
+        set({ isCalculating });
+      },
+
+      setCalculationError: (error) => {
+        logger.log('[ForecastGraphStore] setCalculationError called with:', error);
+        set({ calculationError: error });
       },
     }),
     {
@@ -501,6 +776,14 @@ export const useIsForecastLoading = () => useForecastGraphStore((state) => state
 export const useForecastError = () => useForecastGraphStore((state) => state.error);
 export const useOrganizationForecasts = () => useForecastGraphStore(useShallow((state) => state.organizationForecasts));
 
+// NEW: Validation and calculation selectors
+export const useGraphValidation = () => useForecastGraphStore((state) => state.graphValidation);
+export const useIsValidatingGraph = () => useForecastGraphStore((state) => state.isValidatingGraph);
+export const useCalculationResults = () => useForecastGraphStore((state) => state.calculationResults);
+export const useIsCalculating = () => useForecastGraphStore((state) => state.isCalculating);
+export const useCalculationError = () => useForecastGraphStore((state) => state.calculationError);
+export const useLastCalculatedAt = () => useForecastGraphStore((state) => state.lastCalculatedAt);
+
 // Action hooks for easy access
 export const useLoadForecast = () => useForecastGraphStore((state) => state.loadForecast);
 export const useSetForecastMetadata = () => useForecastGraphStore((state) => state.setForecastMetadata);
@@ -517,3 +800,77 @@ export const useSetConfigPanelOpen = () => useForecastGraphStore((state) => stat
 export const useOpenConfigPanelForNode = () => useForecastGraphStore((state) => state.openConfigPanelForNode);
 export const useDuplicateNodeWithEdges = () => useForecastGraphStore((state) => state.duplicateNodeWithEdges);
 export const useLoadOrganizationForecasts = () => useForecastGraphStore((state) => state.loadOrganizationForecasts);
+
+// NEW: Last edited node position tracking hooks
+export const useLastEditedNodePosition = () => useForecastGraphStore((state) => state.lastEditedNodePosition);
+export const useUpdateLastEditedNodePosition = () => useForecastGraphStore((state) => state.updateLastEditedNodePosition);
+
+// NEW: Validation and calculation action hooks
+export const useValidateGraph = () => useForecastGraphStore((state) => state.validateGraph);
+export const useSetGraphValidation = () => useForecastGraphStore((state) => state.setGraphValidation);
+export const useClearGraphValidation = () => useForecastGraphStore((state) => state.clearGraphValidation);
+export const useSetValidatingGraph = () => useForecastGraphStore((state) => state.setValidatingGraph);
+export const useCalculateForecast = () => useForecastGraphStore((state) => state.calculateForecast);
+export const useLoadCalculationResults = () => useForecastGraphStore((state) => state.loadCalculationResults);
+export const useSetCalculationResults = () => useForecastGraphStore((state) => state.setCalculationResults);
+export const useClearCalculationResults = () => useForecastGraphStore((state) => state.clearCalculationResults);
+export const useSetCalculating = () => useForecastGraphStore((state) => state.setCalculating);
+export const useSetCalculationError = () => useForecastGraphStore((state) => state.setCalculationError);
+
+/**
+ * Calculate a smart position for a new node based on the last edited node position.
+ * If no last edited position is available, returns a default position.
+ * 
+ * @param lastEditedPosition - The position of the last edited node
+ * @param existingNodes - Array of existing nodes to avoid overlaps
+ * @returns A position object with x and y coordinates
+ */
+export const calculateSmartNodePosition = (
+  lastEditedPosition: { x: number; y: number } | null,
+  existingNodes: ForecastNodeClient[] = []
+): { x: number; y: number } => {
+  // If no last edited position, use default with some randomness
+  if (!lastEditedPosition) {
+    return {
+      x: Math.random() * 300 + 50,
+      y: Math.random() * 300 + 50,
+    };
+  }
+
+  // Base offset from the last edited node
+  const baseOffsetX = 150;
+  const baseOffsetY = 100;
+  
+  // Try different positions around the last edited node
+  const candidatePositions = [
+    { x: lastEditedPosition.x + baseOffsetX, y: lastEditedPosition.y }, // Right
+    { x: lastEditedPosition.x, y: lastEditedPosition.y + baseOffsetY }, // Below
+    { x: lastEditedPosition.x - baseOffsetX, y: lastEditedPosition.y }, // Left
+    { x: lastEditedPosition.x, y: lastEditedPosition.y - baseOffsetY }, // Above
+    { x: lastEditedPosition.x + baseOffsetX, y: lastEditedPosition.y + baseOffsetY }, // Bottom-right
+    { x: lastEditedPosition.x - baseOffsetX, y: lastEditedPosition.y + baseOffsetY }, // Bottom-left
+    { x: lastEditedPosition.x + baseOffsetX, y: lastEditedPosition.y - baseOffsetY }, // Top-right
+    { x: lastEditedPosition.x - baseOffsetX, y: lastEditedPosition.y - baseOffsetY }, // Top-left
+  ];
+
+  // Check each candidate position for overlap with existing nodes
+  for (const candidate of candidatePositions) {
+    const hasOverlap = existingNodes.some(node => {
+      const distance = Math.sqrt(
+        Math.pow(node.position.x - candidate.x, 2) + 
+        Math.pow(node.position.y - candidate.y, 2)
+      );
+      return distance < 120; // Minimum distance to avoid overlap
+    });
+
+    if (!hasOverlap) {
+      return candidate;
+    }
+  }
+
+  // If all positions have overlaps, use the first candidate with a random offset
+  return {
+    x: candidatePositions[0].x + (Math.random() - 0.5) * 100,
+    y: candidatePositions[0].y + (Math.random() - 0.5) * 100,
+  };
+};

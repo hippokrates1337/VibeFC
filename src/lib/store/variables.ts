@@ -90,14 +90,10 @@ const createVariableStore = () => {
           set({ isLoading: true, error: null });
           
           try {
-            // Use environment variable for the standalone backend API URL
-            const backendUrlBase = process.env.NEXT_PUBLIC_BACKEND_URL;
-            if (!backendUrlBase) {
-              throw new Error('Backend API URL is not configured. Set NEXT_PUBLIC_BACKEND_URL environment variable.');
-            }
-            const fetchUrl = `${backendUrlBase}/data-intake/variables/${userId}`;
+            // Use Next.js API route instead of calling backend directly
+            const fetchUrl = `/api/data-intake/variables/user/${userId}`;
             
-            logger.log(`[fetchVariables] Fetching variables from Backend API: ${fetchUrl}`);
+            logger.log(`[fetchVariables] Fetching variables from Next.js API: ${fetchUrl}`);
             const response = await fetch(fetchUrl, {
               method: 'GET',
               headers: {

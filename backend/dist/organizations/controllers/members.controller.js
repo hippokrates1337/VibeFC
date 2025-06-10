@@ -24,17 +24,17 @@ let MembersController = class MembersController {
     constructor(membersService) {
         this.membersService = membersService;
     }
-    async findAll(orgId) {
-        return this.membersService.findAllInOrganization(orgId);
+    async findAll(orgId, req) {
+        return this.membersService.findAllInOrganization(orgId, req);
     }
-    async addMember(orgId, inviteMemberDto) {
-        return this.membersService.addMember(orgId, inviteMemberDto);
+    async addMember(orgId, inviteMemberDto, req) {
+        return this.membersService.addMember(orgId, inviteMemberDto, req);
     }
-    async updateRole(orgId, userId, updateRoleDto) {
-        return this.membersService.updateMemberRole(orgId, userId, updateRoleDto);
+    async updateRole(orgId, userId, updateRoleDto, req) {
+        return this.membersService.updateMemberRole(orgId, userId, updateRoleDto, req);
     }
-    async removeMember(orgId, userId) {
-        return this.membersService.removeMember(orgId, userId);
+    async removeMember(orgId, userId, req) {
+        return this.membersService.removeMember(orgId, userId, req);
     }
 };
 exports.MembersController = MembersController;
@@ -43,8 +43,9 @@ __decorate([
     (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(member_dto_2.OrganizationRole.ADMIN, member_dto_2.OrganizationRole.EDITOR, member_dto_2.OrganizationRole.VIEWER),
     __param(0, (0, common_1.Param)('orgId')),
+    __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], MembersController.prototype, "findAll", null);
 __decorate([
@@ -54,8 +55,9 @@ __decorate([
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     __param(0, (0, common_1.Param)('orgId')),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, member_dto_1.InviteMemberDto]),
+    __metadata("design:paramtypes", [String, member_dto_1.InviteMemberDto, Object]),
     __metadata("design:returntype", Promise)
 ], MembersController.prototype, "addMember", null);
 __decorate([
@@ -66,8 +68,9 @@ __decorate([
     __param(0, (0, common_1.Param)('orgId')),
     __param(1, (0, common_1.Param)('userId')),
     __param(2, (0, common_1.Body)()),
+    __param(3, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, member_dto_1.UpdateMemberRoleDto]),
+    __metadata("design:paramtypes", [String, String, member_dto_1.UpdateMemberRoleDto, Object]),
     __metadata("design:returntype", Promise)
 ], MembersController.prototype, "updateRole", null);
 __decorate([
@@ -77,8 +80,9 @@ __decorate([
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
     __param(0, (0, common_1.Param)('orgId')),
     __param(1, (0, common_1.Param)('userId')),
+    __param(2, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], MembersController.prototype, "removeMember", null);
 exports.MembersController = MembersController = __decorate([

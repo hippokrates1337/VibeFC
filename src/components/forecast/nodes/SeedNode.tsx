@@ -1,11 +1,29 @@
 import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { Flame } from 'lucide-react';
+import { useForecastGraphStore, MetricNodeAttributes } from '@/lib/store/forecast-graph-store';
 
 /**
- * SeedNode displays the sourceMetricId.
+ * SeedNode displays the sourceMetricId and resolves it to the metric node's label.
  */
 const SeedNode: React.FC<NodeProps> = ({ data, selected }) => {
+  const nodes = useForecastGraphStore(state => state.nodes);
+  
+  // Find the connected metric node and display its label
+  const getDisplayName = () => {
+    const sourceMetricId = data?.sourceMetricId;
+    if (!sourceMetricId) return '-';
+    
+    // Find the metric node by ID
+    const metricNode = nodes.find(node => node.id === sourceMetricId && node.type === 'METRIC');
+    if (metricNode) {
+      const metricData = metricNode.data as MetricNodeAttributes;
+      return metricData?.label || `Metric ${sourceMetricId.slice(0, 8)}...`;
+    }
+    
+    // If no metric node found, display the ID (fallback)
+    return sourceMetricId.slice(0, 8) + '...';
+  };
   return (
     <div className={`relative bg-slate-800 border-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 w-44 ${
       selected ? 'border-pink-500 ring-2 ring-pink-400/20' : 'border-slate-600 hover:border-pink-400'
@@ -23,7 +41,7 @@ const SeedNode: React.FC<NodeProps> = ({ data, selected }) => {
         <div className="text-xs text-slate-300">
           <span className="font-medium">Source Metric:</span>
           <div className="font-mono text-slate-100 mt-1 p-1 bg-slate-700 rounded text-xs truncate border border-slate-600" title={data?.sourceMetricId || '-'}>
-            {data?.sourceMetricId || '-'}
+            {getDisplayName()}
           </div>
         </div>
       </div>

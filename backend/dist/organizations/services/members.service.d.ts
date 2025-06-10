@@ -1,10 +1,11 @@
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { InviteMemberDto, UpdateMemberRoleDto } from '../dto/member.dto';
+import { Request } from 'express';
 export declare class MembersService {
     private supabaseService;
-    constructor(supabaseService: SupabaseService);
-    findAllInOrganization(organizationId: string): Promise<any[]>;
-    addMember(organizationId: string, dto: InviteMemberDto): Promise<void>;
-    updateMemberRole(organizationId: string, userId: string, dto: UpdateMemberRoleDto): Promise<void>;
-    removeMember(organizationId: string, userId: string): Promise<void>;
+    constructor(supabaseService: SupabaseOptimizedService);
+    findAllInOrganization(organizationId: string, request: Request): Promise<any[]>;
+    addMember(organizationId: string, dto: InviteMemberDto, request: Request): Promise<void>;
+    updateMemberRole(organizationId: string, userId: string, dto: UpdateMemberRoleDto, request: Request): Promise<void>;
+    removeMember(organizationId: string, userId: string, request: Request): Promise<void>;
 }

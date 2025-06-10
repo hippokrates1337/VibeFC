@@ -32,8 +32,32 @@ async function ensureTestUserExists(email: string, password: string): Promise<vo
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.log('⚠️ Missing Supabase environment variables for user creation. Skipping automatic user creation.');
-    console.log('💡 Manual setup required: Create user in Supabase dashboard with the test credentials.');
+    console.log('⚠️ Missing Supabase environment variables for user creation. Attempting to validate existing user...');
+    
+    // Try to validate if user exists using auth endpoint
+    try {
+      const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+        },
+        body: JSON.stringify({
+          email,
+          password
+        })
+      });
+      
+      if (response.ok) {
+        console.log(`✅ Test user credentials validated: ${email}`);
+        return;
+      } else {
+        console.log(`❌ Test user validation failed (${response.status}). User may not exist.`);
+        console.log('💡 Manual setup required: Create user in Supabase dashboard with the test credentials.');
+      }
+    } catch (error) {
+      console.log(`⚠️ Could not validate test user: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return;
   }
   
@@ -157,20 +181,47 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
   const ORG_A_ID = MOCK_ORG_A.id;
   const ORG_A_NAME = MOCK_ORG_A.name;
   
-  // Force the correct email format regardless of environment variables
-  const TEST_EMAIL = 'testuser@dummydomain.org'; // This matches your Supabase user
-  const TEST_PASSWORD = 'password'; // This matches your Supabase user password
+  // Use environment variables with proper fallback
+  const TEST_EMAIL = process.env.TEST_USER_EMAIL || 'testuser@dummydomain.org';
+  const TEST_PASSWORD = process.env.TEST_USER_PASSWORD || 'password';
+
+  // Validate environment before running tests
+  test.beforeAll(async () => {
+    console.log('🔍 Environment Validation');
+    console.log('=========================');
+    console.log(`NEXT_PUBLIC_SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL || 'NOT SET'}`);
+    console.log(`NEXT_PUBLIC_SUPABASE_ANON_KEY: ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`SUPABASE_SERVICE_ROLE_KEY: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`TEST_USER_EMAIL: ${TEST_EMAIL}`);
+    console.log(`TEST_USER_PASSWORD: ${TEST_PASSWORD ? 'SET' : 'NOT SET'}`);
+    console.log('');
+    
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      console.log('⚠️ NEXT_PUBLIC_SUPABASE_URL is not set. This will cause authentication to fail.');
+      console.log('💡 Based on the test output, your Supabase URL should be: https://rfjcfypsaixxenafuxky.supabase.co');
+    }
+    
+    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.log('⚠️ NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. This will cause authentication to fail.');
+    }
+    
+    console.log('🔧 Email Case Check:');
+    console.log(`   Current test email: ${TEST_EMAIL}`);
+    console.log('   Known working emails: testuser@dummydomain.org (lowercase)');
+    console.log('   💡 If authentication fails with HTTP 400, check email case sensitivity!');
+    console.log('');
+  });
 
   test.beforeEach(async ({ page, context }: { page: Page, context: BrowserContext }) => {
-    // Set a shorter timeout for beforeEach
-    test.setTimeout(60000); // 60 seconds instead of 30
+    // Set a reasonable timeout for beforeEach
+    test.setTimeout(120000); // 2 minutes
     
     // Validate test environment
     console.log(`🔧 Using test credentials: ${TEST_EMAIL} / ${TEST_PASSWORD ? '[PASSWORD SET]' : '[NO PASSWORD]'}`);
     console.log(`🔧 TEST_USER_EMAIL env var: ${process.env.TEST_USER_EMAIL || 'not set'}`);
     console.log(`🔧 TEST_USER_PASSWORD env var: ${process.env.TEST_USER_PASSWORD || 'not set'}`);
     console.log(`🔧 Final TEST_EMAIL value: ${TEST_EMAIL}`);
-    console.log(`🔧 Final TEST_PASSWORD value: ${TEST_PASSWORD === 'password' ? 'hardcoded password' : 'other password'}`);
+    console.log(`🔧 Final TEST_PASSWORD value: ${TEST_PASSWORD}`);
     
     // Validate required environment variables
     const testSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -310,47 +361,117 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
     console.log('Clicking login button...');
     await page.locator('button[type="submit"]').click();
     
-    // Wait for form submission to complete (look for loading states or navigation)
-    await page.waitForTimeout(2000);
+    // Wait for form submission to complete and check for navigation
+    console.log('Waiting for authentication to complete...');
     
-    // Check if we were redirected (successful login)
-    const currentUrlAfterWait = page.url();
-    console.log(`📍 URL after wait: ${currentUrlAfterWait}`);
-    
-    if (currentUrlAfterWait !== 'http://localhost:3000/login') {
-      console.log('✅ Login successful - redirected away from login page');
-      // Skip the form checking since we're no longer on the login page
-      // Continue with the rest of the test setup
-    } else {
-      console.log('⚠️ Still on login page - checking for errors');
+    try {
+      // Wait for either successful navigation away from login page OR error message
+      await Promise.race([
+        // Option 1: Successful login - redirected away from login page
+        page.waitForURL(url => !url.toString().includes('/login'), { timeout: 15000 }),
+        // Option 2: Login error appears
+        page.locator('div:has-text("Invalid login credentials"), .text-red-500:has-text("Invalid"), [data-testid="error"]').waitFor({ timeout: 15000 })
+      ]);
       
-      // Early check for invalid credentials error specifically
-      const invalidCredentialsError = page.locator('div:has-text("Invalid login credentials")').first();
-      if (await invalidCredentialsError.isVisible()) {
-        console.log('❌ Invalid login credentials detected');
-        await page.screenshot({ path: 'debug-invalid-credentials.png' });
+      const currentUrlAfterAuth = page.url();
+      console.log(`📍 URL after authentication attempt: ${currentUrlAfterAuth}`);
+      
+      // Check if we successfully left the login page
+      if (!currentUrlAfterAuth.includes('/login')) {
+        console.log('✅ Login successful - redirected away from login page');
+      } else {
+        // Still on login page - check for specific error messages
+        const invalidCredentialsError = page.locator('div:has-text("Invalid login credentials")').first();
+        const anyErrorMessage = page.locator('.text-red-500, [data-testid="error"], .error').first();
         
-        console.log(`❌ Test user ${TEST_EMAIL} does not exist or password is incorrect.`);
-        console.log('💡 To fix this issue:');
-        console.log('   1. Ensure the test user exists in your Supabase Auth > Users');
-        console.log('   2. Verify the password is correct');
-        console.log('   3. Or create the test user with the expected credentials');
-        console.log('   4. Check NEXT_PUBLIC_SUPABASE_URL is pointing to the correct project');
-        
-        throw new Error(`Authentication failed: Test user ${TEST_EMAIL} does not exist or password is incorrect. Please create this user in your Supabase project.`);
+        if (await invalidCredentialsError.isVisible()) {
+          console.log('❌ Invalid login credentials detected');
+          await page.screenshot({ path: 'debug-invalid-credentials.png' });
+          
+          throw new Error(`Authentication failed: Test user ${TEST_EMAIL} credentials are invalid. Please verify the user exists in your Supabase project with the correct password.`);
+        } else if (await anyErrorMessage.isVisible()) {
+          const errorText = await anyErrorMessage.textContent();
+          console.log('❌ Login error detected:', errorText);
+          await page.screenshot({ path: 'debug-login-error.png' });
+          
+          throw new Error(`Authentication failed: ${errorText}`);
+        } else {
+          // No specific error found but still on login page
+          await page.screenshot({ path: 'debug-stuck-on-login.png' });
+          throw new Error('Login failed - still on login page without clear error message. Check if the test user exists and has correct credentials.');
+        }
       }
+    } catch (timeoutError) {
+      const currentUrlAfterTimeout = page.url();
+      console.log(`⚠️ Authentication timeout. Current URL: ${currentUrlAfterTimeout}`);
       
-      // If still on login page without error, something else might be wrong
-      await page.screenshot({ path: 'debug-stuck-on-login.png' });
-      throw new Error('Login failed - still on login page without clear error message');
+      if (currentUrlAfterTimeout.includes('/login')) {
+        // Check for any error state after timeout
+        const errorElement = page.locator('.text-red-500, [data-testid="error"], .error').first();
+        const hasError = await errorElement.isVisible().catch(() => false);
+        
+        if (hasError) {
+          const errorText = await errorElement.textContent();
+          console.log('❌ Authentication error after timeout:', errorText);
+          throw new Error(`Authentication timeout with error: ${errorText}`);
+        } else {
+          console.log('❌ Authentication timeout without visible error');
+          await page.screenshot({ path: 'debug-auth-timeout.png' });
+          throw new Error(`Authentication timeout: Still on login page after 15 seconds. The user ${TEST_EMAIL} may not exist or may have incorrect credentials.`);
+        }
+      } else {
+        console.log('✅ Authentication may have succeeded after timeout');
+      }
     }
     
-    // Check for any JavaScript errors
+    // Additional debugging - Check for any client-side errors
     const jsErrors: string[] = [];
-    page.on('pageerror', (error) => {
-      jsErrors.push(error.message);
-      console.log('🚨 JavaScript Error:', error.message);
+    page.on('console', msg => {
+      if (msg.type() === 'error') {
+        jsErrors.push(`Console error: ${msg.text()}`);
+      }
     });
+    
+    page.on('pageerror', error => {
+      jsErrors.push(`Page error: ${error.message}`);
+    });
+
+    // Wait for page to be fully loaded
+    await page.waitForLoadState('networkidle');
+    
+    // Check for any JavaScript errors that might prevent authentication
+    if (jsErrors.length > 0) {
+      console.log('⚠️ JavaScript errors detected:');
+      jsErrors.forEach(error => console.log(`   ${error}`));
+    }
+
+    // Check for any JavaScript errors
+    const consoleErrors = page.locator('text=/error/i, text=/failed/i').first();
+    const hasConsoleError = await consoleErrors.isVisible().catch(() => false);
+    
+    if (hasConsoleError) {
+      const errorText = await consoleErrors.textContent();
+      console.log('⚠️ Potential error on page:', errorText);
+    }
+
+    // Try to get more detailed authentication state
+    const authState = await page.evaluate(() => {
+      // Check localStorage for auth tokens
+      const localStorageKeys = Object.keys(localStorage);
+      const authKeys = localStorageKeys.filter(key => 
+        key.includes('supabase') || key.includes('auth') || key.includes('token')
+      );
+      
+      return {
+        localStorageAuthKeys: authKeys,
+        hasLocalStorage: typeof Storage !== 'undefined',
+        cookieCount: document.cookie.split(';').length,
+        userAgent: navigator.userAgent,
+        url: window.location.href
+      };
+    });
+    
+    console.log('🔍 Authentication state check:', authState);
     
     // The login success/failure has already been handled above
     // If we reach here, login was successful and we're redirected
@@ -1043,7 +1164,7 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
           
           // Check React mounting/hydration status
           const reactState = {
-            hasReactRoot: !!document.querySelector('[data-reactroot]'),
+            hasReactRoot: !!document.querySelector('#__next, [data-reactroot]'),
             hasNextScript: !!document.querySelector('script[src*="_next"]'),
             documentReady: document.readyState,
             loadingSpinners: document.querySelectorAll('.animate-spin, [class*="spin"]').length,

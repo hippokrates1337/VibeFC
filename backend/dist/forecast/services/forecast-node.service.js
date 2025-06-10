@@ -12,15 +12,16 @@ var ForecastNodeService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ForecastNodeService = void 0;
 const common_1 = require("@nestjs/common");
-const supabase_service_1 = require("../../supabase/supabase.service");
+const supabase_optimized_service_1 = require("../../supabase/supabase-optimized.service");
 let ForecastNodeService = ForecastNodeService_1 = class ForecastNodeService {
     constructor(supabaseService) {
         this.supabaseService = supabaseService;
         this.logger = new common_1.Logger(ForecastNodeService_1.name);
     }
-    async create(dto) {
+    async create(dto, request) {
         try {
-            const { data: insertedNode, error: insertError } = await this.supabaseService.client
+            const client = this.supabaseService.getClientForRequest(request);
+            const { data: insertedNode, error: insertError } = await client
                 .from('forecast_nodes')
                 .insert({
                 forecast_id: dto.forecastId,
@@ -50,8 +51,9 @@ let ForecastNodeService = ForecastNodeService_1 = class ForecastNodeService {
             throw new common_1.InternalServerErrorException('An unexpected error occurred while creating the forecast node.');
         }
     }
-    async findByForecast(forecastId) {
-        const { data, error } = await this.supabaseService.client
+    async findByForecast(forecastId, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('forecast_nodes')
             .select('*')
             .eq('forecast_id', forecastId);
@@ -61,8 +63,9 @@ let ForecastNodeService = ForecastNodeService_1 = class ForecastNodeService {
         }
         return data.map(node => this.mapDbEntityToDto(node));
     }
-    async findOne(id, forecastId) {
-        let query = this.supabaseService.client
+    async findOne(id, request, forecastId) {
+        const client = this.supabaseService.getClientForRequest(request);
+        let query = client
             .from('forecast_nodes')
             .select('*')
             .eq('id', id);
@@ -90,7 +93,7 @@ let ForecastNodeService = ForecastNodeService_1 = class ForecastNodeService {
         }
         return this.mapDbEntityToDto(data);
     }
-    async update(id, dto) {
+    async update(id, dto, request) {
         if (Object.keys(dto).length === 0) {
             return;
         }
@@ -108,7 +111,8 @@ let ForecastNodeService = ForecastNodeService_1 = class ForecastNodeService {
         if (Object.keys(updateData).length === 1 && updateData.updated_at) {
             return;
         }
-        const { data, error } = await this.supabaseService.client
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('forecast_nodes')
             .update(updateData)
             .eq('id', id)
@@ -128,10 +132,11 @@ let ForecastNodeService = ForecastNodeService_1 = class ForecastNodeService {
         }
         this.logger.log(`Forecast node updated: ${id}`);
     }
-    async remove(id) {
+    async remove(id, request) {
         this.logger.debug(`Attempting to remove forecast node with id: ${id}`);
-        await this.findOne(id);
-        const { error } = await this.supabaseService.client
+        await this.findOne(id, request);
+        const client = this.supabaseService.getClientForRequest(request);
+        const { error } = await client
             .from('forecast_nodes')
             .delete()
             .eq('id', id);
@@ -156,6 +161,6 @@ let ForecastNodeService = ForecastNodeService_1 = class ForecastNodeService {
 exports.ForecastNodeService = ForecastNodeService;
 exports.ForecastNodeService = ForecastNodeService = ForecastNodeService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [supabase_service_1.SupabaseService])
+    __metadata("design:paramtypes", [supabase_optimized_service_1.SupabaseOptimizedService])
 ], ForecastNodeService);
 //# sourceMappingURL=forecast-node.service.js.map

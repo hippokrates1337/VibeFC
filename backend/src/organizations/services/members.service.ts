@@ -1,13 +1,15 @@
 import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { InviteMemberDto, UpdateMemberRoleDto, MemberDto, OrganizationRole } from '../dto/member.dto';
+import { Request } from 'express';
 
 @Injectable()
 export class MembersService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(private supabaseService: SupabaseOptimizedService) {}
 
-  async findAllInOrganization(organizationId: string): Promise<any[]> {
-    const { data, error } = await this.supabaseService.client
+  async findAllInOrganization(organizationId: string, request: Request): Promise<any[]> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organization_members')
       .select(`
         *,
@@ -30,9 +32,11 @@ export class MembersService {
     }));
   }
 
-  async addMember(organizationId: string, dto: InviteMemberDto): Promise<void> {
+  async addMember(organizationId: string, dto: InviteMemberDto, request: Request): Promise<void> {
+    const client = this.supabaseService.getClientForRequest(request);
+    
     // First, check if the user exists
-    const { data: userData, error: userError } = await this.supabaseService.client
+    const { data: userData, error: userError } = await client
       .from('auth.users')
       .select('id')
       .eq('email', dto.email)
@@ -45,7 +49,7 @@ export class MembersService {
     const userId = userData.id;
 
     // Check if the user is already a member
-    const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+    const { data: existingMember, error: memberCheckError } = await client
       .from('organization_members')
       .select('*')
       .eq('organization_id', organizationId)
@@ -61,7 +65,7 @@ export class MembersService {
     }
 
     // Add the user as a member
-    const { error: insertError } = await this.supabaseService.client
+    const { error: insertError } = await client
       .from('organization_members')
       .insert({
         organization_id: organizationId,
@@ -74,9 +78,11 @@ export class MembersService {
     }
   }
 
-  async updateMemberRole(organizationId: string, userId: string, dto: UpdateMemberRoleDto): Promise<void> {
+  async updateMemberRole(organizationId: string, userId: string, dto: UpdateMemberRoleDto, request: Request): Promise<void> {
+    const client = this.supabaseService.getClientForRequest(request);
+    
     // Check if the member exists
-    const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+    const { data: existingMember, error: memberCheckError } = await client
       .from('organization_members')
       .select('*')
       .eq('organization_id', organizationId)
@@ -93,7 +99,7 @@ export class MembersService {
 
     // Check if this is the last admin
     if (existingMember.role === OrganizationRole.ADMIN && dto.role !== OrganizationRole.ADMIN) {
-      const { data: adminCount, error: countError } = await this.supabaseService.client
+      const { data: adminCount, error: countError } = await client
         .from('organization_members')
         .select('id', { count: 'exact' })
         .eq('organization_id', organizationId)
@@ -109,7 +115,7 @@ export class MembersService {
     }
 
     // Update the member's role
-    const { error: updateError } = await this.supabaseService.client
+    const { error: updateError } = await client
       .from('organization_members')
       .update({ role: dto.role })
       .eq('organization_id', organizationId)
@@ -120,9 +126,11 @@ export class MembersService {
     }
   }
 
-  async removeMember(organizationId: string, userId: string): Promise<void> {
+  async removeMember(organizationId: string, userId: string, request: Request): Promise<void> {
+    const client = this.supabaseService.getClientForRequest(request);
+    
     // Check if the member exists and is not the last admin
-    const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+    const { data: existingMember, error: memberCheckError } = await client
       .from('organization_members')
       .select('role')
       .eq('organization_id', organizationId)
@@ -139,7 +147,7 @@ export class MembersService {
 
     // If the member is an admin, check if they are the last admin
     if (existingMember.role === OrganizationRole.ADMIN) {
-      const { data: adminCount, error: countError } = await this.supabaseService.client
+      const { data: adminCount, error: countError } = await client
         .from('organization_members')
         .select('id', { count: 'exact' })
         .eq('organization_id', organizationId)
@@ -155,7 +163,7 @@ export class MembersService {
     }
 
     // Remove the member
-    const { error: deleteError } = await this.supabaseService.client
+    const { error: deleteError } = await client
       .from('organization_members')
       .delete()
       .eq('organization_id', organizationId)

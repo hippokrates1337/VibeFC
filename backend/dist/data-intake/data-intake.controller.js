@@ -42,7 +42,7 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
                     }
                 });
             }
-            const result = await this.dataIntakeService.addVariables(addVariablesDto);
+            const result = await this.dataIntakeService.addVariables(addVariablesDto, req);
             return result;
         }
         catch (error) {
@@ -57,14 +57,14 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
             }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-    async getVariablesByUser(userId) {
+    async getVariablesByUser(req, userId) {
         try {
             this.logger.log(`Fetching variables for user: ${userId}`);
             if (!userId) {
                 this.logger.warn('No user ID provided in request');
                 throw new common_1.HttpException('User ID is required', common_1.HttpStatus.BAD_REQUEST);
             }
-            const result = await this.dataIntakeService.getVariablesByUser(userId);
+            const result = await this.dataIntakeService.getVariablesByUser(userId, req);
             return result;
         }
         catch (error) {
@@ -86,7 +86,7 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
                 this.logger.warn('Empty variables array in update request');
                 throw new common_1.HttpException('No variables provided for update', common_1.HttpStatus.BAD_REQUEST);
             }
-            const result = await this.dataIntakeService.updateVariables(updateVariablesDto);
+            const result = await this.dataIntakeService.updateVariables(updateVariablesDto, req);
             return result;
         }
         catch (error) {
@@ -117,7 +117,7 @@ let DataIntakeController = DataIntakeController_1 = class DataIntakeController {
                 this.logger.error('User ID missing in request context for deletion');
                 throw new common_1.HttpException('Authentication context is missing', common_1.HttpStatus.UNAUTHORIZED);
             }
-            const result = await this.dataIntakeService.deleteVariables({ ids }, req.user.userId, organizationId);
+            const result = await this.dataIntakeService.deleteVariables({ ids }, req.user.userId, organizationId, req);
             return result;
         }
         catch (error) {
@@ -145,9 +145,10 @@ __decorate([
 ], DataIntakeController.prototype, "addVariables", null);
 __decorate([
     (0, common_1.Get)('variables/:userId'),
-    __param(0, (0, common_1.Param)('userId')),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], DataIntakeController.prototype, "getVariablesByUser", null);
 __decorate([

@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">46.15% </span>
+                <span class="strong">48.14% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>84/182</span>
+                <span class='fraction'>91/189</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">46.15% </span>
+                <span class="strong">48.14% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>84/182</span>
+                <span class='fraction'>91/189</span>
             </div>
         
             
@@ -244,7 +244,15 @@
 <a name='L179'></a><a href='#L179'>179</a>
 <a name='L180'></a><a href='#L180'>180</a>
 <a name='L181'></a><a href='#L181'>181</a>
-<a name='L182'></a><a href='#L182'>182</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -270,6 +278,7 @@
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -317,6 +326,7 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -346,6 +356,7 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -378,6 +389,7 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -397,6 +409,7 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -412,6 +425,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
@@ -426,24 +440,26 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateOrganizationDto, UpdateOrganizationDto, OrganizationDto } from '../dto/organization.dto';
 import { OrganizationRole } from '../dto/member.dto';
 import { MembersService } from './members.service';
+import { Request } from 'express';
 &nbsp;
 @Injectable()
 export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
 &nbsp;
   constructor(
-    private supabaseService: SupabaseService,
+    private supabaseService: SupabaseOptimizedService,
     private membersService: MembersService,
   ) {}
 &nbsp;
-  async create(userId: string, dto: CreateOrganizationDto): Promise&lt;OrganizationDto&gt; {
+  async create(userId: string, dto: CreateOrganizationDto, request: Request): Promise&lt;OrganizationDto&gt; {
     let createdOrg: OrganizationDto | null = null;
     try {
-      const { data: insertedOrg, error: insertError } = await this.supabaseService.client
+      const client = this.supabaseService.getClientForRequest(request);
+      const { data: insertedOrg, error: insertError } = await client
         .from('organizations')
         .insert({
           name: dto.name,
@@ -470,7 +486,7 @@ export class OrganizationsService {
 <span class="cstat-no" title="statement not covered" >      this.logger.log(`Organization created: ${createdOrg.id} by user ${userId}`);</span>
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >      try {</span>
-<span class="cstat-no" title="statement not covered" >        await this.membersService.addMember(createdOrg.id, { email: userId, role: OrganizationRole.ADMIN });</span>
+<span class="cstat-no" title="statement not covered" >        await this.membersService.addMember(createdOrg.id, { email: userId, role: OrganizationRole.ADMIN }, request);</span>
 <span class="cstat-no" title="statement not covered" >        this.logger.log(`Added owner ${userId} as admin to organization ${createdOrg.id}`);</span>
 <span class="cstat-no" title="statement not covered" >      } catch (memberError) {</span>
 <span class="cstat-no" title="statement not covered" >        this.logger.error(`Failed to add owner ${userId} as admin member to org ${createdOrg.id}`, memberError.stack);</span>
@@ -488,8 +504,9 @@ export class OrganizationsService {
     }
   }
 &nbsp;
-  async findAll(userId: string): Promise&lt;OrganizationDto[]&gt; {
-    const { data, error } = await this.supabaseService.client
+  async findAll(userId: string, request: Request): Promise&lt;OrganizationDto[]&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organizations')
       .select(`
         *,
@@ -511,12 +528,13 @@ export class OrganizationsService {
 <span class="cstat-no" title="statement not covered" >    }));</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async findOne(id: string, userId: string): Promise&lt;OrganizationDto&gt; {
+  async findOne(id: string, userId: string, request: Request): Promise&lt;OrganizationDto&gt; {
     // Note: The `!inner` join implies the user *must* be a member. 
     // If no record is found, it could be the org doesn't exist OR the user isn't a member.
     // The error handling needs to account for this ambiguity or the query needs changing
     // if we need to differentiate "Org not found" from "Access denied".
-    const { data, error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organizations')
       .select(`
         *,
@@ -552,8 +570,9 @@ export class OrganizationsService {
 <span class="cstat-no" title="statement not covered" >    };</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async update(id: string, dto: UpdateOrganizationDto): Promise&lt;void&gt; {
-    const { data, error } = await this.supabaseService.client
+  async update(id: string, dto: UpdateOrganizationDto, request: Request): Promise&lt;void&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organizations')
       .update({ name: dto.name })
       .eq('id', id)
@@ -573,8 +592,9 @@ export class OrganizationsService {
 <span class="cstat-no" title="statement not covered" >    this.logger.log(`Organization updated: ${id}`);</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async remove(id: string): Promise&lt;void&gt; {
-    const { count, error } = await this.supabaseService.client
+  async remove(id: string, request: Request): Promise&lt;void&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { count, error } = await client
       .from('organizations')
       .delete()
       .eq('id', id)<span class="branch-0 cbranch-no" title="branch not covered" >;</span>
@@ -592,8 +612,9 @@ export class OrganizationsService {
 <span class="cstat-no" title="statement not covered" >    this.logger.log(`Organization deleted: ${id}`);</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async getUserRoleInOrganization(userId: string, organizationId: string): Promise&lt;OrganizationRole | null&gt; {
-    const { data, error } = await this.supabaseService.client
+  async getUserRoleInOrganization(userId: string, organizationId: string, request: Request): Promise&lt;OrganizationRole | null&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organization_members')
       .select('role')
       .eq('user_id', userId)
@@ -613,7 +634,7 @@ export class OrganizationsService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-06-01T20:28:33.719Z
+                at 2025-06-10T10:52:18.600Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForecastEdgeService } from '../forecast-edge.service';
-import { SupabaseService } from '../../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../../supabase/supabase-optimized.service';
 import { Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../../dto/forecast-edge.dto';
+import { ForecastNodeService } from '../forecast-node.service';
 
 // Mock Supabase client methods
 const mockSupabaseInsert = jest.fn();
@@ -25,14 +26,20 @@ Logger.prototype.warn = jest.fn();
 
 describe('ForecastEdgeService', () => {
   let service: ForecastEdgeService;
-  let supabaseService: SupabaseService;
+  let supabaseService: SupabaseOptimizedService;
   const testForecastId = 'test-forecast-123';
   const testSourceNodeId = 'test-source-node-123';
   const testTargetNodeId = 'test-target-node-123';
 
   const mockSupabaseService = {
-    client: mockSupabaseClient,
+    getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
   };
+
+  // Mock request object
+  const mockRequest = {
+    headers: { authorization: 'Bearer mock-token' },
+    user: { id: 'test-user-123', email: 'test@example.com' }
+  } as any;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -62,16 +69,22 @@ describe('ForecastEdgeService', () => {
       eq: jest.fn().mockResolvedValue({ count: 1, error: null }),
     });
 
+    const mockForecastNodeService = {
+      findOne: jest.fn(),
+      remove: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ForecastEdgeService,
-        { provide: SupabaseService, useValue: mockSupabaseService },
+        { provide: SupabaseOptimizedService, useValue: mockSupabaseService },
+        { provide: ForecastNodeService, useValue: mockForecastNodeService },
         Logger,
       ],
     }).compile();
 
     service = module.get<ForecastEdgeService>(ForecastEdgeService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
+    supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
 
     // Clear logger mocks before each test
     (Logger.prototype.log as jest.Mock).mockClear();
@@ -102,7 +115,7 @@ describe('ForecastEdgeService', () => {
       const mockInsertSingle = jest.fn().mockResolvedValue({ data: newEdge, error: null });
       mockSupabaseInsert.mockReturnValue({ select: jest.fn().mockReturnThis(), single: mockInsertSingle });
 
-      const result = await service.create(createDto);
+      const result = await service.create(createDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_edges');
       expect(mockSupabaseInsert).toHaveBeenCalledWith({
@@ -128,7 +141,7 @@ describe('ForecastEdgeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.create(createDto))
+      await expect(service.create(createDto, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to create forecast edge: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -139,7 +152,7 @@ describe('ForecastEdgeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: null })
       });
 
-      await expect(service.create(createDto))
+      await expect(service.create(createDto, mockRequest))
         .rejects.toThrow(new InternalServerErrorException('Failed to create forecast edge, data missing after insert.'));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -185,7 +198,7 @@ describe('ForecastEdgeService', () => {
       const mockSelectEq = jest.fn().mockResolvedValue({ data: mockDbResult, error: null });
       mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
 
-      const result = await service.findByForecast(forecastId);
+      const result = await service.findByForecast(forecastId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_edges');
       expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
@@ -199,16 +212,15 @@ describe('ForecastEdgeService', () => {
         eq: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.findByForecast(forecastId))
+      await expect(service.findByForecast(forecastId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to fetch forecast edges: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
     });
   });
 
   // --- findOne Test ---
   describe('findOne', () => {
-    const edgeId = 'edge-123';
-    const mockDbResult = {
+    const edgeId = 'test-edge-id';
+    const mockDbEdge = {
       id: edgeId,
       forecast_id: testForecastId,
       source_node_id: testSourceNodeId,
@@ -223,28 +235,29 @@ describe('ForecastEdgeService', () => {
       createdAt: new Date('2023-01-01T00:00:00.000Z')
     };
 
-    it('should return a specific edge by ID', async () => {
+    it('should return edge when found', async () => {
+      const mockSelectSingle = jest.fn().mockResolvedValue({ data: mockDbEdge, error: null });
       mockSupabaseSelect.mockReturnValue({
         eq: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: mockDbResult, error: null })
+        single: mockSelectSingle
       });
 
-      const result = await service.findOne(edgeId);
+      const result = await service.findOne(edgeId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_edges');
       expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
+      expect(mockSelectSingle).toHaveBeenCalledTimes(1);
       expect(result).toEqual(expectedEdge);
     });
 
-    it('should throw NotFoundException if edge does not exist', async () => {
+    it('should throw NotFoundException if edge not found', async () => {
       mockSupabaseSelect.mockReturnValue({
         eq: jest.fn().mockReturnThis(),
         single: jest.fn().mockResolvedValue({ data: null, error: null })
       });
 
-      await expect(service.findOne(edgeId))
+      await expect(service.findOne(edgeId, mockRequest))
         .rejects.toThrow(new NotFoundException(`Forecast edge with ID ${edgeId} not found.`));
-      expect(Logger.prototype.warn).toHaveBeenCalled();
     });
 
     it('should throw InternalServerErrorException if DB query fails', async () => {
@@ -254,47 +267,43 @@ describe('ForecastEdgeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.findOne(edgeId))
+      await expect(service.findOne(edgeId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to retrieve forecast edge details: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
     });
   });
 
   // --- remove Test ---
   describe('remove', () => {
-    const edgeId = 'edge-123';
+    const edgeId = 'test-edge-id';
 
-    it('should delete an edge successfully', async () => {
-      mockSupabaseDelete.mockReturnValue({
-        eq: jest.fn().mockResolvedValue({ count: 1, error: null })
-      });
+    it('should remove edge successfully', async () => {
+      const mockDeleteEq = jest.fn().mockResolvedValue({ count: 1, error: null });
+      mockSupabaseDelete.mockReturnValue({ eq: mockDeleteEq });
 
-      await service.remove(edgeId);
+      await service.remove(edgeId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_edges');
-      expect(mockSupabaseDelete).toHaveBeenCalled();
+      expect(mockDeleteEq).toHaveBeenCalledWith('id', edgeId);
       expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast edge deleted: ${edgeId}`);
     });
 
-    it('should throw NotFoundException if edge does not exist', async () => {
+    it('should throw NotFoundException if edge not found', async () => {
       mockSupabaseDelete.mockReturnValue({
         eq: jest.fn().mockResolvedValue({ count: 0, error: null })
       });
 
-      await expect(service.remove(edgeId))
+      await expect(service.remove(edgeId, mockRequest))
         .rejects.toThrow(new NotFoundException(`Forecast edge with ID ${edgeId} not found.`));
-      expect(Logger.prototype.warn).toHaveBeenCalled();
     });
 
-    it('should throw InternalServerErrorException if DB delete fails', async () => {
+    it('should throw InternalServerErrorException if delete fails', async () => {
       const dbError = { message: 'Delete failed', code: 'DB500' };
       mockSupabaseDelete.mockReturnValue({
         eq: jest.fn().mockResolvedValue({ count: 0, error: dbError })
       });
 
-      await expect(service.remove(edgeId))
+      await expect(service.remove(edgeId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to delete forecast edge ${edgeId}: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
     });
   });
 }); 

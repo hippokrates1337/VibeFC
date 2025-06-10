@@ -1,10 +1,19 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, HttpCode, HttpStatus, Request as NestRequest } from '@nestjs/common';
 import { MembersService } from '../services/members.service';
 import { InviteMemberDto, UpdateMemberRoleDto } from '../dto/member.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { OrganizationRole } from '../dto/member.dto';
+import { Request } from 'express';
+
+// Extend Express Request to include user property
+interface RequestWithUser extends Request {
+  user: {
+    id: string;
+    [key: string]: any;
+  };
+}
 
 @Controller('organizations/:orgId/members')
 @UseGuards(JwtAuthGuard)
@@ -14,8 +23,8 @@ export class MembersController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
-  async findAll(@Param('orgId') orgId: string) {
-    return this.membersService.findAllInOrganization(orgId);
+  async findAll(@Param('orgId') orgId: string, @NestRequest() req: RequestWithUser) {
+    return this.membersService.findAllInOrganization(orgId, req);
   }
 
   @Post()
@@ -25,8 +34,9 @@ export class MembersController {
   async addMember(
     @Param('orgId') orgId: string,
     @Body() inviteMemberDto: InviteMemberDto,
+    @NestRequest() req: RequestWithUser
   ): Promise<void> {
-    return this.membersService.addMember(orgId, inviteMemberDto);
+    return this.membersService.addMember(orgId, inviteMemberDto, req);
   }
 
   @Put(':userId')
@@ -37,8 +47,9 @@ export class MembersController {
     @Param('orgId') orgId: string,
     @Param('userId') userId: string,
     @Body() updateRoleDto: UpdateMemberRoleDto,
+    @NestRequest() req: RequestWithUser
   ): Promise<void> {
-    return this.membersService.updateMemberRole(orgId, userId, updateRoleDto);
+    return this.membersService.updateMemberRole(orgId, userId, updateRoleDto, req);
   }
 
   @Delete(':userId')
@@ -48,7 +59,8 @@ export class MembersController {
   async removeMember(
     @Param('orgId') orgId: string,
     @Param('userId') userId: string,
+    @NestRequest() req: RequestWithUser
   ): Promise<void> {
-    return this.membersService.removeMember(orgId, userId);
+    return this.membersService.removeMember(orgId, userId, req);
   }
 } 

@@ -55,6 +55,12 @@ const config = {
     "**/?(*.)+(spec|test).[tj]s?(x)"
   ],
 
+  // Exclude Playwright e2e tests from Jest
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    "/tests/e2e/"
+  ],
+
   // A list of paths to modules that run some code to configure or set up the testing environment
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
 

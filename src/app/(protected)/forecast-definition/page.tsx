@@ -7,9 +7,10 @@ import { Forecast, forecastApi } from '@/lib/api/forecast';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
-import { Loader2 } from 'lucide-react';
+import { Loader2, BarChart3, Calendar, Clock } from 'lucide-react';
 import { useOrganizationStore } from '@/lib/store/organization';
 import { useOrganizationForecasts, useIsForecastLoading, useForecastError } from '@/lib/store/forecast-graph-store';
+import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
 
 // Helper function to safely format dates
 const formatDateSafe = (dateString: string | null | undefined, formatPattern: string): string => {
@@ -29,6 +30,192 @@ const formatDateSafe = (dateString: string | null | undefined, formatPattern: st
   }
 };
 
+// Helper function to format forecast period in MM-YYYY format
+const formatForecastPeriod = (startDate: string | null | undefined, endDate: string | null | undefined): string => {
+  const formattedStart = formatDateSafe(startDate, 'MM-yyyy');
+  const formattedEnd = formatDateSafe(endDate, 'MM-yyyy');
+  
+  if (formattedStart === 'N/A' || formattedEnd === 'N/A') {
+    return 'Period not defined';
+  }
+  
+  return `${formattedStart} to ${formattedEnd}`;
+};
+
+// Helper function to get forecast summary stats
+const getForecastSummary = (forecast: Forecast): string => {
+  // Since we don't have access to nodes/edges in the list view,
+  // we'll show a meaningful placeholder based on available data
+  const startDate = formatDateSafe(forecast.forecastStartDate, 'MMM yyyy');
+  const endDate = formatDateSafe(forecast.forecastEndDate, 'MMM yyyy');
+  
+  if (startDate !== 'N/A' && endDate !== 'N/A') {
+    return `Forecast model • ${startDate} - ${endDate}`;
+  }
+  
+  return 'Forecast model ready to edit';
+};
+
+// Enhanced graph preview component that shows realistic graph structure
+const GraphPreview = ({ forecast }: { forecast: Forecast }) => {
+  const [graphSummary, setGraphSummary] = useState<{
+    nodeCount: number;
+    edgeCount: number;
+    nodeTypes: string[];
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch graph summary when component mounts
+  useEffect(() => {
+    const fetchGraphSummary = async () => {
+      setIsLoading(true);
+      try {
+        // This is a simple approach - we could optimize this by having a backend endpoint
+        // that returns forecasts with summary data in one call
+        const response = await forecastApi.getForecast(forecast.id);
+        if (response.data) {
+          const nodeTypes = response.data.nodes.map(node => node.kind);
+          const uniqueNodeTypes = nodeTypes.filter((type, index, arr) => arr.indexOf(type) === index);
+          
+          setGraphSummary({
+            nodeCount: response.data.nodes.length,
+            edgeCount: response.data.edges.length,
+            nodeTypes: uniqueNodeTypes
+          });
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch graph summary for forecast ${forecast.id}:`, error);
+        // Fallback to empty graph
+        setGraphSummary({
+          nodeCount: 0,
+          edgeCount: 0,
+          nodeTypes: []
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchGraphSummary();
+  }, [forecast.id]);
+
+  // Color mapping for different node types
+  const getNodeColor = (type: string, index: number) => {
+    const colors = {
+      'DATA': 'text-blue-400',
+      'CONSTANT': 'text-green-400', 
+      'OPERATOR': 'text-yellow-400',
+      'METRIC': 'text-purple-400',
+      'SEED': 'text-red-400'
+    };
+    return colors[type as keyof typeof colors] || `text-slate-${400 + (index % 3) * 100}`;
+  };
+
+  // Generate realistic node positions based on actual data
+  const generateNodePositions = (nodeCount: number, nodeTypes: string[]) => {
+    if (nodeCount === 0) return [];
+    
+    const positions = [];
+    const maxNodes = Math.min(nodeCount, 8); // Limit visual nodes to keep it clean
+    
+    for (let i = 0; i < maxNodes; i++) {
+      const angle = (i / maxNodes) * 2 * Math.PI;
+      const radius = 25;
+      const x = 60 + radius * Math.cos(angle);
+      const y = 40 + radius * Math.sin(angle);
+      const type = nodeTypes[i % nodeTypes.length];
+      
+      positions.push({ x, y, type, index: i });
+    }
+    
+    return positions;
+  };
+
+  // Generate edges based on actual edge count
+  const generateEdges = (nodePositions: any[], edgeCount: number) => {
+    if (nodePositions.length < 2 || edgeCount === 0) return [];
+    
+    const edges = [];
+    const maxEdges = Math.min(edgeCount, nodePositions.length - 1);
+    
+    for (let i = 0; i < maxEdges; i++) {
+      const sourceIndex = i;
+      const targetIndex = (i + 1) % nodePositions.length;
+      const source = nodePositions[sourceIndex];
+      const target = nodePositions[targetIndex];
+      
+      edges.push({ source, target });
+    }
+    
+    return edges;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="h-32 flex items-center justify-center bg-slate-700 rounded-md border border-slate-600 p-4">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+      </div>
+    );
+  }
+
+  const nodePositions = generateNodePositions(graphSummary?.nodeCount || 0, graphSummary?.nodeTypes || []);
+  const edges = generateEdges(nodePositions, graphSummary?.edgeCount || 0);
+
+  return (
+    <div className="h-32 flex flex-col items-center justify-center bg-slate-700 rounded-md border border-slate-600 p-4 relative overflow-hidden">
+      {/* Graph visualization */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-50">
+        <svg width="120" height="80" viewBox="0 0 120 80" className="text-slate-500">
+          {/* Render edges first (behind nodes) */}
+          {edges.map((edge, index) => (
+            <line
+              key={`edge-${index}`}
+              x1={edge.source.x}
+              y1={edge.source.y}
+              x2={edge.target.x}
+              y2={edge.target.y}
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="text-slate-400"
+            />
+          ))}
+          
+          {/* Render nodes */}
+          {nodePositions.map((node, index) => (
+            <circle
+              key={`node-${index}`}
+              cx={node.x}
+              cy={node.y}
+              r="4"
+              fill="currentColor"
+              className={getNodeColor(node.type, node.index)}
+            />
+          ))}
+        </svg>
+      </div>
+      
+      {/* Content */}
+      <BarChart3 className="h-8 w-8 text-blue-400 mb-2 relative z-10" />
+      <div className="text-center relative z-10">
+        {graphSummary && graphSummary.nodeCount > 0 ? (
+          <>
+            <p className="text-sm text-slate-300 font-medium">
+              {graphSummary.nodeCount} nodes, {graphSummary.edgeCount} connections
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              {getForecastSummary(forecast)}
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-slate-300 font-medium">
+            {getForecastSummary(forecast)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function ForecastDefinitionPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -38,6 +225,50 @@ export default function ForecastDefinitionPage() {
   const forecasts = useOrganizationForecasts();
   const isForecastListLoading = useIsForecastLoading();
   const forecastError = useForecastError();
+  
+  // Get the action to load forecasts into the store
+  const loadOrganizationForecasts = useForecastGraphStore((state) => state.loadOrganizationForecasts);
+  const setForecastLoading = useForecastGraphStore((state) => state.setLoading);
+  const setForecastError = useForecastGraphStore((state) => state.setError);
+
+  // Load forecasts when organization changes
+  useEffect(() => {
+    const fetchForecasts = async () => {
+      if (!currentOrganizationFromStore?.id) {
+        // Clear forecasts if no organization selected
+        loadOrganizationForecasts([]);
+        return;
+      }
+
+      try {
+        setForecastLoading(true);
+        setForecastError(null);
+        
+        const { data, error } = await forecastApi.getForecasts(currentOrganizationFromStore.id);
+        
+        if (error) {
+          console.error('Failed to fetch organization forecasts:', error.message);
+          setForecastError(error.message);
+          loadOrganizationForecasts([]);
+          return;
+        }
+        
+        if (data) {
+          loadOrganizationForecasts(data);
+        } else {
+          loadOrganizationForecasts([]);
+        }
+      } catch (apiError: any) {
+        console.error('Error calling forecastApi.getForecasts:', apiError);
+        setForecastError(apiError?.message || 'Failed to fetch forecasts');
+        loadOrganizationForecasts([]);
+      } finally {
+        setForecastLoading(false);
+      }
+    };
+
+    fetchForecasts();
+  }, [currentOrganizationFromStore?.id, loadOrganizationForecasts, setForecastLoading, setForecastError]);
 
   // Create a new forecast
   const handleCreateForecast = async () => {
@@ -131,16 +362,15 @@ export default function ForecastDefinitionPage() {
                     <CardHeader className="pb-2">
                       <CardTitle className="text-xl text-slate-100">{forecast.name}</CardTitle>
                       <CardDescription className="text-slate-400">
-                        {formatDateSafe(forecast.forecastStartDate, 'MMM d, yyyy')} - {formatDateSafe(forecast.forecastEndDate, 'MMM d, yyyy')}
+                        {formatForecastPeriod(forecast.forecastStartDate, forecast.forecastEndDate)}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-32 flex items-center justify-center bg-slate-700 rounded-md border border-slate-600">
-                        <p className="text-sm text-slate-400">Graph preview</p>
-                      </div>
+                      <GraphPreview forecast={forecast} />
                     </CardContent>
                     <CardFooter className="flex justify-between border-t border-slate-700 p-4 bg-slate-800">
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-slate-400 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
                         Updated {formatDateSafe(forecast.updatedAt, 'MMM d, yyyy')}
                       </div>
                       <Button

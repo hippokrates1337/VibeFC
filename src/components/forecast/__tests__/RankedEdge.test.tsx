@@ -48,7 +48,7 @@ describe('RankedEdge', () => {
     // Mock nodes with a non-operator target
     mockUseForecastNodes.mockReturnValue([
       { id: 'source-node', type: 'DATA', data: { name: 'Source', variableId: 'var1', offsetMonths: 0 }, position: { x: 0, y: 0 } },
-      { id: 'target-node', type: 'CONSTANT', data: { value: 10 }, position: { x: 100, y: 100 } },
+      { id: 'target-node', type: 'CONSTANT', data: { name: 'Target Constant', value: 10 }, position: { x: 100, y: 100 } },
     ]);
 
     renderRankedEdge(createEdgeProps());
