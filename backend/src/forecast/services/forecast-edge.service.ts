@@ -1,20 +1,21 @@
 import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../dto/forecast-edge.dto';
 import { ForecastNodeService } from './forecast-node.service';
+import { Request } from 'express';
 
 @Injectable()
 export class ForecastEdgeService {
   private readonly logger = new Logger(ForecastEdgeService.name);
 
   constructor(
-    private supabaseService: SupabaseService,
+    private supabaseService: SupabaseOptimizedService,
     private readonly nodeService: ForecastNodeService,
   ) {}
 
-  async create(dto: CreateForecastEdgeDto): Promise<ForecastEdgeDto> {
+  async create(dto: CreateForecastEdgeDto, request: Request): Promise<ForecastEdgeDto> {
     try {
-      await this.nodeService.findOne(dto.sourceNodeId, dto.forecastId);
+      await this.nodeService.findOne(dto.sourceNodeId, request, dto.forecastId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         this.logger.warn(`Source node ${dto.sourceNodeId} not found for forecast ${dto.forecastId} during edge creation.`);
@@ -25,7 +26,7 @@ export class ForecastEdgeService {
     }
 
     try {
-      await this.nodeService.findOne(dto.targetNodeId, dto.forecastId);
+      await this.nodeService.findOne(dto.targetNodeId, request, dto.forecastId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         this.logger.warn(`Target node ${dto.targetNodeId} not found for forecast ${dto.forecastId} during edge creation.`);
@@ -36,7 +37,8 @@ export class ForecastEdgeService {
     }
     
     try {
-      const { data: insertedEdge, error: insertError } = await this.supabaseService.client
+      const client = this.supabaseService.getClientForRequest(request);
+      const { data: insertedEdge, error: insertError } = await client
         .from('forecast_edges')
         .insert({
           forecast_id: dto.forecastId,
@@ -73,8 +75,9 @@ export class ForecastEdgeService {
     }
   }
 
-  async findByForecast(forecastId: string): Promise<ForecastEdgeDto[]> {
-    const { data, error } = await this.supabaseService.client
+  async findByForecast(forecastId: string, request: Request): Promise<ForecastEdgeDto[]> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecast_edges')
       .select('*')
       .eq('forecast_id', forecastId);
@@ -87,8 +90,9 @@ export class ForecastEdgeService {
     return data.map(edge => this.mapDbEntityToDto(edge));
   }
 
-  async findOne(id: string): Promise<ForecastEdgeDto> {
-    const { data, error } = await this.supabaseService.client
+  async findOne(id: string, request: Request): Promise<ForecastEdgeDto> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecast_edges')
       .select('*')
       .eq('id', id)
@@ -112,8 +116,9 @@ export class ForecastEdgeService {
     return this.mapDbEntityToDto(data);
   }
 
-  async remove(id: string): Promise<void> {
-    const { count, error } = await this.supabaseService.client
+  async remove(id: string, request: Request): Promise<void> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { count, error } = await client
       .from('forecast_edges')
       .delete()
       .eq('id', id);

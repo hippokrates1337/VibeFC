@@ -69,6 +69,9 @@ interface ForecastGraphState {
   error: string | null;
   organizationForecasts: ClientForecastSummary[];
   
+  // NEW: Last edited node position tracking
+  lastEditedNodePosition: { x: number; y: number } | null;
+  
   // NEW: Graph validation state
   graphValidation: GraphValidationResult | null;
   isValidatingGraph: boolean;
@@ -117,6 +120,9 @@ interface ForecastGraphActions {
   setError: (error: string | null) => void;
   duplicateNodeWithEdges: (nodeId: string) => string | null;
   loadOrganizationForecasts: (forecasts: ClientForecastSummary[]) => void;
+  
+  // Last edited node position tracking
+  updateLastEditedNodePosition: (position: { x: number; y: number }) => void;
   
   // Graph validation actions
   validateGraph: () => Promise<GraphValidationResult>;
@@ -237,6 +243,9 @@ const initialState: ForecastGraphState = {
   error: null,
   organizationForecasts: [],
   
+  // NEW: Last edited node position tracking
+  lastEditedNodePosition: null,
+  
   // NEW: Graph validation state
   graphValidation: null,
   isValidatingGraph: false,
@@ -312,6 +321,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
           return {
             nodes: newNodes,
             isDirty: true,
+            lastEditedNodePosition: position,
           };
         });
 
@@ -320,14 +330,18 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
 
       updateNodeData: (nodeId, dataUpdates) => {
         logger.log(`[ForecastGraphStore] updateNodeData called for nodeId: ${nodeId} with updates:`, dataUpdates);
-        set((state) => ({
-          nodes: state.nodes.map((node) => 
-            node.id === nodeId 
-              ? { ...node, data: { ...node.data, ...dataUpdates } } 
-              : node
-          ),
-          isDirty: true,
-        }));
+        set((state) => {
+          const targetNode = state.nodes.find(node => node.id === nodeId);
+          return {
+            nodes: state.nodes.map((node) => 
+              node.id === nodeId 
+                ? { ...node, data: { ...node.data, ...dataUpdates } } 
+                : node
+            ),
+            isDirty: true,
+            lastEditedNodePosition: targetNode ? targetNode.position : state.lastEditedNodePosition,
+          };
+        });
         logger.log(`[ForecastGraphStore] Node data updated for nodeId: ${nodeId}`);
       },
 
@@ -340,6 +354,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
               : node
           ),
           isDirty: true,
+          lastEditedNodePosition: position,
         }));
         logger.log(`[ForecastGraphStore] Node position updated for nodeId: ${nodeId}`);
       },
@@ -406,18 +421,45 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         // logger.log('[ForecastGraphStore] onNodesChange called with changes:', changes); // Can be very noisy
         set((state) => {
           const newNodes = applyNodeChanges(changes, state.nodes) as ForecastNodeClient[];
+          
           // Only mark as dirty for structural changes that affect calculation
           // Position, dimensions, and selection don't affect graph calculation results
           const dirty = changes.some(change => 
             change.type === 'remove' ||
             change.type === 'add'
           );
+          
+          // Track position changes for smart node placement
+          let lastEditedNodePosition = state.lastEditedNodePosition;
+          
+          // Find position changes that have a defined position
+          // We track both during dragging and when dragging ends to ensure we capture the position
+          const positionChanges = changes.filter(change => 
+            change.type === 'position' && 
+            change.position !== undefined
+          );
+          
+          if (positionChanges.length > 0) {
+            // Take the position of the last moved node
+            const lastPositionChange = positionChanges[positionChanges.length - 1];
+            if (lastPositionChange.type === 'position' && lastPositionChange.position) {
+              lastEditedNodePosition = lastPositionChange.position;
+              logger.log('[ForecastGraphStore] Node position changed, updating last edited position:', {
+                nodeId: lastPositionChange.id,
+                position: lastPositionChange.position,
+                dragging: lastPositionChange.dragging
+              });
+            }
+          }
+          
           if (dirty) {
             // logger.log('[ForecastGraphStore] Nodes structurally changed, setting isDirty to true.');
           }
+          
           return {
             nodes: newNodes,
             isDirty: dirty ? true : state.isDirty,
+            lastEditedNodePosition,
           };
         });
       },
@@ -538,6 +580,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
             nodes: updatedNodes,
             edges: newEdges,
             isDirty: true,
+            lastEditedNodePosition: duplicatedNode.position,
           };
         });
         logger.log(`[ForecastGraphStore] Node duplicated: ${nodeId} -> ${newNodeId} with ${duplicatedEdges.length} edges.`);
@@ -552,6 +595,11 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
           error: null,
         });
         logger.log('[ForecastGraphStore] Organization forecasts loaded.');
+      },
+
+      updateLastEditedNodePosition: (position) => {
+        logger.log('[ForecastGraphStore] updateLastEditedNodePosition called with:', position);
+        set({ lastEditedNodePosition: position });
       },
 
       // Graph validation actions
@@ -758,6 +806,10 @@ export const useOpenConfigPanelForNode = () => useForecastGraphStore((state) => 
 export const useDuplicateNodeWithEdges = () => useForecastGraphStore((state) => state.duplicateNodeWithEdges);
 export const useLoadOrganizationForecasts = () => useForecastGraphStore((state) => state.loadOrganizationForecasts);
 
+// NEW: Last edited node position tracking hooks
+export const useLastEditedNodePosition = () => useForecastGraphStore((state) => state.lastEditedNodePosition);
+export const useUpdateLastEditedNodePosition = () => useForecastGraphStore((state) => state.updateLastEditedNodePosition);
+
 // NEW: Validation and calculation action hooks
 export const useValidateGraph = () => useForecastGraphStore((state) => state.validateGraph);
 export const useSetGraphValidation = () => useForecastGraphStore((state) => state.setGraphValidation);
@@ -769,3 +821,61 @@ export const useSetCalculationResults = () => useForecastGraphStore((state) => s
 export const useClearCalculationResults = () => useForecastGraphStore((state) => state.clearCalculationResults);
 export const useSetCalculating = () => useForecastGraphStore((state) => state.setCalculating);
 export const useSetCalculationError = () => useForecastGraphStore((state) => state.setCalculationError);
+
+/**
+ * Calculate a smart position for a new node based on the last edited node position.
+ * If no last edited position is available, returns a default position.
+ * 
+ * @param lastEditedPosition - The position of the last edited node
+ * @param existingNodes - Array of existing nodes to avoid overlaps
+ * @returns A position object with x and y coordinates
+ */
+export const calculateSmartNodePosition = (
+  lastEditedPosition: { x: number; y: number } | null,
+  existingNodes: ForecastNodeClient[] = []
+): { x: number; y: number } => {
+  // If no last edited position, use default with some randomness
+  if (!lastEditedPosition) {
+    return {
+      x: Math.random() * 300 + 50,
+      y: Math.random() * 300 + 50,
+    };
+  }
+
+  // Base offset from the last edited node
+  const baseOffsetX = 150;
+  const baseOffsetY = 100;
+  
+  // Try different positions around the last edited node
+  const candidatePositions = [
+    { x: lastEditedPosition.x + baseOffsetX, y: lastEditedPosition.y }, // Right
+    { x: lastEditedPosition.x, y: lastEditedPosition.y + baseOffsetY }, // Below
+    { x: lastEditedPosition.x - baseOffsetX, y: lastEditedPosition.y }, // Left
+    { x: lastEditedPosition.x, y: lastEditedPosition.y - baseOffsetY }, // Above
+    { x: lastEditedPosition.x + baseOffsetX, y: lastEditedPosition.y + baseOffsetY }, // Bottom-right
+    { x: lastEditedPosition.x - baseOffsetX, y: lastEditedPosition.y + baseOffsetY }, // Bottom-left
+    { x: lastEditedPosition.x + baseOffsetX, y: lastEditedPosition.y - baseOffsetY }, // Top-right
+    { x: lastEditedPosition.x - baseOffsetX, y: lastEditedPosition.y - baseOffsetY }, // Top-left
+  ];
+
+  // Check each candidate position for overlap with existing nodes
+  for (const candidate of candidatePositions) {
+    const hasOverlap = existingNodes.some(node => {
+      const distance = Math.sqrt(
+        Math.pow(node.position.x - candidate.x, 2) + 
+        Math.pow(node.position.y - candidate.y, 2)
+      );
+      return distance < 120; // Minimum distance to avoid overlap
+    });
+
+    if (!hasOverlap) {
+      return candidate;
+    }
+  }
+
+  // If all positions have overlaps, use the first candidate with a random offset
+  return {
+    x: candidatePositions[0].x + (Math.random() - 0.5) * 100,
+    y: candidatePositions[0].y + (Math.random() - 0.5) * 100,
+  };
+};

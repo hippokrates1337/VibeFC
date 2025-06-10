@@ -22,19 +22,19 @@ export class OrganizationsController {
 
   @Post()
   async create(@NestRequest() req: RequestWithUser, @Body() createOrganizationDto: CreateOrganizationDto): Promise<OrganizationDto> {
-    return this.organizationsService.create(req.user.id, createOrganizationDto);
+    return this.organizationsService.create(req.user.id, createOrganizationDto, req);
   }
 
   @Get()
   async findAll(@NestRequest() req: RequestWithUser): Promise<OrganizationDto[]> {
-    return this.organizationsService.findAll(req.user.id);
+    return this.organizationsService.findAll(req.user.id, req);
   }
 
   @Get(':orgId')
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
   async findOne(@Param('orgId') orgId: string, @NestRequest() req: RequestWithUser): Promise<OrganizationDto> {
-    return this.organizationsService.findOne(orgId, req.user.id);
+    return this.organizationsService.findOne(orgId, req.user.id, req);
   }
 
   @Put(':orgId')
@@ -44,15 +44,16 @@ export class OrganizationsController {
   async update(
     @Param('orgId') orgId: string,
     @Body() updateOrganizationDto: UpdateOrganizationDto,
+    @NestRequest() req: RequestWithUser
   ): Promise<void> {
-    return this.organizationsService.update(orgId, updateOrganizationDto);
+    return this.organizationsService.update(orgId, updateOrganizationDto, req);
   }
 
   @Delete(':orgId')
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('orgId') orgId: string): Promise<void> {
-    return this.organizationsService.remove(orgId);
+  async remove(@Param('orgId') orgId: string, @NestRequest() req: RequestWithUser): Promise<void> {
+    return this.organizationsService.remove(orgId, req);
   }
 } 

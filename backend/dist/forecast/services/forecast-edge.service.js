@@ -12,7 +12,7 @@ var ForecastEdgeService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ForecastEdgeService = void 0;
 const common_1 = require("@nestjs/common");
-const supabase_service_1 = require("../../supabase/supabase.service");
+const supabase_optimized_service_1 = require("../../supabase/supabase-optimized.service");
 const forecast_node_service_1 = require("./forecast-node.service");
 let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
     constructor(supabaseService, nodeService) {
@@ -20,9 +20,9 @@ let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
         this.nodeService = nodeService;
         this.logger = new common_1.Logger(ForecastEdgeService_1.name);
     }
-    async create(dto) {
+    async create(dto, request) {
         try {
-            await this.nodeService.findOne(dto.sourceNodeId, dto.forecastId);
+            await this.nodeService.findOne(dto.sourceNodeId, request, dto.forecastId);
         }
         catch (error) {
             if (error instanceof common_1.NotFoundException) {
@@ -33,7 +33,7 @@ let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
             throw new common_1.InternalServerErrorException('Error verifying source node existence.');
         }
         try {
-            await this.nodeService.findOne(dto.targetNodeId, dto.forecastId);
+            await this.nodeService.findOne(dto.targetNodeId, request, dto.forecastId);
         }
         catch (error) {
             if (error instanceof common_1.NotFoundException) {
@@ -44,7 +44,8 @@ let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
             throw new common_1.InternalServerErrorException('Error verifying target node existence.');
         }
         try {
-            const { data: insertedEdge, error: insertError } = await this.supabaseService.client
+            const client = this.supabaseService.getClientForRequest(request);
+            const { data: insertedEdge, error: insertError } = await client
                 .from('forecast_edges')
                 .insert({
                 forecast_id: dto.forecastId,
@@ -77,8 +78,9 @@ let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
             throw new common_1.InternalServerErrorException('An unexpected error occurred while creating the forecast edge.');
         }
     }
-    async findByForecast(forecastId) {
-        const { data, error } = await this.supabaseService.client
+    async findByForecast(forecastId, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('forecast_edges')
             .select('*')
             .eq('forecast_id', forecastId);
@@ -88,8 +90,9 @@ let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
         }
         return data.map(edge => this.mapDbEntityToDto(edge));
     }
-    async findOne(id) {
-        const { data, error } = await this.supabaseService.client
+    async findOne(id, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('forecast_edges')
             .select('*')
             .eq('id', id)
@@ -108,8 +111,9 @@ let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
         }
         return this.mapDbEntityToDto(data);
     }
-    async remove(id) {
-        const { count, error } = await this.supabaseService.client
+    async remove(id, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { count, error } = await client
             .from('forecast_edges')
             .delete()
             .eq('id', id);
@@ -136,7 +140,7 @@ let ForecastEdgeService = ForecastEdgeService_1 = class ForecastEdgeService {
 exports.ForecastEdgeService = ForecastEdgeService;
 exports.ForecastEdgeService = ForecastEdgeService = ForecastEdgeService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [supabase_service_1.SupabaseService,
+    __metadata("design:paramtypes", [supabase_optimized_service_1.SupabaseOptimizedService,
         forecast_node_service_1.ForecastNodeService])
 ], ForecastEdgeService);
 //# sourceMappingURL=forecast-edge.service.js.map

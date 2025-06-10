@@ -1,22 +1,24 @@
 import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateOrganizationDto, UpdateOrganizationDto, OrganizationDto } from '../dto/organization.dto';
 import { OrganizationRole } from '../dto/member.dto';
 import { MembersService } from './members.service';
+import { Request } from 'express';
 
 @Injectable()
 export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
 
   constructor(
-    private supabaseService: SupabaseService,
+    private supabaseService: SupabaseOptimizedService,
     private membersService: MembersService,
   ) {}
 
-  async create(userId: string, dto: CreateOrganizationDto): Promise<OrganizationDto> {
+  async create(userId: string, dto: CreateOrganizationDto, request: Request): Promise<OrganizationDto> {
     let createdOrg: OrganizationDto | null = null;
     try {
-      const { data: insertedOrg, error: insertError } = await this.supabaseService.client
+      const client = this.supabaseService.getClientForRequest(request);
+      const { data: insertedOrg, error: insertError } = await client
         .from('organizations')
         .insert({
           name: dto.name,
@@ -43,7 +45,7 @@ export class OrganizationsService {
       this.logger.log(`Organization created: ${createdOrg.id} by user ${userId}`);
 
       try {
-        await this.membersService.addMember(createdOrg.id, { email: userId, role: OrganizationRole.ADMIN });
+        await this.membersService.addMember(createdOrg.id, { email: userId, role: OrganizationRole.ADMIN }, request);
         this.logger.log(`Added owner ${userId} as admin to organization ${createdOrg.id}`);
       } catch (memberError) {
         this.logger.error(`Failed to add owner ${userId} as admin member to org ${createdOrg.id}`, memberError.stack);
@@ -61,8 +63,9 @@ export class OrganizationsService {
     }
   }
 
-  async findAll(userId: string): Promise<OrganizationDto[]> {
-    const { data, error } = await this.supabaseService.client
+  async findAll(userId: string, request: Request): Promise<OrganizationDto[]> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organizations')
       .select(`
         *,
@@ -84,12 +87,13 @@ export class OrganizationsService {
     }));
   }
 
-  async findOne(id: string, userId: string): Promise<OrganizationDto> {
+  async findOne(id: string, userId: string, request: Request): Promise<OrganizationDto> {
     // Note: The `!inner` join implies the user *must* be a member. 
     // If no record is found, it could be the org doesn't exist OR the user isn't a member.
     // The error handling needs to account for this ambiguity or the query needs changing
     // if we need to differentiate "Org not found" from "Access denied".
-    const { data, error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organizations')
       .select(`
         *,
@@ -125,8 +129,9 @@ export class OrganizationsService {
     };
   }
 
-  async update(id: string, dto: UpdateOrganizationDto): Promise<void> {
-    const { data, error } = await this.supabaseService.client
+  async update(id: string, dto: UpdateOrganizationDto, request: Request): Promise<void> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organizations')
       .update({ name: dto.name })
       .eq('id', id)
@@ -146,8 +151,9 @@ export class OrganizationsService {
     this.logger.log(`Organization updated: ${id}`);
   }
 
-  async remove(id: string): Promise<void> {
-    const { count, error } = await this.supabaseService.client
+  async remove(id: string, request: Request): Promise<void> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { count, error } = await client
       .from('organizations')
       .delete()
       .eq('id', id);
@@ -165,8 +171,9 @@ export class OrganizationsService {
     this.logger.log(`Organization deleted: ${id}`);
   }
 
-  async getUserRoleInOrganization(userId: string, organizationId: string): Promise<OrganizationRole | null> {
-    const { data, error } = await this.supabaseService.client
+  async getUserRoleInOrganization(userId: string, organizationId: string, request: Request): Promise<OrganizationRole | null> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organization_members')
       .select('role')
       .eq('user_id', userId)

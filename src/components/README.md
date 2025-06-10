@@ -10,6 +10,35 @@ This directory contains all UI components used in the application.
 - `/organization`: Components for organization management and member administration (See `organization/README.md`)
 - `/__tests__`: Test files for components (See `__tests__/README.md`)
 
+## Shared Components
+
+### `RoleBasedAccess.tsx`
+Role-based access control component for conditional rendering based on user permissions:
+
+```typescript
+import { RoleBasedAccess, AdminOnly, AdminOrEditor } from '@/components/RoleBasedAccess';
+
+// Basic usage
+<RoleBasedAccess allowedRoles={['admin', 'editor']}>
+  <EditButton />
+</RoleBasedAccess>
+
+// Helper components
+<AdminOnly>
+  <DeleteButton />
+</AdminOnly>
+
+<AdminOrEditor fallback={<p>Access denied</p>}>
+  <ManagementPanel />
+</AdminOrEditor>
+```
+
+**Features:**
+- Conditional rendering based on user role (admin, editor, viewer)
+- Helper components for common role combinations
+- Fallback content for unauthorized access
+- Integration with organization store for role checking
+
 ## Component Guidelines
 
 1. Use PascalCase for component file names

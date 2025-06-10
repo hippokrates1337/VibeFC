@@ -302,17 +302,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('🔐 [AuthProvider] Starting signIn for:', email);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
+      console.log('🔐 [AuthProvider] SignIn result:', {
+        hasError: !!error,
+        hasSession: !!data.session,
+        hasUser: !!data.user,
+        errorMessage: error?.message
+      });
+      
       if (!error && data.session) {
-        window.location.href = '/';
+        console.log('🔐 [AuthProvider] Authentication successful, redirecting to home');
+        // Use router.push instead of window.location.href for better SPA behavior
+        router.push('/');
       } else if (error) {
-        console.error('Sign in error:', error);
+        console.error('🔐 [AuthProvider] Sign in error:', error);
       }
       
       return { error };
     } catch (err) {
-      console.error('Sign in error:', err);
+      console.error('🔐 [AuthProvider] Sign in exception:', err);
       return { error: err };
     }
   };

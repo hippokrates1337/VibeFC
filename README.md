@@ -208,13 +208,41 @@ Navigate to the `backend/` directory:
 
 ## Testing Strategy
 
-The application uses Jest and React Testing Library for testing:
+The application uses a comprehensive multi-layer testing approach:
 
-- **Unit Tests**: Located alongside source files in `__tests__` folders
-- **Component Tests**: Testing UI components in isolation
-- **Coverage Goals**: Aiming for 80%+ code coverage
+### Frontend Testing
+- **Unit Tests**: Jest and React Testing Library for component and utility testing
+- **API Client Tests**: Comprehensive coverage of forecast calculation API functions
+- **Location**: Tests are located alongside source files in `__tests__` folders
 
-The `src/setupTests.ts` file is used to configure the Jest testing environment. Its main role is to ensure that browser-specific APIs, like `fetch`, are available and correctly polyfilled or mocked when tests run in the Node.js environment. This helps in testing components that make HTTP requests.
+### Backend Testing  
+- **Unit Tests**: Jest for service and utility testing
+- **Integration Tests**: Real calculation engine testing with actual graph execution
+- **Performance Tests**: Large graph testing (50+ nodes) included in integration test suite
+
+### End-to-End Testing
+- **Playwright Tests**: Complete user workflow testing from graph creation to result viewing
+- **Location**: `tests/e2e/` directory (excluded from Jest runs)
+- **Coverage**: User authentication, forecast creation, calculation execution, result display
+
+### Test Coverage Goals
+- **Target**: 80%+ code coverage across all components
+- **Focus Areas**: Calculation engine, graph validation, API integration, user workflows
+- **Current Status**: Comprehensive coverage for forecast calculation functionality
+
+### Running Tests
+```bash
+# Frontend and backend unit/integration tests
+npm test
+
+# End-to-end tests with Playwright  
+npx playwright test
+
+# Coverage report
+npm test -- --coverage
+```
+
+The `src/setupTests.ts` file configures the Jest testing environment, ensuring browser-specific APIs like `fetch` are properly polyfilled for testing components that make HTTP requests.
 
 ## Data Model
 

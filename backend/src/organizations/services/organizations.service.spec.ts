@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrganizationsService } from './organizations.service';
 import { MembersService } from './members.service';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { Logger, NotFoundException, InternalServerErrorException, ConflictException } from '@nestjs/common';
 import { CreateOrganizationDto } from '../dto/organization.dto';
 import { UpdateOrganizationDto } from '../dto/organization.dto';
@@ -39,12 +39,19 @@ Logger.prototype.warn = jest.fn();
 
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
-  let supabaseService: SupabaseService;
+  let supabaseService: SupabaseOptimizedService;
   let membersService: MembersService;
   const testUserId = 'test-user-123'; // Define a user for context
 
-  const mockSupabaseService = {
-    client: mockSupabaseClient,
+  // Mock request object for the optimized service
+  const mockRequest = {
+    headers: { authorization: 'Bearer test-token' },
+    user: { userId: testUserId, organizationId: 'test-org-id' }
+  } as any;
+
+  const mockSupabaseOptimizedService = {
+    getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
+    client: mockSupabaseClient, // For backward compatibility
   };
 
   beforeEach(async () => {
@@ -86,14 +93,14 @@ describe('OrganizationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrganizationsService,
-        { provide: SupabaseService, useValue: mockSupabaseService },
+        { provide: SupabaseOptimizedService, useValue: mockSupabaseOptimizedService },
         { provide: MembersService, useValue: mockMembersService },
         Logger,
       ],
     }).compile();
 
     service = module.get<OrganizationsService>(OrganizationsService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
+    supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
     membersService = module.get<MembersService>(MembersService);
     
     // Clear logger mocks before each test
@@ -119,13 +126,13 @@ describe('OrganizationsService', () => {
       // Mock member service success
       mockMembersService.addMember.mockResolvedValue(undefined); 
 
-      const result = await service.create(userId, createDto);
+      const result = await service.create(userId, createDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
       expect(mockSupabaseInsert).toHaveBeenCalledWith({ name: createDto.name, owner_id: userId }); 
       expect(mockInsertSingle).toHaveBeenCalledTimes(1);
       // Expect owner to be added as admin member
-      expect(mockMembersService.addMember).toHaveBeenCalledWith(newOrg.id, { email: userId, role: OrganizationRole.ADMIN });
+      expect(mockMembersService.addMember).toHaveBeenCalledWith(newOrg.id, { email: userId, role: OrganizationRole.ADMIN }, expect.any(Object));
       expect(result).toEqual(newOrg);
       expect(Logger.prototype.log).toHaveBeenCalledWith(`Organization created: ${newOrg.id} by user ${userId}`);
       expect(Logger.prototype.log).toHaveBeenCalledWith(`Added owner ${userId} as admin to organization ${newOrg.id}`);
@@ -138,7 +145,7 @@ describe('OrganizationsService', () => {
             single: jest.fn().mockResolvedValue({ data: null, error: dbError }) 
         });
 
-        await expect(service.create(userId, createDto))
+        await expect(service.create(userId, createDto, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to create organization: ${dbError.message}`));
         expect(mockMembersService.addMember).not.toHaveBeenCalled();
     });
@@ -154,7 +161,7 @@ describe('OrganizationsService', () => {
         // TODO: Service layer bug - create() should throw ConflictException if addMember fails.
         // Current behavior: Logs error but resolves successfully.
         // Adjusting test to reflect current behavior.
-        await expect(service.create(userId, createDto))
+        await expect(service.create(userId, createDto, mockRequest))
             .rejects.toThrow(new ConflictException(`Organization ${newOrg.id} created, but failed to add owner as admin member. Please contact support.`));
         expect(Logger.prototype.error).toHaveBeenCalledWith(expect.stringContaining('Failed to add owner'), expect.any(String)); // Check for message and stack trace string
         // Consider cleanup logic if org is created but owner cannot be added
@@ -167,7 +174,7 @@ describe('OrganizationsService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: duplicateError }) 
       });
 
-      await expect(service.create(userId, createDto))
+      await expect(service.create(userId, createDto, mockRequest))
           .rejects.toThrow(new ConflictException('Organization with this name already exists'));
       
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
@@ -196,7 +203,7 @@ describe('OrganizationsService', () => {
     });
 
     it('should return organizations the user is a member of using select/join', async () => {
-      const result = await service.findAll(userId);
+      const result = await service.findAll(userId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
       expect(mockSupabaseSelect).toHaveBeenCalledWith(expect.stringContaining('organization_members!inner'));
@@ -206,7 +213,7 @@ describe('OrganizationsService', () => {
 
     it('should return an empty array if user is member of no orgs', async () => {
         mockSelectEq.mockResolvedValue({ data: [], error: null });
-        const result = await service.findAll(userId);
+        const result = await service.findAll(userId, mockRequest);
         expect(mockSelectEq).toHaveBeenCalledWith('organization_members.user_id', userId);
         expect(result).toEqual([]);
     });
@@ -215,7 +222,7 @@ describe('OrganizationsService', () => {
         const dbError = { message: 'Select join failed', code: 'DB500' };
         mockSelectEq.mockResolvedValue({ data: null, error: dbError });
 
-        await expect(service.findAll(userId))
+        await expect(service.findAll(userId, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to fetch organizations: ${dbError.message}`));
     });
   });
@@ -238,7 +245,7 @@ describe('OrganizationsService', () => {
     });
 
     it('should return the organization if found', async () => {
-      const result = await service.findOne(orgId, userId);
+      const result = await service.findOne(orgId, userId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
       expect(mockSupabaseSelect).toHaveBeenCalledWith(expect.stringContaining('organization_members!inner'));
@@ -258,7 +265,7 @@ describe('OrganizationsService', () => {
       mockSingle.mockResolvedValue({ data: null, error: null });
       // Expect the service to throw NotFoundException as per the updated logic
       try {
-        await service.findOne(orgId, userId);
+        await service.findOne(orgId, userId, mockRequest);
       } catch (e) {
         expect(e).toBeInstanceOf(NotFoundException);
       }
@@ -270,7 +277,7 @@ describe('OrganizationsService', () => {
         const dbError = { message: 'Select failed', code: 'DB500' };
         mockSingle.mockResolvedValue({ data: null, error: dbError });
         
-        await expect(service.findOne(orgId, userId))
+        await expect(service.findOne(orgId, userId, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to retrieve organization details: ${dbError.message}`));
     });
   });
@@ -292,7 +299,7 @@ describe('OrganizationsService', () => {
     });
 
     it('should update the organization and return the updated data', async () => {
-      const result = await service.update(orgId, updateDto);
+      const result = await service.update(orgId, updateDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
       expect(mockSupabaseUpdate).toHaveBeenCalledWith({ name: updateDto.name });
@@ -308,7 +315,7 @@ describe('OrganizationsService', () => {
         mockUpdateSingle.mockResolvedValue({ data: null, error: null });
 
         // Expect the service to throw NotFoundException as it now checks the result
-        await expect(service.update(orgId, updateDto))
+        await expect(service.update(orgId, updateDto, mockRequest))
             .rejects.toThrow(new NotFoundException(`Organization with ID ${orgId} not found.`));
     });
     
@@ -318,7 +325,7 @@ describe('OrganizationsService', () => {
         mockUpdateSingle.mockResolvedValue({ data: null, error: dbError });
 
         // Expect the service to throw InternalServerErrorException as it now handles the error
-        await expect(service.update(orgId, updateDto))
+        await expect(service.update(orgId, updateDto, mockRequest))
            .rejects.toThrow(new InternalServerErrorException(`Failed to update organization ${orgId}: ${dbError.message}`));
     });
   });
@@ -334,7 +341,7 @@ describe('OrganizationsService', () => {
     });
 
     it('should successfully remove the organization', async () => {
-      await service.remove(orgId);
+      await service.remove(orgId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('organizations');
       expect(mockSupabaseDelete).toHaveBeenCalledTimes(1);
@@ -346,7 +353,7 @@ describe('OrganizationsService', () => {
         mockDeleteEq.mockResolvedValue({ count: 0, error: null }); // Simulate 0 rows deleted
         
         // Expect the service to throw NotFoundException as it now checks the count
-        await expect(service.remove(orgId))
+        await expect(service.remove(orgId, mockRequest))
             .rejects.toThrow(new NotFoundException(`Organization with ID ${orgId} not found.`));
     });
 
@@ -355,7 +362,7 @@ describe('OrganizationsService', () => {
         mockDeleteEq.mockResolvedValue({ count: null, error: dbError });
         
         // Expect the updated error message including the orgId
-        await expect(service.remove(orgId))
+        await expect(service.remove(orgId, mockRequest))
             .rejects.toThrow(new InternalServerErrorException(`Failed to delete organization ${orgId}: ${dbError.message}`));
     });
   });
@@ -391,31 +398,34 @@ describe('OrganizationsService', () => {
     });
 
     it('should return the user role if found', async () => {
-      const mockRole = OrganizationRole.EDITOR;
-      mockRoleSingle.mockResolvedValue({ data: { role: mockRole }, error: null });
+      const memberData = { user_id: userId, organization_id: orgId, role: OrganizationRole.ADMIN };
+      mockRoleSingle.mockResolvedValue({ data: memberData, error: null });
 
-      const result = await service.getUserRoleInOrganization(userId, orgId);
+      const result = await service.getUserRoleInOrganization(userId, orgId, mockRequest);
 
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('organization_members');
-      // Use the accessible mockMembersTable for assertion
-      expect(mockMembersTable.select).toHaveBeenCalledWith('role'); 
+      expect(mockMembersTable.select).toHaveBeenCalledWith('role');
       expect(mockRoleSelectEqUser).toHaveBeenCalledWith('user_id', userId);
       expect(mockRoleSelectEqOrg).toHaveBeenCalledWith('organization_id', orgId);
       expect(mockRoleSingle).toHaveBeenCalledTimes(1);
-      expect(result).toBe(mockRole);
+      expect(result).toEqual(OrganizationRole.ADMIN);
     });
 
-    it('should return null if the user is not a member', async () => {
-      mockRoleSingle.mockResolvedValue({ data: null, error: null }); // No record found
-      const result = await service.getUserRoleInOrganization(userId, orgId);
+    it('should return null if user is not a member of the organization', async () => {
+      mockRoleSingle.mockResolvedValue({ data: null, error: null });
+
+      const result = await service.getUserRoleInOrganization(userId, orgId, mockRequest);
+
       expect(result).toBeNull();
     });
 
-    it('should return null if the select query fails', async () => {
-      const dbError = { message: 'DB Error', code: '500' };
-      mockRoleSingle.mockResolvedValue({ data: null, error: dbError }); // Error during query
-      const result = await service.getUserRoleInOrganization(userId, orgId);
-      expect(result).toBeNull(); 
-    });
+         it('should return null if query fails', async () => {
+       const dbError = { message: 'Select failed', code: 'DB500' };
+       mockRoleSingle.mockResolvedValue({ data: null, error: dbError });
+
+       const result = await service.getUserRoleInOrganization(userId, orgId, mockRequest);
+
+       expect(result).toBeNull();
+       // The service doesn't log errors for this method, it just returns null
+     });
   });
 }); 

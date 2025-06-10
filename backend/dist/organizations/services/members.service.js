@@ -11,14 +11,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MembersService = void 0;
 const common_1 = require("@nestjs/common");
-const supabase_service_1 = require("../../supabase/supabase.service");
+const supabase_optimized_service_1 = require("../../supabase/supabase-optimized.service");
 const member_dto_1 = require("../dto/member.dto");
 let MembersService = class MembersService {
     constructor(supabaseService) {
         this.supabaseService = supabaseService;
     }
-    async findAllInOrganization(organizationId) {
-        const { data, error } = await this.supabaseService.client
+    async findAllInOrganization(organizationId, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('organization_members')
             .select(`
         *,
@@ -38,8 +39,9 @@ let MembersService = class MembersService {
             joinedAt: new Date(member.joined_at),
         }));
     }
-    async addMember(organizationId, dto) {
-        const { data: userData, error: userError } = await this.supabaseService.client
+    async addMember(organizationId, dto, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data: userData, error: userError } = await client
             .from('auth.users')
             .select('id')
             .eq('email', dto.email)
@@ -48,7 +50,7 @@ let MembersService = class MembersService {
             throw new common_1.NotFoundException(`User with email ${dto.email} not found`);
         }
         const userId = userData.id;
-        const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+        const { data: existingMember, error: memberCheckError } = await client
             .from('organization_members')
             .select('*')
             .eq('organization_id', organizationId)
@@ -60,7 +62,7 @@ let MembersService = class MembersService {
         if (existingMember) {
             throw new common_1.ConflictException(`User is already a member of this organization`);
         }
-        const { error: insertError } = await this.supabaseService.client
+        const { error: insertError } = await client
             .from('organization_members')
             .insert({
             organization_id: organizationId,
@@ -71,8 +73,9 @@ let MembersService = class MembersService {
             throw new common_1.InternalServerErrorException(`Failed to add member: ${insertError.message}`);
         }
     }
-    async updateMemberRole(organizationId, userId, dto) {
-        const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+    async updateMemberRole(organizationId, userId, dto, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data: existingMember, error: memberCheckError } = await client
             .from('organization_members')
             .select('*')
             .eq('organization_id', organizationId)
@@ -85,7 +88,7 @@ let MembersService = class MembersService {
             throw new common_1.NotFoundException(`User is not a member of this organization`);
         }
         if (existingMember.role === member_dto_1.OrganizationRole.ADMIN && dto.role !== member_dto_1.OrganizationRole.ADMIN) {
-            const { data: adminCount, error: countError } = await this.supabaseService.client
+            const { data: adminCount, error: countError } = await client
                 .from('organization_members')
                 .select('id', { count: 'exact' })
                 .eq('organization_id', organizationId)
@@ -97,7 +100,7 @@ let MembersService = class MembersService {
                 throw new common_1.BadRequestException(`Cannot demote the last admin of the organization`);
             }
         }
-        const { error: updateError } = await this.supabaseService.client
+        const { error: updateError } = await client
             .from('organization_members')
             .update({ role: dto.role })
             .eq('organization_id', organizationId)
@@ -106,8 +109,9 @@ let MembersService = class MembersService {
             throw new common_1.InternalServerErrorException(`Failed to update member role: ${updateError.message}`);
         }
     }
-    async removeMember(organizationId, userId) {
-        const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+    async removeMember(organizationId, userId, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data: existingMember, error: memberCheckError } = await client
             .from('organization_members')
             .select('role')
             .eq('organization_id', organizationId)
@@ -120,7 +124,7 @@ let MembersService = class MembersService {
             throw new common_1.NotFoundException(`User is not a member of this organization`);
         }
         if (existingMember.role === member_dto_1.OrganizationRole.ADMIN) {
-            const { data: adminCount, error: countError } = await this.supabaseService.client
+            const { data: adminCount, error: countError } = await client
                 .from('organization_members')
                 .select('id', { count: 'exact' })
                 .eq('organization_id', organizationId)
@@ -132,7 +136,7 @@ let MembersService = class MembersService {
                 throw new common_1.BadRequestException(`Cannot remove the last admin of the organization`);
             }
         }
-        const { error: deleteError } = await this.supabaseService.client
+        const { error: deleteError } = await client
             .from('organization_members')
             .delete()
             .eq('organization_id', organizationId)
@@ -145,6 +149,6 @@ let MembersService = class MembersService {
 exports.MembersService = MembersService;
 exports.MembersService = MembersService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [supabase_service_1.SupabaseService])
+    __metadata("design:paramtypes", [supabase_optimized_service_1.SupabaseOptimizedService])
 ], MembersService);
 //# sourceMappingURL=members.service.js.map

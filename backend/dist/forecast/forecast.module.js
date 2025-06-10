@@ -16,12 +16,13 @@ const forecast_edge_service_1 = require("./services/forecast-edge.service");
 const forecast_calculation_service_1 = require("./services/forecast-calculation.service");
 const supabase_module_1 = require("../supabase/supabase.module");
 const data_intake_module_1 = require("../data-intake/data-intake.module");
+const common_module_1 = require("../common/common.module");
 let ForecastModule = class ForecastModule {
 };
 exports.ForecastModule = ForecastModule;
 exports.ForecastModule = ForecastModule = __decorate([
     (0, common_1.Module)({
-        imports: [supabase_module_1.SupabaseModule, data_intake_module_1.DataIntakeModule],
+        imports: [supabase_module_1.SupabaseModule, data_intake_module_1.DataIntakeModule, common_module_1.CommonModule],
         controllers: [forecast_controller_1.ForecastController, forecast_calculation_controller_1.ForecastCalculationController],
         providers: [
             forecast_service_1.ForecastService,

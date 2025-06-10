@@ -1,14 +1,16 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, Request, Query, Logger } from '@nestjs/common';
+import { Request as ExpressRequest } from 'express';
 import { ForecastService } from '../services/forecast.service';
 import { ForecastNodeService } from '../services/forecast-node.service';
 import { ForecastEdgeService } from '../services/forecast-edge.service';
 import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../dto/forecast.dto';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto } from '../dto/forecast-node.dto';
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../dto/forecast-edge.dto';
+import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 // Define type for authenticated request
-interface RequestWithUser extends Request {
+interface RequestWithUser extends ExpressRequest {
   user: {
     userId: string;
     [key: string]: any;
@@ -40,7 +42,7 @@ export class ForecastController {
     this.logger.debug(`Received CreateForecastDto: ${JSON.stringify(createForecastDto)}`);
 
     try {
-      const result = await this.forecastService.create(userId, createForecastDto);
+      const result = await this.forecastService.create(userId, createForecastDto, req);
       this.logger.debug(`Forecast creation successful in controller, returning result.`);
       return result;
     } catch (error) {
@@ -52,27 +54,38 @@ export class ForecastController {
   @Get()
   async findAll(@Request() req: RequestWithUser, @Query('organizationId') organizationId: string): Promise<ForecastDto[]> {
     const userId = req.user.userId;
-    return this.forecastService.findAll(userId, organizationId);
+    return this.forecastService.findAll(userId, organizationId, req);
   }
 
   @Get(':id')
   async findOne(@Request() req: RequestWithUser, @Param('id') id: string): Promise<ForecastDto> {
     const userId = req.user.userId;
-    return this.forecastService.findOne(id, userId);
+    return this.forecastService.findOne(id, userId, req);
   }
 
   @Patch(':id')
   @HttpCode(204)
   async update(@Request() req: RequestWithUser, @Param('id') id: string, @Body() updateForecastDto: UpdateForecastDto): Promise<void> {
     const userId = req.user.userId;
-    return this.forecastService.update(id, userId, updateForecastDto);
+    return this.forecastService.update(id, userId, updateForecastDto, req);
   }
 
   @Delete(':id')
   @HttpCode(204)
   async remove(@Request() req: RequestWithUser, @Param('id') id: string): Promise<void> {
     const userId = req.user.userId;
-    return this.forecastService.remove(id, userId);
+    return this.forecastService.remove(id, userId, req);
+  }
+
+  @Post(':forecastId/bulk-save')
+  async bulkSaveGraph(
+    @Request() req: RequestWithUser,
+    @Param('forecastId') forecastId: string,
+    @Body() bulkSaveDto: BulkSaveGraphDto
+  ): Promise<FlattenedForecastWithDetailsDto> {
+    const userId = req.user.userId;
+    this.logger.log(`Bulk save graph request for forecast ${forecastId} by user ${userId}`);
+    return this.forecastService.bulkSaveGraph(forecastId, userId, bulkSaveDto, req);
   }
 
   // Node endpoints
@@ -84,31 +97,31 @@ export class ForecastController {
   ): Promise<ForecastNodeDto> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
     // Ensure the node is associated with the correct forecast
     createNodeDto.forecastId = forecastId;
-    return this.nodeService.create(createNodeDto);
+    return this.nodeService.create(createNodeDto, req);
   }
 
   @Get(':forecastId/nodes')
   async findNodes(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string): Promise<ForecastNodeDto[]> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
     // If we get here, the forecast exists and belongs to the user
-    return this.nodeService.findByForecast(forecastId);
+    return this.nodeService.findByForecast(forecastId, req);
   }
 
   @Get(':forecastId/nodes/:nodeId')
   async findNode(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string, @Param('nodeId') nodeId: string): Promise<ForecastNodeDto> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
     // If we get here, the forecast exists and belongs to the user, so we can check the node
-    return this.nodeService.findOne(nodeId);
+    return this.nodeService.findOne(nodeId, req);
   }
 
   @Patch(':forecastId/nodes/:nodeId')
@@ -121,9 +134,9 @@ export class ForecastController {
   ): Promise<void> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
-    return this.nodeService.update(nodeId, updateNodeDto);
+    return this.nodeService.update(nodeId, updateNodeDto, req);
   }
 
   @Delete(':forecastId/nodes/:nodeId')
@@ -135,9 +148,9 @@ export class ForecastController {
   ): Promise<void> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
-    return this.nodeService.remove(nodeId);
+    return this.nodeService.remove(nodeId, req);
   }
 
   // Edge endpoints
@@ -149,31 +162,31 @@ export class ForecastController {
   ): Promise<ForecastEdgeDto> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
     // Ensure the edge is associated with the correct forecast
     createEdgeDto.forecastId = forecastId;
-    return this.edgeService.create(createEdgeDto);
+    return this.edgeService.create(createEdgeDto, req);
   }
 
   @Get(':forecastId/edges')
   async findEdges(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string): Promise<ForecastEdgeDto[]> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
     // If we get here, the forecast exists and belongs to the user
-    return this.edgeService.findByForecast(forecastId);
+    return this.edgeService.findByForecast(forecastId, req);
   }
 
   @Get(':forecastId/edges/:edgeId')
   async findEdge(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string, @Param('edgeId') edgeId: string): Promise<ForecastEdgeDto> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
     // If we get here, the forecast exists and belongs to the user, so we can check the edge
-    return this.edgeService.findOne(edgeId);
+    return this.edgeService.findOne(edgeId, req);
   }
 
   @Delete(':forecastId/edges/:edgeId')
@@ -185,8 +198,8 @@ export class ForecastController {
   ): Promise<void> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
-    await this.forecastService.findOne(forecastId, userId);
+    await this.forecastService.findOne(forecastId, userId, req);
     
-    return this.edgeService.remove(edgeId);
+    return this.edgeService.remove(edgeId, req);
   }
 } 

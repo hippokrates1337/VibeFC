@@ -1,20 +1,38 @@
 import React from 'react';
-import { render, waitFor } from '@/test-utils';
+import { render, waitFor, renderWithoutErrorBoundary } from '@/test-utils';
 import { AuthProvider } from '../auth-provider';
-import { supabase } from '@/lib/supabase';
-import { useOrganizationStore } from '@/lib/store/organization';
-import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
+import type { Session } from '@supabase/supabase-js';
 
-// Mock Supabase
-jest.mock('@/lib/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn(),
-      onAuthStateChange: jest.fn(),
+// Mock Supabase completely before importing anything else
+jest.mock('@/lib/supabase', () => {
+  const mockAuthSubscription = { 
+    unsubscribe: jest.fn(),
+    id: 'test-subscription-id',
+    callback: jest.fn(),
+  };
+  const mockGetSession = jest.fn();
+  const mockOnAuthStateChange = jest.fn();
+  const mockSignInWithPassword = jest.fn();
+  const mockSignUp = jest.fn();
+  const mockSignOut = jest.fn();
+  const mockSupabaseFrom = jest.fn();
+
+  return {
+    supabase: {
+      auth: {
+        getSession: mockGetSession,
+        onAuthStateChange: mockOnAuthStateChange,
+        signInWithPassword: mockSignInWithPassword,
+        signUp: mockSignUp,
+        signOut: mockSignOut,
+      },
+      from: mockSupabaseFrom,
     },
-    from: jest.fn(),
-  },
-}));
+  };
+});
+
+// Import after mocking
+import { supabase } from '@/lib/supabase';
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
@@ -23,125 +41,260 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock stores
-jest.mock('@/lib/store/organization', () => ({
-  useOrganizationStore: {
-    getState: jest.fn(),
+// Mock document.cookie
+Object.defineProperty(document, 'cookie', {
+  writable: true,
+  value: '',
+  configurable: true,
+});
+
+// Mock window.location
+Object.defineProperty(window, 'location', {
+  value: {
+    origin: 'http://localhost:3000',
+    href: 'http://localhost:3000',
+    reload: jest.fn(),
   },
-}));
+  writable: true,
+  configurable: true,
+});
 
-jest.mock('@/lib/store/variables', () => ({
-  useVariableStore: {
-    getState: jest.fn(() => ({
-      fetchVariables: jest.fn(),
-      clearVariables: jest.fn(),
-    })),
-  },
-}));
-
-jest.mock('@/lib/store/forecast-graph-store', () => ({
-  useForecastGraphStore: {
-    getState: jest.fn(),
-  },
-}));
-
-describe('AuthProvider - Unsaved Changes Preservation', () => {
-  const mockSession = {
-    user: { id: 'test-user-id' },
-    access_token: 'test-token',
-    expires_in: 3600,
-  };
-
+// Mock organization store
+jest.mock('@/lib/store/organization', () => {
   const mockOrgStore = {
     currentOrganization: { id: 'test-org-id', name: 'Test Org' },
+    organizations: [{ id: 'test-org-id', name: 'Test Org' }],
+    isLoading: false,
     fetchOrganizationData: jest.fn(),
     clearOrganizationData: jest.fn(),
   };
 
-  const mockForecastStore = {
-    forecastId: 'test-forecast-id',
-    isDirty: true,
-    nodes: [{ id: 'node-1', type: 'CONSTANT' }],
-    organizationId: 'test-org-id',
-    loadOrganizationForecasts: jest.fn(),
-    resetStore: jest.fn(),
-    setLoading: jest.fn(),
-    setError: jest.fn(),
+  const mockUseOrganizationStore = jest.fn() as jest.MockedFunction<any> & {
+    getState: jest.MockedFunction<() => typeof mockOrgStore>;
   };
+
+  return {
+    useOrganizationStore: mockUseOrganizationStore,
+  };
+});
+
+// Mock variable store
+const mockVariableStore = {
+  fetchVariables: jest.fn(),
+  clearVariables: jest.fn(),
+};
+
+jest.mock('@/lib/store/variables', () => ({
+  useVariableStore: {
+    getState: jest.fn(() => mockVariableStore),
+  },
+}));
+
+// Mock forecast graph store
+const mockForecastStore = {
+  forecastId: 'test-forecast-id',
+  isDirty: true,
+  nodes: [{ id: 'node-1', type: 'CONSTANT' }],
+  organizationId: 'test-org-id',
+  loadOrganizationForecasts: jest.fn(),
+  resetStore: jest.fn(),
+  setLoading: jest.fn(),
+  setError: jest.fn(),
+};
+
+jest.mock('@/lib/store/forecast-graph-store', () => ({
+  useForecastGraphStore: {
+    getState: jest.fn(() => mockForecastStore),
+  },
+}));
+
+// Import mocked stores after mocking
+import { useOrganizationStore } from '@/lib/store/organization';
+
+describe('AuthProvider - Unsaved Changes Preservation', () => {
+  const mockSession: Session = {
+    user: { 
+      id: 'test-user-id',
+      email: 'test@example.com',
+      aud: 'authenticated',
+      role: 'authenticated',
+      app_metadata: {},
+      user_metadata: {},
+      created_at: '2024-01-01T00:00:00Z',
+    },
+    access_token: 'test-token',
+    refresh_token: 'test-refresh-token',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+  };
+
+  // Get references to the mocked functions
+  const mockGetSession = supabase.auth.getSession as jest.MockedFunction<typeof supabase.auth.getSession>;
+  const mockOnAuthStateChange = supabase.auth.onAuthStateChange as jest.MockedFunction<typeof supabase.auth.onAuthStateChange>;
+  const mockSupabaseFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
+  const mockUseOrganizationStore = useOrganizationStore as jest.MockedFunction<typeof useOrganizationStore> & {
+    getState: jest.MockedFunction<() => any>;
+  };
+
+  // Create mock store objects that can be modified in tests
+  const createMockOrgStore = () => ({
+    currentOrganization: { id: 'test-org-id', name: 'Test Org' },
+    organizations: [{ id: 'test-org-id', name: 'Test Org' }],
+    isLoading: false,
+    fetchOrganizationData: jest.fn(),
+    clearOrganizationData: jest.fn(),
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
     
-    // Mock store states
-    (useOrganizationStore.getState as jest.Mock).mockReturnValue(mockOrgStore);
-    (useForecastGraphStore.getState as jest.Mock).mockReturnValue(mockForecastStore);
+    // Mock document.cookie
+    Object.defineProperty(document, 'cookie', {
+      writable: true,
+      value: '',
+      configurable: true,
+    });
+    
+    // Mock window.location
+    Object.defineProperty(window, 'location', {
+      value: {
+        origin: 'http://localhost:3000',
+        href: 'http://localhost:3000',
+        reload: jest.fn(),
+      },
+      writable: true,
+      configurable: true,
+    });
 
-    // Mock Supabase auth
-    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+    // Setup Supabase mocks
+    mockGetSession.mockResolvedValue({
       data: { session: mockSession },
+      error: null,
     });
 
-    (supabase.auth.onAuthStateChange as jest.Mock).mockReturnValue({
-      data: { subscription: { unsubscribe: jest.fn() } },
+    mockOnAuthStateChange.mockReturnValue({
+      data: { 
+        subscription: { 
+          unsubscribe: jest.fn(),
+          id: 'test-subscription-id',
+          callback: jest.fn(),
+        } 
+      },
     });
+
+    mockSupabaseFrom.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+      }),
+    } as any);
+
+    // Setup organization store mock with default state
+    const mockOrgStore = createMockOrgStore();
+    mockUseOrganizationStore.mockImplementation((selector?: any) => {
+      if (typeof selector === 'function') {
+        return selector(mockOrgStore);
+      }
+      return mockOrgStore;
+    });
+
+    // Add getState method to organization store mock
+    (mockUseOrganizationStore as any).getState = jest.fn(() => mockOrgStore);
   });
 
   it('should preserve unsaved changes when SIGNED_IN event occurs with existing data', async () => {
-    const mockOnAuthStateChange = supabase.auth.onAuthStateChange as jest.Mock;
-    
-    render(
+    // Ensure the organization store shows existing data from the beginning
+    const existingOrgStore = {
+      currentOrganization: { id: 'test-org-id', name: 'Test Org' },
+      organizations: [{ id: 'test-org-id', name: 'Test Org' }], // This is key - non-empty array
+      isLoading: false,
+      fetchOrganizationData: jest.fn(),
+      clearOrganizationData: jest.fn(),
+    };
+
+    // Setup the organization store to return existing data
+    mockUseOrganizationStore.mockImplementation((selector?: any) => {
+      if (typeof selector === 'function') {
+        return selector(existingOrgStore);
+      }
+      return existingOrgStore;
+    });
+
+    // Update getState to return existing data
+    (mockUseOrganizationStore as any).getState = jest.fn(() => existingOrgStore);
+
+    const TestComponent = () => (
       <AuthProvider>
-        <div>Test Child</div>
+        <div data-testid="test-child">Test Child</div>
       </AuthProvider>
     );
 
-    // Wait for initial setup
+    const { getByTestId } = renderWithoutErrorBoundary(<TestComponent />);
+
+    // Wait for initial setup - this should NOT trigger fetchOrganizationData 
+    // because we have existing data
     await waitFor(() => {
-      expect(supabase.auth.getSession).toHaveBeenCalled();
+      expect(mockGetSession).toHaveBeenCalled();
     });
 
-    // Simulate the auth state change callback being called
+    // Verify component rendered successfully
+    expect(getByTestId('test-child')).toBeInTheDocument();
+
+    // Clear any calls that might have happened during initial render
+    existingOrgStore.fetchOrganizationData.mockClear();
+
+    // Now simulate the auth state change callback being called
     const authStateChangeCallback = mockOnAuthStateChange.mock.calls[0][0];
     
     // Simulate SIGNED_IN event (like when browser window is restored)
     authStateChangeCallback('SIGNED_IN', mockSession);
 
+    // Give time for any async operations
+    await waitFor(() => {
+      // Since we have existing organizations (length > 0), 
+      // fetchOrganizationData should NOT be called
+      expect(existingOrgStore.fetchOrganizationData).not.toHaveBeenCalled();
+    });
+    
     // Verify that resetStore was NOT called because we have unsaved changes
     expect(mockForecastStore.resetStore).not.toHaveBeenCalled();
-    
-    // Verify that organization data fetch was NOT triggered
-    expect(mockOrgStore.fetchOrganizationData).not.toHaveBeenCalled();
   });
 
   it('should fetch fresh data when SIGNED_IN event occurs with no existing data', async () => {
     // Mock empty store state
-    const emptyForecastStore = {
-      ...mockForecastStore,
-      forecastId: null,
-      isDirty: false,
-      nodes: [],
-    };
-    
     const emptyOrgStore = {
-      ...mockOrgStore,
       currentOrganization: null,
+      organizations: [],
+      isLoading: false,
+      fetchOrganizationData: jest.fn(),
+      clearOrganizationData: jest.fn(),
     };
 
-    (useOrganizationStore.getState as jest.Mock).mockReturnValue(emptyOrgStore);
-    (useForecastGraphStore.getState as jest.Mock).mockReturnValue(emptyForecastStore);
+    // Update mocks to return empty state
+    mockUseOrganizationStore.mockImplementation((selector?: any) => {
+      if (typeof selector === 'function') {
+        return selector(emptyOrgStore);
+      }
+      return emptyOrgStore;
+    });
 
-    const mockOnAuthStateChange = supabase.auth.onAuthStateChange as jest.Mock;
-    
-    render(
+    (mockUseOrganizationStore as any).getState = jest.fn(() => emptyOrgStore);
+
+    const TestComponent = () => (
       <AuthProvider>
-        <div>Test Child</div>
+        <div data-testid="test-child">Test Child</div>
       </AuthProvider>
     );
 
+    const { getByTestId } = renderWithoutErrorBoundary(<TestComponent />);
+
     // Wait for initial setup
     await waitFor(() => {
-      expect(supabase.auth.getSession).toHaveBeenCalled();
+      expect(mockGetSession).toHaveBeenCalled();
     });
+
+    // Verify component rendered successfully
+    expect(getByTestId('test-child')).toBeInTheDocument();
 
     // Simulate the auth state change callback being called
     const authStateChangeCallback = mockOnAuthStateChange.mock.calls[0][0];
@@ -154,18 +307,21 @@ describe('AuthProvider - Unsaved Changes Preservation', () => {
   });
 
   it('should clear all data on SIGNED_OUT event', async () => {
-    const mockOnAuthStateChange = supabase.auth.onAuthStateChange as jest.Mock;
-    
-    render(
+    const TestComponent = () => (
       <AuthProvider>
-        <div>Test Child</div>
+        <div data-testid="test-child">Test Child</div>
       </AuthProvider>
     );
 
+    const { getByTestId } = renderWithoutErrorBoundary(<TestComponent />);
+
     // Wait for initial setup
     await waitFor(() => {
-      expect(supabase.auth.getSession).toHaveBeenCalled();
+      expect(mockGetSession).toHaveBeenCalled();
     });
+
+    // Verify component rendered successfully
+    expect(getByTestId('test-child')).toBeInTheDocument();
 
     // Simulate the auth state change callback being called
     const authStateChangeCallback = mockOnAuthStateChange.mock.calls[0][0];
@@ -173,8 +329,11 @@ describe('AuthProvider - Unsaved Changes Preservation', () => {
     // Simulate SIGNED_OUT event
     authStateChangeCallback('SIGNED_OUT', null);
 
+    // Get the current mock org store to check function calls
+    const currentOrgStore = (mockUseOrganizationStore as any).getState();
+
     // Verify that all stores were cleared
-    expect(mockOrgStore.clearOrganizationData).toHaveBeenCalled();
+    expect(currentOrgStore.clearOrganizationData).toHaveBeenCalled();
     expect(mockForecastStore.resetStore).toHaveBeenCalled();
   });
 }); 

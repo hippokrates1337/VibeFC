@@ -203,17 +203,17 @@ describe('forecast-graph-store', () => {
     const dataNode = result.current.nodes.find(node => node.type === 'DATA');
     expect(dataNode?.data).toEqual({ name: 'New Data Node', variableId: '', offsetMonths: 0 });
     
-    // Check CONSTANT node
+    // Check CONSTANT node - Updated to include name field
     const constantNode = result.current.nodes.find(node => node.type === 'CONSTANT');
-    expect(constantNode?.data).toEqual({ value: 0 });
+    expect(constantNode?.data).toEqual({ name: 'New Constant', value: 0 });
     
     // Check OPERATOR node
     const operatorNode = result.current.nodes.find(node => node.type === 'OPERATOR');
     expect(operatorNode?.data).toEqual({ op: '+', inputOrder: [] });
     
-    // Check METRIC node
+    // Check METRIC node - Updated to include label field
     const metricNode = result.current.nodes.find(node => node.type === 'METRIC');
-    expect(metricNode?.data).toEqual({ label: '', budgetVariableId: '', historicalVariableId: '', useCalculated: false });
+    expect(metricNode?.data).toEqual({ label: 'New Metric', budgetVariableId: '', historicalVariableId: '', useCalculated: false });
     
     // Check SEED node
     const seedNode = result.current.nodes.find(node => node.type === 'SEED');
@@ -411,8 +411,8 @@ describe('forecast-graph-store', () => {
     expect(result.current.isDirty).toBe(true);
   });
 
-  // Test onNodesChange action
-  it('should apply node changes', () => {
+  // Test onNodesChange action for position changes (should not mark dirty)
+  it('should apply node position changes without marking dirty', () => {
     const { result } = renderHook(() => useForecastGraphStore());
     let nodeId = '';
     
@@ -446,6 +446,42 @@ describe('forecast-graph-store', () => {
     
     // Check that the position was updated
     expect(result.current.nodes[0].position).toEqual({ x: 200, y: 200 });
+    // Position changes should NOT mark the store as dirty (by design)
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  // Test onNodesChange action for structural changes (should mark dirty)
+  it('should apply node removal and mark store as dirty', () => {
+    const { result } = renderHook(() => useForecastGraphStore());
+    let nodeId = '';
+    
+    // Add a node first
+    act(() => {
+      const id = result.current.addNode({
+        type: 'CONSTANT',
+        data: { value: 10 }
+      });
+      nodeId = id as string;
+      
+      // Reset dirty state for testing
+      result.current.setDirty(false);
+    });
+    
+    // Create remove change (structural change)
+    const changes: NodeChange[] = [
+      {
+        type: 'remove',
+        id: nodeId,
+      }
+    ];
+    
+    // Apply changes
+    act(() => {
+      result.current.onNodesChange(changes);
+    });
+    
+    // Check that the node was removed and store is marked dirty
+    expect(result.current.nodes).toHaveLength(0);
     expect(result.current.isDirty).toBe(true);
   });
 

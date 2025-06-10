@@ -1,41 +1,36 @@
 # Forecast Component Tests
 
-This directory contains tests for the forecast editor components, specifically the custom React Flow nodes and the main canvas. These tests follow the project's testing guidelines.
+This directory contains tests for the forecast editor components using Jest and React Testing Library.
 
 ## Test Coverage
 
-The tests cover:
+### Custom Node Components
+- **`DataNode.test.tsx`**: Tests data node rendering and variable display
+- **`ConstantNode.test.tsx`**: Tests constant value node rendering
+- **`OperatorNode.test.tsx`**: Tests mathematical operation node rendering
+- **`MetricNode.test.tsx`**: Tests metric node rendering and variable integration
+- **`SeedNode.test.tsx`**: Tests seed node rendering and source display
 
-1.  **Custom Node Components**:
-    *   `DataNode.test.tsx`: Tests for the Data node.
-    *   `ConstantNode.test.tsx`: Tests for the Constant node.
-    *   `OperatorNode.test.tsx`: Tests for the Operator node.
-    *   `MetricNode.test.tsx`: Tests for the Metric node.
-    *   `SeedNode.test.tsx`: Tests for the Seed node.
+### Canvas Component
+- **`ForecastCanvas.test.tsx`**: Tests the main React Flow canvas integration
+  - Node and edge data passing to React Flow
+  - Event handling for graph interactions
+  - Custom node type registration
+  - Canvas controls and background rendering
 
-    Each custom node test verifies:
-    *   Correct rendering of node-specific data attributes (e.g., variable ID, operator type, metric label).
-    *   Proper handling and display of default values when data props are incomplete or missing.
-    *   Accurate rendering and positioning of React Flow `Handle` components (source and target connection points).
+## Testing Strategy
 
-2.  **Canvas Component**:
-    *   `ForecastCanvas.test.tsx`: Tests for the main `ForecastCanvas` that hosts the React Flow graph.
+- **Mocking**: React Flow and Zustand store dependencies are mocked for isolated testing
+- **User-Centric**: Tests focus on component behavior and rendering from user perspective
+- **Props Validation**: Ensures components handle missing or incomplete data gracefully
+- **Integration**: Verifies proper integration between components and state management
 
-    The canvas tests verify:
-    *   Proper integration with the (mocked) React Flow library.
-    *   Correct passing of nodes and edges data from the (mocked) Zustand store to React Flow.
-    *   Event handling: Ensures that callbacks for node changes, edge changes, and new connections correctly trigger the corresponding actions in the Zustand store.
-    *   Registration of all custom node types (`DataNode`, `ConstantNode`, etc.) with React Flow.
-    *   Rendering of auxiliary React Flow components like `Controls` and `Background`.
+## Running Tests
 
-## Testing Approach
+```bash
+# Run forecast component tests
+npm test -- src/components/forecast
 
-These tests utilize:
-*   Jest as the test runner and for mocking.
-*   React Testing Library for rendering components and asserting their behavior in a user-centric way.
-*   Mocks for `reactflow` and the `useForecastGraphStore` (Zustand) to isolate components and control dependencies.
-
-The tests focus on ensuring that:
-*   Node components display the correct information based on their props.
-*   Nodes correctly expose connection points (handles).
-*   The canvas component correctly integrates with the graph store and React Flow, responding appropriately to events. 
+# Run with coverage
+npm run test:coverage -- src/components/forecast
+``` 

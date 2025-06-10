@@ -135,7 +135,7 @@ describe('DataIntakeController (Integration)', () => {
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       // Controller passes the DTO directly to the service after potentially adding IDs (which doesn't happen here as they exist)
-      expect(mockDataIntakeService.addVariables).toHaveBeenCalledWith(addDto);
+      expect(mockDataIntakeService.addVariables).toHaveBeenCalledWith(addDto, expect.any(Object));
     });
 
     it('should return 400 on invalid DTO (empty array)', async () => {
@@ -221,7 +221,7 @@ describe('DataIntakeController (Integration)', () => {
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockDataIntakeService.getVariablesByUser).toHaveBeenCalledWith(userIdToFetch);
+      expect(mockDataIntakeService.getVariablesByUser).toHaveBeenCalledWith(userIdToFetch, expect.any(Object));
     });
 
      it('should return 401 if auth guard denies access', async () => {
@@ -280,7 +280,7 @@ describe('DataIntakeController (Integration)', () => {
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       // Controller passes DTO directly, service might use user context internally
-      expect(mockDataIntakeService.updateVariables).toHaveBeenCalledWith(updateDto);
+      expect(mockDataIntakeService.updateVariables).toHaveBeenCalledWith(updateDto, expect.any(Object));
     });
 
     it('should return 400 on invalid DTO', async () => {
@@ -347,7 +347,8 @@ describe('DataIntakeController (Integration)', () => {
       expect(mockDataIntakeService.deleteVariables).toHaveBeenCalledWith(
         { ids: idsToDelete }, // Service expects {ids} object based on controller code
         userId,           // User ID from request context
-        organizationId    // Org ID from DTO body
+        organizationId,   // Org ID from DTO body
+        expect.any(Object) // Request object
       );
     });
 

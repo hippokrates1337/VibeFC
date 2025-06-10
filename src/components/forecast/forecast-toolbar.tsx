@@ -14,7 +14,12 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
-import { useForecastGraphStore, ForecastNodeKind } from '@/lib/store/forecast-graph-store';
+import { 
+  useForecastGraphStore, 
+  ForecastNodeKind,
+  useLastEditedNodePosition,
+  calculateSmartNodePosition
+} from '@/lib/store/forecast-graph-store';
 import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/use-toast';
 import NodeConfigPanel from '@/components/forecast/node-config-panel';
@@ -116,6 +121,9 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
   // Unsaved changes dialog state
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  
+  // Last edited node position for smart positioning
+  const lastEditedNodePosition = useLastEditedNodePosition();
   
   // Zustand store selectors
   const { 
@@ -253,13 +261,13 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
   
   // Add a new node of the specified kind
   const handleAddNode = (nodeKind: ForecastNodeKind) => {
+    // Calculate smart position based on last edited node
+    const smartPosition = calculateSmartNodePosition(lastEditedNodePosition, nodes);
+    
     const nodeId = addNode({ 
       type: nodeKind, 
       data: {}, 
-      position: { 
-        x: Math.random() * 300 + 50, 
-        y: Math.random() * 300 + 50 
-      } 
+      position: smartPosition
     });
     
     // Select the new node and open configuration panel for it
@@ -268,7 +276,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
     
     toast({
       title: 'Node Added',
-      description: `${nodeKind} node added. Configure its properties.`,
+      description: `${nodeKind} node added near your last edit. Configure its properties.`,
     });
   };
   

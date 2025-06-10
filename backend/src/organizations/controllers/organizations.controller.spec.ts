@@ -128,7 +128,7 @@ describe('OrganizationsController (Integration)', () => {
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockOrganizationsService.findAll).toHaveBeenCalledWith(mockUser.id);
+      expect(mockOrganizationsService.findAll).toHaveBeenCalledWith(mockUser.id, expect.any(Object));
     });
 
     it('should return 401 if JWT guard denies', async () => {
@@ -168,7 +168,7 @@ describe('OrganizationsController (Integration)', () => {
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       // The controller has RolesGuard on this endpoint
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockOrganizationsService.findOne).toHaveBeenCalledWith(orgId, mockUser.id);
+      expect(mockOrganizationsService.findOne).toHaveBeenCalledWith(orgId, mockUser.id, expect.any(Object));
     });
 
     it('should return 401 if JWT guard denies', async () => {
@@ -229,7 +229,7 @@ describe('OrganizationsController (Integration)', () => {
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockOrganizationsService.create).toHaveBeenCalledWith(mockUser.id, createDto);
+      expect(mockOrganizationsService.create).toHaveBeenCalledWith(mockUser.id, createDto, expect.any(Object));
     });
 
     it('should return 400 for invalid data', async () => {
@@ -272,7 +272,7 @@ describe('OrganizationsController (Integration)', () => {
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1); // RolesGuard is used
-      expect(mockOrganizationsService.update).toHaveBeenCalledWith(orgId, updateDto);
+      expect(mockOrganizationsService.update).toHaveBeenCalledWith(orgId, updateDto, expect.any(Object));
     });
     
     it('should return 400 for invalid update data', async () => {
@@ -329,7 +329,7 @@ describe('OrganizationsController (Integration)', () => {
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1); // RolesGuard is used
-      expect(mockOrganizationsService.remove).toHaveBeenCalledWith(orgId);
+      expect(mockOrganizationsService.remove).toHaveBeenCalledWith(orgId, expect.any(Object));
     });
 
     it('should return 401 if JWT guard denies', async () => {

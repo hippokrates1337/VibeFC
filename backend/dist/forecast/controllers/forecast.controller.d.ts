@@ -1,10 +1,12 @@
+import { Request as ExpressRequest } from 'express';
 import { ForecastService } from '../services/forecast.service';
 import { ForecastNodeService } from '../services/forecast-node.service';
 import { ForecastEdgeService } from '../services/forecast-edge.service';
 import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../dto/forecast.dto';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto } from '../dto/forecast-node.dto';
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../dto/forecast-edge.dto';
-interface RequestWithUser extends Request {
+import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
+interface RequestWithUser extends ExpressRequest {
     user: {
         userId: string;
         [key: string]: any;
@@ -21,6 +23,7 @@ export declare class ForecastController {
     findOne(req: RequestWithUser, id: string): Promise<ForecastDto>;
     update(req: RequestWithUser, id: string, updateForecastDto: UpdateForecastDto): Promise<void>;
     remove(req: RequestWithUser, id: string): Promise<void>;
+    bulkSaveGraph(req: RequestWithUser, forecastId: string, bulkSaveDto: BulkSaveGraphDto): Promise<FlattenedForecastWithDetailsDto>;
     createNode(req: RequestWithUser, forecastId: string, createNodeDto: CreateForecastNodeDto): Promise<ForecastNodeDto>;
     findNodes(req: RequestWithUser, forecastId: string): Promise<ForecastNodeDto[]>;
     findNode(req: RequestWithUser, forecastId: string, nodeId: string): Promise<ForecastNodeDto>;

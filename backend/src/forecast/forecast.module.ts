@@ -7,9 +7,10 @@ import { ForecastEdgeService } from './services/forecast-edge.service';
 import { ForecastCalculationService } from './services/forecast-calculation.service';
 import { SupabaseModule } from '../supabase/supabase.module';
 import { DataIntakeModule } from '../data-intake/data-intake.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [SupabaseModule, DataIntakeModule],
+  imports: [SupabaseModule, DataIntakeModule, CommonModule],
   controllers: [ForecastController, ForecastCalculationController],
   providers: [
     ForecastService,

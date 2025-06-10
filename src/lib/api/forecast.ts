@@ -194,34 +194,7 @@ export function mapForecastToClientFormat(combinedData: FlattenedForecastWithDet
   };
 }
 
-// Helper to convert client forecast to API format - This function is no longer used after refactoring saveForecastGraph
-/*
-export function mapClientToApiFormat(
-  forecastId: string,
-  name: string,
-  startDate: string,
-  endDate: string,
-  nodes: ForecastNodeClient[],
-  edges: ForecastEdgeClient[]
-) {
-  return {
-    forecast: {
-      name,
-      forecastStartDate: startDate,
-      forecastEndDate: endDate,
-    },
-    nodes: nodes.map((node: any) => ({
-      kind: node.type,
-      attributes: node.data,
-      position: node.position,
-    })),
-    edges: edges.map((edge: any) => ({
-      source_node_id: edge.source,
-      target_node_id: edge.target,
-    })),
-  };
-}
-*/
+
 
 // Forecast API endpoints
 export const forecastApi = {
@@ -331,8 +304,8 @@ export const forecastApi = {
     });
   },
 
-  // Save the entire forecast graph (nodes and edges)
-  saveForecastGraph: async (
+  // Save the entire forecast graph (nodes and edges) - LEGACY VERSION
+  saveForecastGraphLegacy: async (
     forecastId: string,
     name: string,
     startDate: string,
@@ -519,6 +492,57 @@ export const forecastApi = {
     }
   },
 
+  saveForecastGraphBulk: async (
+    forecastId: string,
+    name: string,
+    startDate: string,
+    endDate: string,
+    nodes: ForecastNodeClient[],
+    edges: ForecastEdgeClient[]
+  ): Promise<ApiResponse<FlattenedForecastWithDetails>> => {
+    const requestBody = {
+      forecast: {
+        name,
+        forecastStartDate: startDate,
+        forecastEndDate: endDate
+      },
+      nodes: nodes.map(node => ({
+        clientId: node.id,
+        kind: node.type,
+        attributes: node.data,
+        position: node.position
+      })),
+      edges: edges.map(edge => ({
+        sourceClientId: edge.source,
+        targetClientId: edge.target
+      }))
+    };
+
+    return fetchWithAuth<FlattenedForecastWithDetails>(`/forecasts/${forecastId}/bulk-save`, {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+  },
+
+  // Save the entire forecast graph (nodes and edges) - FEATURE FLAGGED
+  saveForecastGraph: async (
+    forecastId: string,
+    name: string,
+    startDate: string,
+    endDate: string,
+    nodes: ForecastNodeClient[],
+    edges: ForecastEdgeClient[]
+  ): Promise<ApiResponse<FlattenedForecastWithDetails>> => {
+    // Feature flag: Use bulk save by default, fallback to legacy if needed
+    const useBulkSave = process.env.NEXT_PUBLIC_ENABLE_BULK_SAVE !== 'false'; // Default to true
+    
+    if (useBulkSave) {
+      return forecastApi.saveForecastGraphBulk(forecastId, name, startDate, endDate, nodes, edges);
+    } else {
+      return forecastApi.saveForecastGraphLegacy(forecastId, name, startDate, endDate, nodes, edges);
+    }
+  },
+
   // Add a node to a forecast
   addNode: async (
     forecastId: string,
@@ -581,5 +605,60 @@ export const forecastApi = {
     return fetchWithAuth<void>(`/forecasts/${forecastId}/edges/${edgeId}`, {
       method: 'DELETE',
     });
+  },
+
+  // Real-time individual operations (optimized for UI responsiveness)
+  realtime: {
+    // Add node with immediate UI feedback (no server roundtrip for UI updates)
+    addNodeOptimistic: async (
+      forecastId: string,
+      kind: string,
+      attributes: Record<string, any>,
+      position: { x: number; y: number }
+    ): Promise<ApiResponse<ForecastNode>> => {
+      // Use debounced/batched approach for better performance
+      return fetchWithAuth<ForecastNode>(`/forecasts/${forecastId}/nodes?optimistic=true`, {
+        method: 'POST',
+        body: JSON.stringify({ forecastId, kind, attributes, position }),
+      });
+    },
+
+    // Update node position with batching support
+    updateNodePosition: async (
+      forecastId: string,
+      nodeId: string,
+      position: { x: number; y: number }
+    ): Promise<ApiResponse<ForecastNode>> => {
+      return fetchWithAuth<ForecastNode>(`/forecasts/${forecastId}/nodes/${nodeId}/position`, {
+        method: 'PATCH',
+        body: JSON.stringify({ position }),
+      });
+    },
+
+    // Update node attributes separately from position for better caching
+    updateNodeAttributes: async (
+      forecastId: string,
+      nodeId: string,
+      attributes: Record<string, any>
+    ): Promise<ApiResponse<ForecastNode>> => {
+      return fetchWithAuth<ForecastNode>(`/forecasts/${forecastId}/nodes/${nodeId}/attributes`, {
+        method: 'PATCH',
+        body: JSON.stringify({ attributes }),
+      });
+    },
+
+    // Batch multiple operations for efficiency
+    batchOperations: async (
+      forecastId: string,
+      operations: Array<{
+        type: 'addNode' | 'updateNode' | 'deleteNode' | 'addEdge' | 'deleteEdge';
+        data: any;
+      }>
+    ): Promise<ApiResponse<any>> => {
+      return fetchWithAuth<any>(`/forecasts/${forecastId}/batch`, {
+        method: 'POST',
+        body: JSON.stringify({ operations }),
+      });
+    },
   },
 }; 

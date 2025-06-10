@@ -1,14 +1,8 @@
-# Data Intake (`src/app/data-intake/`)
+# Data Intake (`src/app/(protected)/data-intake/`)
 
-This directory contains the routes and potentially components related to the data intake feature.
+This directory contains the Data Intake module for importing and managing financial data in the VibeFC platform.
 
-**Authorization:** Access to this section requires the user to be authenticated. This is enforced by the `src/middleware.ts`.
-
-*(Add more details about the specific functionality within this section as it's developed)*
-
-# Data Intake Module
-
-The Data Intake module provides functionality for importing and managing financial data in the VibeFC platform. This module allows users to upload CSV files containing time series data, preview the data before import, and manage how new data is integrated with existing data.
+**Authorization:** Access to this section requires user authentication. This is enforced by `src/middleware.ts`.
 
 ## Features
 
@@ -45,7 +39,7 @@ Values in the CSV can be in either:
 
 ### Variable Types
 
-The module supports three types of variables:
+The module supports four types of variables:
 - **ACTUAL**: Historical/actual financial data
 - **BUDGET**: Budget/planned financial data
 - **INPUT**: User input data for forecasting
@@ -66,7 +60,7 @@ All import actions maintain synchronization between the frontend Zustand store a
 
 The main data intake page consists of:
 - File upload area for selecting CSV files (with drag-and-drop support)
-- Card-based view displaying imported variables using `VariableCard` components. Clicking a card opens the `VariableDetailsModal` for editing.
+- Card-based view displaying imported variables using `VariableCard` components
 - Import button to initiate the CSV import process
 - Delete functionality for individual variables (accessible via variable cards and details modal)
 
@@ -95,6 +89,14 @@ The variable details modal allows users to:
 
 ## Implementation Details
 
+### Data Storage and API Integration
+
+- **Local State**: Zustand store (`@/lib/store/variables.ts`) manages application state with localStorage persistence
+- **Backend Sync**: Fetches organization-specific variables from backend API when needed
+- **CRUD Operations**: Full create, read, update, delete operations via Next.js API routes
+- **Authentication**: All API calls use JWT token authentication
+- **Organization Scoping**: All data is scoped to the selected organization
+
 ### File Processing
 
 The CSV processing logic:
@@ -112,35 +114,22 @@ The date handling logic:
 3. Groups time series data by month for display in the table
 4. Sorts dates chronologically for consistent display
 
-### Data Storage and Fetching
-
-Variable data management combines local state with backend synchronization:
-- **Local State:** Zustand (`@/lib/store/variables.ts`) manages the application state for variables. Data is persisted in `localStorage` for immediate UI updates and offline access during a session. Date objects are rehydrated upon loading from storage.
-- **Backend Fetching:** When the user selects an organization, the application attempts to fetch variables specifically for that organization from the backend if they aren't already loaded in the store. This fetch is triggered via the `fetchVariables` function in the Zustand store.
-- **Unique IDs:** Each variable has a unique ID, either assigned by the backend or generated locally (`crypto.randomUUID()`) before being sent to the backend.
-
-### API Integration
-
-- **Fetching Variables**: When data for the selected organization is needed and not available locally, the application fetches it via a `GET` request to `{NEXT_PUBLIC_BACKEND_URL}/data-intake/variables/{userId}`. This requires user authentication (JWT token). The `variableStore` manages the loading and error states for this operation.
-- **Saving New Variables**: Variables added via the CSV import modal (action: 'add') are sent to the backend via a `POST` request, likely to an endpoint like `/api/data-intake/variables` (handled by `api-hooks.ts`). This persists new variables server-side.
-- **Updates/Deletions**: Variable updates (name, type, values) and deletions performed in the data table trigger API calls (e.g., `PUT`, `DELETE`) to update the backend, managed by `api-hooks.ts`. The local Zustand store is updated optimistically or upon successful API response.
-- **Import Updates**: When users select "update existing" during CSV import, the system sends the updated variable data to the backend via `PUT /data-intake/variables` to ensure database persistence.
-
 ## Component Structure
 
 The Data Intake module is organized as follows:
-- `page.tsx`: Client component that renders the main container and variable cards.
-- `import-modal.tsx`: Modal for reviewing and confirming data imports.
-- `delete-confirmation-modal.tsx`: Modal for confirming variable deletion.
-- `_components/`: Directory containing private components used only within this module
-  - `data-intake-container.tsx`: Main container component that manages state, API interactions, and provides data/handlers to `page.tsx` via a render prop.
-  - `variable-card.tsx`: Displays a summary of a single variable in a card format and provides actions like viewing details or deleting the variable.
-  - `variable-details-modal.tsx`: A modal dialog for viewing and editing the comprehensive details of a variable, including its name, type, and time-series data points.
-  - `api-hooks.ts`: Custom hooks for API operations and CSV processing.
-  - `data-status.tsx`: Component for displaying API operation status notifications.
-  - `state-display.tsx`: Components for handling loading, error, and empty states.
-  - `upload-section.tsx`: Component for handling file uploads.
-  - `utils.ts`: Utility functions for date parsing, formatting, and validation.
+
+- **`page.tsx`**: Client component that renders the main container and variable cards
+- **`import-modal.tsx`**: Modal for reviewing and confirming data imports
+- **`delete-confirmation-modal.tsx`**: Modal for confirming variable deletion
+- **`_components/`**: Directory containing private components used only within this module
+  - `data-intake-container.tsx`: Main container component managing state and API interactions
+  - `variable-card.tsx`: Displays a summary of a single variable in card format
+  - `variable-details-modal.tsx`: Modal for viewing and editing variable details
+  - `api-hooks.ts`: Custom hooks for API operations and CSV processing
+  - `data-status.tsx`: Component for displaying API operation status notifications
+  - `state-display.tsx`: Components for handling loading, error, and empty states
+  - `upload-section.tsx`: Component for handling file uploads
+  - `utils.ts`: Utility functions for date parsing, formatting, and validation
 
 ## Usage Example
 
@@ -153,15 +142,11 @@ The Data Intake module is organized as follows:
    ```
 
 2. Upload the file using the file upload area
-
-3. Review the variables in the import modal:
-   - Choose to add new variables or update existing ones
-   - Select matching variables for updates
-
-4. Apply the changes to complete the import
-
-5. View the imported data in the data table
-6. Click on a variable card to view or edit its details in a modal.
+3. Review the variables in the import modal
+4. Choose to add new variables or update existing ones
+5. Apply the changes to complete the import
+6. View the imported data in the variable cards
+7. Click on a variable card to view or edit its details
 
 ## Error Handling
 
@@ -174,16 +159,6 @@ The module handles various error scenarios:
 
 ## Related Components
 
-- **Variable Store**: Manages the state of all variables, including fetching logic (`/src/lib/store/variables.ts`)
+- **Variable Store**: Manages the state of all variables (`/src/lib/store/variables.ts`)
 - **Organization Store**: Manages the currently selected organization (`/src/lib/store/organization.ts`)
-- **Variables Page**: Displays an overview of all imported variables (`/src/app/variables/page.tsx`)
-
-## Future Enhancements
-
-Planned improvements to the Data Intake module:
-- Support for more file formats (Excel, JSON)
-- Bulk editing of variable properties
-- Data validation rules
-- Direct database integration (currently using localStorage)
-- Advanced data visualization options
-- Search and filtering capabilities for the data table 
+- **API Layer**: Next.js API routes for backend communication (`/src/app/api/data-intake/`) 

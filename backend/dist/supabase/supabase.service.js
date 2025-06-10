@@ -97,6 +97,13 @@ let SupabaseService = SupabaseService_1 = class SupabaseService {
                 }
                 else {
                     this.logger.warn('Test environment but no user in request - creating anonymous client');
+                    this.supabaseClient = (0, supabase_js_1.createClient)(supabaseUrl, keyToUse, {
+                        auth: {
+                            autoRefreshToken: false,
+                            persistSession: false,
+                        },
+                    });
+                    return this.supabaseClient;
                 }
             }
             if (!authHeader || !authHeader.startsWith('Bearer ')) {

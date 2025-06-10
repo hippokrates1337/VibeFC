@@ -1,5 +1,5 @@
 import { GraphConverter } from '../graph-converter';
-import { ForecastNodeClient, ForecastEdgeClient, ForecastNodeKind } from '@/types/forecast';
+import { ForecastNodeClient, ForecastEdgeClient, ForecastNodeKind } from '@/lib/store/forecast-graph-store';
 
 describe('GraphConverter', () => {
   let graphConverter: GraphConverter;
@@ -13,15 +13,15 @@ describe('GraphConverter', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Test Constant', value: 100 }
         },
         {
           id: 'metric-1',
-          type: ForecastNodeKind.METRIC,
+          type: 'METRIC',
           position: { x: 200, y: 0 },
-          data: { name: 'Revenue' }
+          data: { label: 'Revenue', budgetVariableId: '', historicalVariableId: '', useCalculated: false }
         }
       ];
 
@@ -43,19 +43,19 @@ describe('GraphConverter', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'node-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Constant 1', value: 100 }
         },
         {
           id: 'node-2',
-          type: ForecastNodeKind.OPERATOR,
+          type: 'OPERATOR',
           position: { x: 100, y: 0 },
           data: { op: '+', inputOrder: ['node-1', 'node-3'] }
         },
         {
           id: 'node-3',
-          type: ForecastNodeKind.OPERATOR,
+          type: 'OPERATOR',
           position: { x: 200, y: 0 },
           data: { op: '*', inputOrder: ['node-2', 'node-1'] }
         }
@@ -70,22 +70,22 @@ describe('GraphConverter', () => {
       const result = graphConverter.validateGraph(nodes, edges);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('Graph contains cycles');
+      expect(result.errors).toContain('Graph contains cycles - forecast graphs must be acyclic');
     });
 
-    it('should detect orphaned nodes', () => {
+    it('should detect orphaned nodes as warnings', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Constant 1', value: 100 }
         },
         {
           id: 'orphan-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 200, y: 0 },
-          data: { value: 200 }
+          data: { name: 'Orphan', value: 200 }
         }
       ];
 
@@ -94,16 +94,18 @@ describe('GraphConverter', () => {
       const result = graphConverter.validateGraph(nodes, edges);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('Orphaned nodes found: orphan-1, constant-1');
+      expect(result.warnings).toContain('Node orphan-1 (CONSTANT) is not connected to any other nodes');
+      expect(result.warnings).toContain('Node constant-1 (CONSTANT) is not connected to any other nodes');
+      expect(result.errors).toContain('Graph must contain at least one METRIC node');
     });
 
     it('should require at least one metric node', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Constant 1', value: 100 }
         }
       ];
 
@@ -112,73 +114,66 @@ describe('GraphConverter', () => {
       const result = graphConverter.validateGraph(nodes, edges);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('At least one METRIC node is required');
+      expect(result.errors).toContain('Graph must contain at least one METRIC node');
     });
 
-    it('should validate operator node input order', () => {
+    it('should validate multiple inputs only for operator nodes', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Constant 1', value: 100 }
         },
         {
           id: 'constant-2',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 100 },
-          data: { value: 200 }
-        },
-        {
-          id: 'operator-1',
-          type: ForecastNodeKind.OPERATOR,
-          position: { x: 200, y: 50 },
-          data: { op: '+', inputOrder: ['constant-1', 'nonexistent-node'] }
+          data: { name: 'Constant 2', value: 200 }
         },
         {
           id: 'metric-1',
-          type: ForecastNodeKind.METRIC,
-          position: { x: 400, y: 50 },
-          data: { name: 'Total' }
+          type: 'METRIC',
+          position: { x: 200, y: 50 },
+          data: { label: 'Total', budgetVariableId: '', historicalVariableId: '', useCalculated: false }
         }
       ];
 
       const edges: ForecastEdgeClient[] = [
-        { id: 'edge-1', source: 'constant-1', target: 'operator-1' },
-        { id: 'edge-2', source: 'constant-2', target: 'operator-1' },
-        { id: 'edge-3', source: 'operator-1', target: 'metric-1' }
+        { id: 'edge-1', source: 'constant-1', target: 'metric-1' },
+        { id: 'edge-2', source: 'constant-2', target: 'metric-1' }
       ];
 
       const result = graphConverter.validateGraph(nodes, edges);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('OPERATOR node operator-1 references non-existent input: nonexistent-node');
+      expect(result.errors).toContain('Node metric-1 (METRIC) has 2 inputs but only OPERATOR nodes can accept multiple inputs');
     });
 
-    it('should validate data node variable references', () => {
+    it('should validate seed node references', () => {
       const nodes: ForecastNodeClient[] = [
         {
-          id: 'data-1',
-          type: ForecastNodeKind.DATA,
+          id: 'seed-1',
+          type: 'SEED',
           position: { x: 0, y: 0 },
-          data: { variableId: '', offsetMonths: 0 } // Empty variableId
+          data: { sourceMetricId: '' } // Empty sourceMetricId
         },
         {
           id: 'metric-1',
-          type: ForecastNodeKind.METRIC,
+          type: 'METRIC',
           position: { x: 200, y: 0 },
-          data: { name: 'Revenue' }
+          data: { label: 'Revenue', budgetVariableId: '', historicalVariableId: '', useCalculated: false }
         }
       ];
 
       const edges: ForecastEdgeClient[] = [
-        { id: 'edge-1', source: 'data-1', target: 'metric-1' }
+        { id: 'edge-1', source: 'seed-1', target: 'metric-1' }
       ];
 
       const result = graphConverter.validateGraph(nodes, edges);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('DATA node data-1 has invalid variableId');
+      expect(result.errors).toContain('SEED node seed-1 missing required sourceMetricId');
     });
   });
 
@@ -187,15 +182,15 @@ describe('GraphConverter', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Constant 1', value: 100 }
         },
         {
           id: 'metric-1',
-          type: ForecastNodeKind.METRIC,
+          type: 'METRIC',
           position: { x: 200, y: 0 },
-          data: { name: 'Revenue' }
+          data: { label: 'Revenue', budgetVariableId: '', historicalVariableId: '', useCalculated: false }
         }
       ];
 
@@ -210,43 +205,44 @@ describe('GraphConverter', () => {
       const trees = graphConverter.convertToTrees(nodes, edges);
 
       expect(trees).toHaveLength(1);
-      expect(trees[0].rootNode.id).toBe('metric-1');
-      expect(trees[0].rootNode.type).toBe(ForecastNodeKind.METRIC);
-      expect(trees[0].rootNode.children).toHaveLength(1);
-      expect(trees[0].rootNode.children[0].id).toBe('constant-1');
+      expect(trees[0].rootMetricNodeId).toBe('metric-1');
+      expect(trees[0].tree.nodeId).toBe('metric-1');
+      expect(trees[0].tree.nodeType).toBe('METRIC');
+      expect(trees[0].tree.children).toHaveLength(1);
+      expect(trees[0].tree.children[0].nodeId).toBe('constant-1');
     });
 
     it('should handle complex graph with multiple metrics', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Constant 1', value: 100 }
         },
         {
           id: 'constant-2',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 100 },
-          data: { value: 200 }
+          data: { name: 'Constant 2', value: 200 }
         },
         {
           id: 'operator-1',
-          type: ForecastNodeKind.OPERATOR,
+          type: 'OPERATOR',
           position: { x: 200, y: 50 },
           data: { op: '+', inputOrder: ['constant-1', 'constant-2'] }
         },
         {
           id: 'metric-1',
-          type: ForecastNodeKind.METRIC,
+          type: 'METRIC',
           position: { x: 400, y: 0 },
-          data: { name: 'Revenue' }
+          data: { label: 'Revenue', budgetVariableId: '', historicalVariableId: '', useCalculated: false }
         },
         {
           id: 'metric-2',
-          type: ForecastNodeKind.METRIC,
+          type: 'METRIC',
           position: { x: 400, y: 100 },
-          data: { name: 'Cost' }
+          data: { label: 'Cost', budgetVariableId: '', historicalVariableId: '', useCalculated: false }
         }
       ];
 
@@ -261,26 +257,26 @@ describe('GraphConverter', () => {
 
       expect(trees).toHaveLength(2);
       
-      const revenueTree = trees.find(t => t.rootNode.id === 'metric-1');
-      const costTree = trees.find(t => t.rootNode.id === 'metric-2');
+      const revenueTree = trees.find(t => t.rootMetricNodeId === 'metric-1');
+      const costTree = trees.find(t => t.rootMetricNodeId === 'metric-2');
       
       expect(revenueTree).toBeDefined();
       expect(costTree).toBeDefined();
       
-      expect(revenueTree!.rootNode.children).toHaveLength(1);
-      expect(revenueTree!.rootNode.children[0].id).toBe('operator-1');
+      expect(revenueTree!.tree.children).toHaveLength(1);
+      expect(revenueTree!.tree.children[0].nodeId).toBe('operator-1');
       
-      expect(costTree!.rootNode.children).toHaveLength(1);
-      expect(costTree!.rootNode.children[0].id).toBe('constant-2');
+      expect(costTree!.tree.children).toHaveLength(1);
+      expect(costTree!.tree.children[0].nodeId).toBe('constant-2');
     });
 
     it('should throw error for invalid graph', () => {
       const nodes: ForecastNodeClient[] = [
         {
           id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
+          type: 'CONSTANT',
           position: { x: 0, y: 0 },
-          data: { value: 100 }
+          data: { name: 'Constant 1', value: 100 }
         }
       ];
 
@@ -288,38 +284,9 @@ describe('GraphConverter', () => {
 
       expect(() => {
         graphConverter.convertToTrees(nodes, edges);
-      }).toThrow('Graph validation failed');
+      }).toThrow('Invalid graph');
     });
   });
 
-  describe('findMetricNodes', () => {
-    it('should identify metric nodes correctly', () => {
-      const nodes: ForecastNodeClient[] = [
-        {
-          id: 'constant-1',
-          type: ForecastNodeKind.CONSTANT,
-          position: { x: 0, y: 0 },
-          data: { value: 100 }
-        },
-        {
-          id: 'metric-1',
-          type: ForecastNodeKind.METRIC,
-          position: { x: 200, y: 0 },
-          data: { name: 'Revenue' }
-        },
-        {
-          id: 'metric-2',
-          type: ForecastNodeKind.METRIC,
-          position: { x: 200, y: 100 },
-          data: { name: 'Cost' }
-        }
-      ];
 
-      const metricNodes = graphConverter.findMetricNodes(nodes);
-
-      expect(metricNodes).toHaveLength(2);
-      expect(metricNodes.map(n => n.id)).toContain('metric-1');
-      expect(metricNodes.map(n => n.id)).toContain('metric-2');
-    });
-  });
 }); 

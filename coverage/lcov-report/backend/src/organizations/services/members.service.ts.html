@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">29.76% </span>
+                <span class="strong">32.95% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>50/168</span>
+                <span class='fraction'>58/176</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">29.76% </span>
+                <span class="strong">32.95% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>50/168</span>
+                <span class='fraction'>58/176</span>
             </div>
         
             
@@ -230,7 +230,15 @@
 <a name='L165'></a><a href='#L165'>165</a>
 <a name='L166'></a><a href='#L166'>166</a>
 <a name='L167'></a><a href='#L167'>167</a>
-<a name='L168'></a><a href='#L168'>168</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -239,6 +247,8 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
@@ -269,6 +279,8 @@
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -314,6 +326,8 @@
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -353,6 +367,8 @@
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">7x</span>
@@ -398,15 +414,17 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { InviteMemberDto, UpdateMemberRoleDto, MemberDto, OrganizationRole } from '../dto/member.dto';
+import { Request } from 'express';
 &nbsp;
 @Injectable()
 export class MembersService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(private supabaseService: SupabaseOptimizedService) {}
 &nbsp;
-  async findAllInOrganization(organizationId: string): Promise&lt;any[]&gt; {
-    const { data, error } = await this.supabaseService.client
+  async findAllInOrganization(organizationId: string, request: Request): Promise&lt;any[]&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('organization_members')
       .select(`
         *,
@@ -429,9 +447,11 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" >    }));</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async addMember(organizationId: string, dto: InviteMemberDto): Promise&lt;void&gt; {
+  async addMember(organizationId: string, dto: InviteMemberDto, request: Request): Promise&lt;void&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    
     // First, check if the user exists
-    const { data: userData, error: userError } = await this.supabaseService.client
+    const { data: userData, error: userError } = await client
       .from('auth.users')
       .select('id')
       .eq('email', dto.email)
@@ -444,7 +464,7 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" >    const userId = userData.id;</span>
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >    // Check if the user is already a member</span>
-<span class="cstat-no" title="statement not covered" >    const { data: existingMember, error: memberCheckError } = await this.supabaseService.client</span>
+<span class="cstat-no" title="statement not covered" >    const { data: existingMember, error: memberCheckError } = await client</span>
 <span class="cstat-no" title="statement not covered" >      .from('organization_members')</span>
 <span class="cstat-no" title="statement not covered" >      .select('*')</span>
 <span class="cstat-no" title="statement not covered" >      .eq('organization_id', organizationId)</span>
@@ -460,7 +480,7 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" >    }</span>
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >    // Add the user as a member</span>
-<span class="cstat-no" title="statement not covered" >    const { error: insertError } = await this.supabaseService.client</span>
+<span class="cstat-no" title="statement not covered" >    const { error: insertError } = await client</span>
 <span class="cstat-no" title="statement not covered" >      .from('organization_members')</span>
 <span class="cstat-no" title="statement not covered" >      .insert({</span>
 <span class="cstat-no" title="statement not covered" >        organization_id: organizationId,</span>
@@ -473,9 +493,11 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" >    }</span>
   }
 &nbsp;
-  async updateMemberRole(organizationId: string, userId: string, dto: UpdateMemberRoleDto): Promise&lt;void&gt; {
+  async updateMemberRole(organizationId: string, userId: string, dto: UpdateMemberRoleDto, request: Request): Promise&lt;void&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    
     // Check if the member exists
-    const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+    const { data: existingMember, error: memberCheckError } = await client
       .from('organization_members')
       .select('*')
       .eq('organization_id', organizationId)
@@ -492,7 +514,7 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >    // Check if this is the last admin</span>
     if (existingMember.role === OrganizationRole.ADMIN &amp;&amp; dto.role !== OrganizationRole.ADMIN) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
-<span class="cstat-no" title="statement not covered" >      const { data: adminCount, error: countError } = await this.supabaseService.client</span>
+<span class="cstat-no" title="statement not covered" >      const { data: adminCount, error: countError } = await client</span>
 <span class="cstat-no" title="statement not covered" >        .from('organization_members')</span>
 <span class="cstat-no" title="statement not covered" >        .select('id', { count: 'exact' })</span>
 <span class="cstat-no" title="statement not covered" >        .eq('organization_id', organizationId)</span>
@@ -508,7 +530,7 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" >    }</span>
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >    // Update the member's role</span>
-<span class="cstat-no" title="statement not covered" >    const { error: updateError } = await this.supabaseService.client</span>
+<span class="cstat-no" title="statement not covered" >    const { error: updateError } = await client</span>
 <span class="cstat-no" title="statement not covered" >      .from('organization_members')</span>
 <span class="cstat-no" title="statement not covered" >      .update({ role: dto.role })</span>
 <span class="cstat-no" title="statement not covered" >      .eq('organization_id', organizationId)</span>
@@ -519,9 +541,11 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" >    }</span>
   }
 &nbsp;
-  async removeMember(organizationId: string, userId: string): Promise&lt;void&gt; {
+  async removeMember(organizationId: string, userId: string, request: Request): Promise&lt;void&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    
     // Check if the member exists and is not the last admin
-    const { data: existingMember, error: memberCheckError } = await this.supabaseService.client
+    const { data: existingMember, error: memberCheckError } = await client
       .from('organization_members')
       .select('role')
       .eq('organization_id', organizationId)
@@ -538,7 +562,7 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >    // If the member is an admin, check if they are the last admin</span>
 <span class="cstat-no" title="statement not covered" >    if (existingMember.role === OrganizationRole.ADMIN) {</span>
-<span class="cstat-no" title="statement not covered" >      const { data: adminCount, error: countError } = await this.supabaseService.client</span>
+<span class="cstat-no" title="statement not covered" >      const { data: adminCount, error: countError } = await client</span>
 <span class="cstat-no" title="statement not covered" >        .from('organization_members')</span>
 <span class="cstat-no" title="statement not covered" >        .select('id', { count: 'exact' })</span>
 <span class="cstat-no" title="statement not covered" >        .eq('organization_id', organizationId)</span>
@@ -554,7 +578,7 @@ export class MembersService {
 <span class="cstat-no" title="statement not covered" >    }</span>
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >    // Remove the member</span>
-<span class="cstat-no" title="statement not covered" >    const { error: deleteError } = await this.supabaseService.client</span>
+<span class="cstat-no" title="statement not covered" >    const { error: deleteError } = await client</span>
 <span class="cstat-no" title="statement not covered" >      .from('organization_members')</span>
 <span class="cstat-no" title="statement not covered" >      .delete()</span>
 <span class="cstat-no" title="statement not covered" >      .eq('organization_id', organizationId)</span>
@@ -571,7 +595,7 @@ export class MembersService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-06-01T20:28:33.719Z
+                at 2025-06-09T20:36:52.216Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

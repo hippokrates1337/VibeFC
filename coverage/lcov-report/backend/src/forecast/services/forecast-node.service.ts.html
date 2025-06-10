@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">46.11% </span>
+                <span class="strong">47.5% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>89/193</span>
+                <span class='fraction'>95/200</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">46.11% </span>
+                <span class="strong">47.23% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>89/193</span>
+                <span class='fraction'>94/199</span>
             </div>
         
             
@@ -255,7 +255,14 @@
 <a name='L190'></a><a href='#L190'>190</a>
 <a name='L191'></a><a href='#L191'>191</a>
 <a name='L192'></a><a href='#L192'>192</a>
-<a name='L193'></a><a href='#L193'>193</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -279,6 +286,7 @@
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -308,6 +316,7 @@
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -318,6 +327,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
@@ -388,6 +398,7 @@
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -419,6 +430,7 @@
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -448,20 +460,22 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto, ForecastNodeKind } from '../dto/forecast-node.dto';
+import { Request } from 'express';
 &nbsp;
 @Injectable()
 export class ForecastNodeService {
   private readonly logger = new Logger(ForecastNodeService.name);
 &nbsp;
   constructor(
-    private supabaseService: SupabaseService,
+    private supabaseService: SupabaseOptimizedService,
   ) {}
 &nbsp;
-  async create(dto: CreateForecastNodeDto): Promise&lt;ForecastNodeDto&gt; {
+  async create(dto: CreateForecastNodeDto, request: Request): Promise&lt;ForecastNodeDto&gt; {
     try {
-      const { data: insertedNode, error: insertError } = await this.supabaseService.client
+      const client = this.supabaseService.getClientForRequest(request);
+      const { data: insertedNode, error: insertError } = await client
         .from('forecast_nodes')
         .insert({
           forecast_id: dto.forecastId,
@@ -495,8 +509,9 @@ export class ForecastNodeService {
     }
   }
 &nbsp;
-  async findByForecast(forecastId: string): Promise&lt;ForecastNodeDto[]&gt; {
-    const { data, error } = await this.supabaseService.client
+  async findByForecast(forecastId: string, request: Request): Promise&lt;ForecastNodeDto[]&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecast_nodes')
       .select('*')
       .eq('forecast_id', forecastId)<span class="branch-0 cbranch-no" title="branch not covered" >;</span>
@@ -509,8 +524,9 @@ export class ForecastNodeService {
 <span class="cstat-no" title="statement not covered" >    return data.map(node =&gt; this.mapDbEntityToDto(node));</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async findOne(id: string, forecastId?: string): Promise&lt;ForecastNodeDto&gt; {
-    let query = this.supabaseService.client
+  async findOne(id: string, request: Request, forecastId?: string): Promise&lt;ForecastNodeDto&gt; {
+    const client = this.supabaseService.getClientForRequest(request);
+    let query = client
       .from('forecast_nodes')
       .select('*')
       .eq('id', id);
@@ -546,7 +562,7 @@ export class ForecastNodeService {
 <span class="cstat-no" title="statement not covered" >    return this.mapDbEntityToDto(data);</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async update(id: string, dto: UpdateForecastNodeDto): Promise&lt;void&gt; {
+  async update(id: string, dto: UpdateForecastNodeDto, request: Request): Promise&lt;void&gt; {
     // Check if there's anything to update before proceeding
     if (Object.keys(dto).length === 0) {
       return; // Nothing to update
@@ -574,7 +590,8 @@ export class ForecastNodeService {
 <span class="cstat-no" title="statement not covered" >      return;</span>
 <span class="cstat-no" title="statement not covered" >    }</span>
 &nbsp;
-    const { data, error } = await this.supabaseService.client
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
       .from('forecast_nodes')
       .update(updateData)
       .eq('id', id)
@@ -602,7 +619,7 @@ export class ForecastNodeService {
 <span class="cstat-no" title="statement not covered" >    this.logger.log(`Forecast node updated: ${id}`);</span>
 <span class="cstat-no" title="statement not covered" >  }</span>
 &nbsp;
-  async remove(id: string): Promise&lt;void&gt; {
+  async remove(id: string, request: Request): Promise&lt;void&gt; {
     this.logger.debug(`Attempting to remove forecast node with id: ${id}`);
 &nbsp;
     // Step 1: Verify the node exists before attempting to delete.
@@ -610,10 +627,11 @@ export class ForecastNodeService {
     // We don't need to pass forecastId here as deletion is by node ID only, 
     // but RLS on the forecast_nodes table should prevent unauthorized deletion.
     // However, the controller should verify forecast ownership before calling this.
-    await this.findOne(id);<span class="branch-0 cbranch-no" title="branch not covered" > // This will now correctly use the single-argument version if called by other parts of this service</span>
+    await this.findOne(id, request);<span class="branch-0 cbranch-no" title="branch not covered" > // This will now correctly use the single-argument version if called by other parts of this service</span>
 <span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" >    // Step 2: If findOne succeeded, the node exists, so proceed with deletion.</span>
-<span class="cstat-no" title="statement not covered" >    const { error } = await this.supabaseService.client</span>
+<span class="cstat-no" title="statement not covered" >    const client = this.supabaseService.getClientForRequest(request);</span>
+<span class="cstat-no" title="statement not covered" >    const { error } = await client</span>
 <span class="cstat-no" title="statement not covered" >      .from('forecast_nodes')</span>
 <span class="cstat-no" title="statement not covered" >      .delete()</span>
 <span class="cstat-no" title="statement not covered" >      .eq('id', id);</span>
@@ -646,7 +664,7 @@ export class ForecastNodeService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-06-01T20:28:33.719Z
+                at 2025-06-09T20:36:52.216Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

@@ -32,7 +32,8 @@ export class ForecastCalculationController {
       
       const result = await this.forecastCalculationService.calculateForecast(
         forecastId,
-        req.user.id
+        req.user.id,
+        req
       );
 
       this.logger.log(`[ForecastCalculationController] Calculation completed for forecast ${forecastId}`);
@@ -59,7 +60,8 @@ export class ForecastCalculationController {
       
       const result = await this.forecastCalculationService.getLatestCalculationResults(
         forecastId,
-        req.user.id
+        req.user.id,
+        req
       );
 
       if (result) {
@@ -91,7 +93,8 @@ export class ForecastCalculationController {
       
       const results = await this.forecastCalculationService.getCalculationHistory(
         forecastId,
-        req.user.id
+        req.user.id,
+        req
       );
 
       this.logger.log(`[ForecastCalculationController] Retrieved ${results.length} historical calculation results for forecast ${forecastId}`);

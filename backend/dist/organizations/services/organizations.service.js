@@ -12,7 +12,7 @@ var OrganizationsService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrganizationsService = void 0;
 const common_1 = require("@nestjs/common");
-const supabase_service_1 = require("../../supabase/supabase.service");
+const supabase_optimized_service_1 = require("../../supabase/supabase-optimized.service");
 const member_dto_1 = require("../dto/member.dto");
 const members_service_1 = require("./members.service");
 let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
@@ -21,10 +21,11 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
         this.membersService = membersService;
         this.logger = new common_1.Logger(OrganizationsService_1.name);
     }
-    async create(userId, dto) {
+    async create(userId, dto, request) {
         let createdOrg = null;
         try {
-            const { data: insertedOrg, error: insertError } = await this.supabaseService.client
+            const client = this.supabaseService.getClientForRequest(request);
+            const { data: insertedOrg, error: insertError } = await client
                 .from('organizations')
                 .insert({
                 name: dto.name,
@@ -47,7 +48,7 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
             createdOrg = insertedOrg;
             this.logger.log(`Organization created: ${createdOrg.id} by user ${userId}`);
             try {
-                await this.membersService.addMember(createdOrg.id, { email: userId, role: member_dto_1.OrganizationRole.ADMIN });
+                await this.membersService.addMember(createdOrg.id, { email: userId, role: member_dto_1.OrganizationRole.ADMIN }, request);
                 this.logger.log(`Added owner ${userId} as admin to organization ${createdOrg.id}`);
             }
             catch (memberError) {
@@ -64,8 +65,9 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
             throw new common_1.InternalServerErrorException('An unexpected error occurred while creating the organization.');
         }
     }
-    async findAll(userId) {
-        const { data, error } = await this.supabaseService.client
+    async findAll(userId, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('organizations')
             .select(`
         *,
@@ -84,8 +86,9 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
             created_at: new Date(org.created_at),
         }));
     }
-    async findOne(id, userId) {
-        const { data, error } = await this.supabaseService.client
+    async findOne(id, userId, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('organizations')
             .select(`
         *,
@@ -111,8 +114,9 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
             created_at: new Date(data.created_at),
         };
     }
-    async update(id, dto) {
-        const { data, error } = await this.supabaseService.client
+    async update(id, dto, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('organizations')
             .update({ name: dto.name })
             .eq('id', id)
@@ -128,8 +132,9 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
         }
         this.logger.log(`Organization updated: ${id}`);
     }
-    async remove(id) {
-        const { count, error } = await this.supabaseService.client
+    async remove(id, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { count, error } = await client
             .from('organizations')
             .delete()
             .eq('id', id);
@@ -143,8 +148,9 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
         }
         this.logger.log(`Organization deleted: ${id}`);
     }
-    async getUserRoleInOrganization(userId, organizationId) {
-        const { data, error } = await this.supabaseService.client
+    async getUserRoleInOrganization(userId, organizationId, request) {
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('organization_members')
             .select('role')
             .eq('user_id', userId)
@@ -159,7 +165,7 @@ let OrganizationsService = OrganizationsService_1 = class OrganizationsService {
 exports.OrganizationsService = OrganizationsService;
 exports.OrganizationsService = OrganizationsService = OrganizationsService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [supabase_service_1.SupabaseService,
+    __metadata("design:paramtypes", [supabase_optimized_service_1.SupabaseOptimizedService,
         members_service_1.MembersService])
 ], OrganizationsService);
 //# sourceMappingURL=organizations.service.js.map

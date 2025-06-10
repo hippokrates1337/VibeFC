@@ -25,7 +25,7 @@ let ForecastCalculationController = ForecastCalculationController_1 = class Fore
     async calculateForecast(forecastId, req) {
         try {
             this.logger.log(`[ForecastCalculationController] Calculate forecast ${forecastId} requested by user ${req.user.id}`);
-            const result = await this.forecastCalculationService.calculateForecast(forecastId, req.user.id);
+            const result = await this.forecastCalculationService.calculateForecast(forecastId, req.user.id, req);
             this.logger.log(`[ForecastCalculationController] Calculation completed for forecast ${forecastId}`);
             return result;
         }
@@ -37,7 +37,7 @@ let ForecastCalculationController = ForecastCalculationController_1 = class Fore
     async getCalculationResults(forecastId, req) {
         try {
             this.logger.log(`[ForecastCalculationController] Get calculation results for forecast ${forecastId} requested by user ${req.user.id}`);
-            const result = await this.forecastCalculationService.getLatestCalculationResults(forecastId, req.user.id);
+            const result = await this.forecastCalculationService.getLatestCalculationResults(forecastId, req.user.id, req);
             if (result) {
                 this.logger.log(`[ForecastCalculationController] Found calculation results for forecast ${forecastId}`);
             }
@@ -54,7 +54,7 @@ let ForecastCalculationController = ForecastCalculationController_1 = class Fore
     async getCalculationHistory(forecastId, req) {
         try {
             this.logger.log(`[ForecastCalculationController] Get calculation history for forecast ${forecastId} requested by user ${req.user.id}`);
-            const results = await this.forecastCalculationService.getCalculationHistory(forecastId, req.user.id);
+            const results = await this.forecastCalculationService.getCalculationHistory(forecastId, req.user.id, req);
             this.logger.log(`[ForecastCalculationController] Retrieved ${results.length} historical calculation results for forecast ${forecastId}`);
             return results;
         }

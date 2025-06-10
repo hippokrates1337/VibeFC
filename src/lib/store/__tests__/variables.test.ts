@@ -1,22 +1,20 @@
-// Fully mock MSW to avoid dependency issues
-// Instead of: import { http, HttpResponse } from 'msw';
-const HttpResponse = {
-  json: (data: any) => ({ body: data })
-};
-const http = {
-  get: (url: string, handler: () => any) => ({ 
-    url, 
-    method: 'GET', 
-    handler 
-  })
-};
-
-// No real MSW imports
-// Define handlers before using them in setupServer
+// Mock the logger utility BEFORE importing the store
+jest.mock('@/lib/utils/logger', () => ({
+  logger: {
+    log: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn()
+  }
+}));
 
 // Use the actual path to your store and types
 import { useVariableStore, Variable, rehydrateVariable, TimeSeriesData } from '../variables';
 import { act } from 'react'; // Using act for store updates if needed
+import { logger } from '@/lib/utils/logger';
+
+// Get access to the mocked logger
+const mockLogger = logger as jest.Mocked<typeof logger>;
 
 // Mock localStorage
 let localStorageMock: { [key: string]: string } = {};
@@ -75,32 +73,25 @@ const mockApiResponse = {
     id: v.id,
     name: v.name,
     type: v.type,
-    values: v.timeSeries.map(ts => ({ // Note the 'values' key
+    values: v.timeSeries.map(ts => ({ // Note the 'values' key (not timeSeries)
       date: ts.date.toISOString(),
       value: ts.value,
     })),
-    organization_id: v.organizationId, // Add organization_id
+    organization_id: v.organizationId, // Note the 'organization_id' key (not organizationId)
   })),
 };
 
 const userId = 'frontend-user'; // Use a consistent user ID
-// Construct the API URL based on the environment variable used in the store
-const getApiUrl = (base: string | undefined, user: string): string => {
-  if (!base) {
-    // Handle missing env var in tests, maybe throw or return a specific invalid URL
-    console.error('Missing NEXT_PUBLIC_BACKEND_URL for test API URL construction');
-    return 'invalid-test-url';
-  }
-  return `${base}/data-intake/variables/${user}`;
+// Construct the API URL to match what the store actually calls
+const getApiUrl = (user: string): string => {
+  return `/api/data-intake/variables/user/${user}`;
 };
-// Note: process.env.NEXT_PUBLIC_BACKEND_URL is set in beforeEach
 
 // Helper function to set up fetch mock for different scenarios
 // Returns the mock function and a cleanup function
 const setupFetchMock = (scenario: 'success' | 'empty' | 'serverError' | 'networkError' | 'nonJsonError' | 'malformed' | 'invalidData'): { mockFetch: jest.Mock; cleanup: () => void } => {
   const originalFetch = global.fetch; // Keep a reference to the original fetch
-  const backendUrlBase = process.env.NEXT_PUBLIC_BACKEND_URL;
-  const expectedApiUrl = getApiUrl(backendUrlBase, userId);
+  const expectedApiUrl = getApiUrl(userId);
 
   const mockImplementation = async (url: RequestInfo | URL): Promise<Response> => {
     const urlString = url.toString();
@@ -149,7 +140,10 @@ const setupFetchMock = (scenario: 'success' | 'empty' | 'serverError' | 'network
         case 'invalidData':
           const invalidDataResponse = {
             variables: [{
-              id: 'var-invalid', name: 'Invalid Data Var', type: 'INPUT',
+              id: 'var-invalid', 
+              name: 'Invalid Data Var', 
+              type: 'INPUT',
+              organization_id: 'org-test',
               values: [
                 { date: 'not-a-date', value: 100 }, // Invalid date
                 { date: '2023-03-01T00:00:00.000Z', value: 'not-a-number' } // Non-numeric value
@@ -189,46 +183,7 @@ const setupFetchMock = (scenario: 'success' | 'empty' | 'serverError' | 'network
   };
 };
 
-// Setup mock handlers
-/*
-const handlers = [
-  // Default success handler
-  http.get(getApiUrl(process.env.NEXT_PUBLIC_BACKEND_URL, userId), () => {
-    return HttpResponse.json(mockApiResponse);
-  }),
-];
-
-// Create a mock server rather than using MSW
-const server = {
-  listen: jest.fn(),
-  resetHandlers: jest.fn(),
-  close: jest.fn(),
-  // Mock fetch requests to return expected data
-  use: jest.fn((mockHandlers) => {
-    // Store the mock handlers (not used in this simple implementation)
-  })
-};
-*/
-
-// Mock fetch globally - This section is now handled by setupFetchMock and can be removed or commented out
-/*
-const originalFetch = global.fetch;
-*/
-
-// Remove server.listen/close calls
-/*
-beforeAll(() => {
-  // Pretend to set up the server
-  server.listen();
-});
-
-afterAll(() => {
-  // Restore the original fetch
-  global.fetch = originalFetch;
-  // Pretend to close the server
-  server.close();
-});
-*/
+// Mock fetch is handled by setupFetchMock function in individual tests
 
 // Use Vitest's module mocking for console if needed
 // jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -246,9 +201,6 @@ describe('Variable Store', () => {
   let cleanupFetchMock: () => void = () => {}; // Function to restore original fetch
 
   beforeEach(() => {
-    // Define mock environment variable
-    process.env.NEXT_PUBLIC_BACKEND_URL = 'http://mock-backend.test';
-
     // Reset Zustand store state
     act(() => {
       useVariableStore.setState({
@@ -273,6 +225,9 @@ describe('Variable Store', () => {
     }
     // Ensure mockFetch is reset (though it will be reassigned in describe blocks/tests)
     mockFetch = jest.fn();
+
+    // Clear mock logger calls
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
@@ -289,9 +244,6 @@ describe('Variable Store', () => {
     jest.clearAllMocks();
     // Ensure timers are real after tests that use fake timers
     jest.useRealTimers();
-
-    // Clean up mock environment variable
-    delete process.env.NEXT_PUBLIC_BACKEND_URL;
   });
 
   // --- Synchronous Actions ---
@@ -344,7 +296,7 @@ describe('Variable Store', () => {
 
     it('should fetch variables successfully and update the store', async () => {
       await act(async () => {
-        await useVariableStore.getState().fetchVariables(userId, 'org-test');
+        await useVariableStore.getState().fetchVariables(userId, 'some-token');
       });
 
       const state = useVariableStore.getState();
@@ -352,7 +304,7 @@ describe('Variable Store', () => {
       expect(state.error).toBeNull();
       expect(state.variables).toEqual(mockVariables);
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch).toHaveBeenCalledWith(getApiUrl(process.env.NEXT_PUBLIC_BACKEND_URL, userId), expect.any(Object));
+      expect(mockFetch).toHaveBeenCalledWith(getApiUrl(userId), expect.any(Object));
     });
 
     it('should handle an empty response from the API', async () => {
@@ -362,7 +314,7 @@ describe('Variable Store', () => {
       cleanupFetchMock = cleanup;
 
       await act(async () => {
-        await useVariableStore.getState().fetchVariables(userId, 'org-test');
+        await useVariableStore.getState().fetchVariables(userId, 'some-token');
       });
 
       const state = useVariableStore.getState();
@@ -379,7 +331,7 @@ describe('Variable Store', () => {
        cleanupFetchMock = cleanup;
 
       await act(async () => {
-        await useVariableStore.getState().fetchVariables(userId, 'org-test');
+        await useVariableStore.getState().fetchVariables(userId, 'some-token');
       });
 
       const state = useVariableStore.getState();
@@ -396,7 +348,7 @@ describe('Variable Store', () => {
       cleanupFetchMock = cleanup;
 
       await act(async () => {
-        await useVariableStore.getState().fetchVariables(userId, 'org-test');
+        await useVariableStore.getState().fetchVariables(userId, 'some-token');
       });
 
       const state = useVariableStore.getState();
@@ -413,7 +365,7 @@ describe('Variable Store', () => {
       cleanupFetchMock = cleanup;
 
       await act(async () => {
-        await useVariableStore.getState().fetchVariables(userId, 'org-test');
+        await useVariableStore.getState().fetchVariables(userId, 'some-token');
       });
 
       const state = useVariableStore.getState();
@@ -430,7 +382,7 @@ describe('Variable Store', () => {
       cleanupFetchMock = cleanup;
 
       await act(async () => {
-        await useVariableStore.getState().fetchVariables(userId, 'org-test');
+        await useVariableStore.getState().fetchVariables(userId, 'some-token');
       });
 
       const state = useVariableStore.getState();
@@ -438,7 +390,7 @@ describe('Variable Store', () => {
       expect(state.error).toBeNull(); // Should not error, just handle missing data
       expect(state.variables).toEqual([]); // Should default to empty
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No variables array found in the API response'));
+      expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('No variables array found in the API response'));
     });
 
     it('should handle invalid data within API response (bad dates, non-numeric values)', async () => {
@@ -448,7 +400,7 @@ describe('Variable Store', () => {
       cleanupFetchMock = cleanup;
 
       await act(async () => {
-        await useVariableStore.getState().fetchVariables(userId, 'org-test');
+        await useVariableStore.getState().fetchVariables(userId, 'some-token');
       });
 
       const state = useVariableStore.getState();
@@ -465,8 +417,8 @@ describe('Variable Store', () => {
       expect(invalidVar.timeSeries[1].date).toEqual(new Date('2023-03-01T00:00:00.000Z'));
       expect(invalidVar.timeSeries[1].value).toBeNaN(); // Fixed: Expect NaN, not null
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      // Check if console.warn was called for the non-numeric value
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Non-numeric value detected: not-a-number'));
+      // Check if logger.warn was called for the non-numeric value
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Non-numeric value detected: not-a-number'));
     });
 
 
@@ -488,7 +440,7 @@ describe('Variable Store', () => {
       expect(state.isLoading).toBe(false);
       expect(state.variables).toEqual(mockVariables.filter(v => v.organizationId === orgId));
       expect(mockFetch).not.toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Variables already exist in store for the selected organization, skipping fetch.'));
+      expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('Variables already exist in store for the selected organization, skipping fetch.'));
     });
 
     it('should still fetch if variables exist but not for the selected organization', async () => {
@@ -621,7 +573,7 @@ describe('Variable Store', () => {
         // but the internal fetch call should have been skipped.
         expect(mockFetch).not.toHaveBeenCalled(); 
         // Check the log from the *direct call* to fetchVariables
-        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Variables already exist in store for the selected organization, skipping fetch.'));
+        expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('Variables already exist in store for the selected organization, skipping fetch.'));
         // Ensure setTimeout was NOT called to schedule a fetch
         expect(setTimeout).not.toHaveBeenCalled();
     });
@@ -640,7 +592,7 @@ describe('Variable Store', () => {
               setTimeout(() => {
                 console.log('Executing scheduled fetch from rehydration simulation');
                 // Store the promise returned by fetchVariables
-                fetchPromise = useVariableStore.getState().fetchVariables(userId, 'org-test');
+                fetchPromise = useVariableStore.getState().fetchVariables(userId, 'some-token');
               }, 100);
             }
         });

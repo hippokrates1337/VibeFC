@@ -19,7 +19,7 @@ export declare class DataIntakeController {
         count: number;
         variables: any[];
     }>;
-    getVariablesByUser(userId: string): Promise<{
+    getVariablesByUser(req: RequestWithUser, userId: string): Promise<{
         message: string;
         count: number;
         variables: any[];
@@ -32,6 +32,7 @@ export declare class DataIntakeController {
     deleteVariables(req: RequestWithUser, deleteVariablesDto: DeleteVariablesDto): Promise<{
         message: string;
         count: number;
+        deletedIds: string[];
     }>;
 }
 export {};

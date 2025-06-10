@@ -12,7 +12,7 @@ var ForecastCalculationService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ForecastCalculationService = void 0;
 const common_1 = require("@nestjs/common");
-const supabase_service_1 = require("../../supabase/supabase.service");
+const supabase_optimized_service_1 = require("../../supabase/supabase-optimized.service");
 const data_intake_service_1 = require("../../data-intake/data-intake.service");
 const forecast_service_1 = require("./forecast.service");
 const forecast_node_service_1 = require("./forecast-node.service");
@@ -29,18 +29,18 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
         this.forecastEdgeService = forecastEdgeService;
         this.logger = new common_1.Logger(ForecastCalculationService_1.name);
     }
-    async calculateForecast(forecastId, userId) {
+    async calculateForecast(forecastId, userId, request) {
         try {
             this.logger.log(`[ForecastCalculation] Starting calculation for forecast ${forecastId} by user ${userId}`);
-            const forecast = await this.forecastService.findOne(forecastId, userId);
+            const forecast = await this.forecastService.findOne(forecastId, userId, request);
             if (!forecast) {
                 throw new common_1.NotFoundException(`Forecast ${forecastId} not found`);
             }
             this.logger.log(`[ForecastCalculation] Forecast found: ${forecast.name}`);
-            const nodes = await this.forecastNodeService.findByForecast(forecastId);
-            const edges = await this.forecastEdgeService.findByForecast(forecastId);
+            const nodes = await this.forecastNodeService.findByForecast(forecastId, request);
+            const edges = await this.forecastEdgeService.findByForecast(forecastId, request);
             this.logger.log(`[ForecastCalculation] Graph loaded: ${nodes.length} nodes, ${edges.length} edges`);
-            const variablesResponse = await this.dataIntakeService.getVariablesByUser(userId);
+            const variablesResponse = await this.dataIntakeService.getVariablesByUser(userId, request);
             const variables = variablesResponse.variables || [];
             this.logger.log(`[ForecastCalculation] Variables loaded: ${variables.length} variables`);
             variables.forEach(variable => {
@@ -57,7 +57,7 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
             const transformedVariables = this.transformVariablesToCalculationFormat(variables);
             this.logger.log(`[ForecastCalculation] Data transformed for calculation engine`);
             const calculationResult = await this.executeRealCalculation(forecastId, forecast, transformedNodes, transformedEdges, transformedVariables);
-            const storedResult = await this.storeCalculationResults(forecastId, forecast.organizationId, calculationResult);
+            const storedResult = await this.storeCalculationResults(forecastId, forecast.organizationId, calculationResult, request);
             this.logger.log(`[ForecastCalculation] Calculation completed and stored for forecast ${forecastId}`);
             return storedResult;
         }
@@ -181,12 +181,12 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
             }))
         }));
     }
-    async getLatestCalculationResults(forecastId, userId) {
+    async getLatestCalculationResults(forecastId, userId, request) {
         try {
             this.logger.log(`[ForecastCalculation] Fetching latest results for forecast ${forecastId}`);
-            await this.forecastService.findOne(forecastId, userId);
-            const supabase = this.supabaseService.client;
-            const { data, error } = await supabase
+            await this.forecastService.findOne(forecastId, userId, request);
+            const client = this.supabaseService.getClientForRequest(request);
+            const { data, error } = await client
                 .from('forecast_calculation_results')
                 .select('*')
                 .eq('forecast_id', forecastId)
@@ -211,12 +211,12 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
             throw new common_1.InternalServerErrorException(`Failed to fetch calculation results: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
-    async getCalculationHistory(forecastId, userId) {
+    async getCalculationHistory(forecastId, userId, request) {
         try {
             this.logger.log(`[ForecastCalculation] Fetching calculation history for forecast ${forecastId}`);
-            await this.forecastService.findOne(forecastId, userId);
-            const supabase = this.supabaseService.client;
-            const { data, error } = await supabase
+            await this.forecastService.findOne(forecastId, userId, request);
+            const client = this.supabaseService.getClientForRequest(request);
+            const { data, error } = await client
                 .from('forecast_calculation_results')
                 .select('*')
                 .eq('forecast_id', forecastId)
@@ -237,10 +237,10 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
             throw new common_1.InternalServerErrorException(`Failed to fetch calculation history: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
-    async storeCalculationResults(forecastId, organizationId, results) {
+    async storeCalculationResults(forecastId, organizationId, results, request) {
         try {
-            const supabase = this.supabaseService.client;
-            const { data, error } = await supabase
+            const client = this.supabaseService.getClientForRequest(request);
+            const { data, error } = await client
                 .from('forecast_calculation_results')
                 .insert({
                 forecast_id: forecastId,
@@ -273,7 +273,7 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
 exports.ForecastCalculationService = ForecastCalculationService;
 exports.ForecastCalculationService = ForecastCalculationService = ForecastCalculationService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [supabase_service_1.SupabaseService,
+    __metadata("design:paramtypes", [supabase_optimized_service_1.SupabaseOptimizedService,
         data_intake_service_1.DataIntakeService,
         forecast_service_1.ForecastService,
         forecast_node_service_1.ForecastNodeService,

@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
+import { Request } from 'express';
 import { DataIntakeService } from '../../data-intake/data-intake.service';
 import { ForecastService } from './forecast.service';
 import { ForecastNodeService } from './forecast-node.service';
@@ -24,7 +25,7 @@ export class ForecastCalculationService {
   private readonly logger = new Logger(ForecastCalculationService.name);
 
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly supabaseService: SupabaseOptimizedService,
     private readonly dataIntakeService: DataIntakeService,
     private readonly forecastService: ForecastService,
     private readonly forecastNodeService: ForecastNodeService,
@@ -39,13 +40,14 @@ export class ForecastCalculationService {
    */
   async calculateForecast(
     forecastId: string,
-    userId: string
+    userId: string,
+    request: Request
   ): Promise<ForecastCalculationResultDto> {
     try {
       this.logger.log(`[ForecastCalculation] Starting calculation for forecast ${forecastId} by user ${userId}`);
       
       // 1. Fetch and validate forecast
-      const forecast = await this.forecastService.findOne(forecastId, userId);
+      const forecast = await this.forecastService.findOne(forecastId, userId, request);
       if (!forecast) {
         throw new NotFoundException(`Forecast ${forecastId} not found`);
       }
@@ -53,13 +55,13 @@ export class ForecastCalculationService {
       this.logger.log(`[ForecastCalculation] Forecast found: ${forecast.name}`);
 
       // 2. Fetch forecast graph (nodes and edges)
-      const nodes = await this.forecastNodeService.findByForecast(forecastId);
-      const edges = await this.forecastEdgeService.findByForecast(forecastId);
+      const nodes = await this.forecastNodeService.findByForecast(forecastId, request);
+      const edges = await this.forecastEdgeService.findByForecast(forecastId, request);
 
       this.logger.log(`[ForecastCalculation] Graph loaded: ${nodes.length} nodes, ${edges.length} edges`);
 
       // 3. Fetch organization variables for calculation
-      const variablesResponse = await this.dataIntakeService.getVariablesByUser(userId);
+      const variablesResponse = await this.dataIntakeService.getVariablesByUser(userId, request);
       const variables = variablesResponse.variables || [];
 
       this.logger.log(`[ForecastCalculation] Variables loaded: ${variables.length} variables`);
@@ -95,7 +97,8 @@ export class ForecastCalculationService {
       const storedResult = await this.storeCalculationResults(
         forecastId,
         forecast.organizationId,
-        calculationResult
+        calculationResult,
+        request
       );
 
       this.logger.log(`[ForecastCalculation] Calculation completed and stored for forecast ${forecastId}`);
@@ -305,17 +308,18 @@ export class ForecastCalculationService {
    */
   async getLatestCalculationResults(
     forecastId: string,
-    userId: string
+    userId: string,
+    request: Request
   ): Promise<ForecastCalculationResultDto | null> {
     try {
       this.logger.log(`[ForecastCalculation] Fetching latest results for forecast ${forecastId}`);
       
       // Verify user has access to the forecast
-      await this.forecastService.findOne(forecastId, userId);
+      await this.forecastService.findOne(forecastId, userId, request);
 
-      const supabase = this.supabaseService.client;
+      const client = this.supabaseService.getClientForRequest(request);
       
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('forecast_calculation_results')
         .select('*')
         .eq('forecast_id', forecastId)
@@ -354,17 +358,18 @@ export class ForecastCalculationService {
    */
   async getCalculationHistory(
     forecastId: string,
-    userId: string
+    userId: string,
+    request: Request
   ): Promise<ForecastCalculationResultDto[]> {
     try {
       this.logger.log(`[ForecastCalculation] Fetching calculation history for forecast ${forecastId}`);
       
       // Verify user has access to the forecast
-      await this.forecastService.findOne(forecastId, userId);
+      await this.forecastService.findOne(forecastId, userId, request);
 
-      const supabase = this.supabaseService.client;
+      const client = this.supabaseService.getClientForRequest(request);
       
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('forecast_calculation_results')
         .select('*')
         .eq('forecast_id', forecastId)
@@ -398,12 +403,13 @@ export class ForecastCalculationService {
   private async storeCalculationResults(
     forecastId: string,
     organizationId: string,
-    results: any
+    results: any,
+    request: Request
   ): Promise<ForecastCalculationResultDto> {
     try {
-      const supabase = this.supabaseService.client;
+      const client = this.supabaseService.getClientForRequest(request);
       
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('forecast_calculation_results')
         .insert({
           forecast_id: forecastId,

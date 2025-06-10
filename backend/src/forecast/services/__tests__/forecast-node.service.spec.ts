@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForecastNodeService } from '../forecast-node.service';
-import { SupabaseService } from '../../../supabase/supabase.service';
+import { SupabaseOptimizedService } from '../../../supabase/supabase-optimized.service';
 import { Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto, ForecastNodeKind, NodePosition } from '../../dto/forecast-node.dto';
 
@@ -27,12 +27,18 @@ Logger.prototype.warn = jest.fn();
 
 describe('ForecastNodeService', () => {
   let service: ForecastNodeService;
-  let supabaseService: SupabaseService;
+  let supabaseService: SupabaseOptimizedService;
   const testForecastId = 'test-forecast-123';
 
   const mockSupabaseService = {
-    client: mockSupabaseClient,
+    getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
   };
+
+  // Mock request object
+  const mockRequest = {
+    headers: { authorization: 'Bearer mock-token' },
+    user: { id: 'test-user-123', email: 'test@example.com' }
+  } as any;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -72,13 +78,13 @@ describe('ForecastNodeService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ForecastNodeService,
-        { provide: SupabaseService, useValue: mockSupabaseService },
+        { provide: SupabaseOptimizedService, useValue: mockSupabaseService },
         Logger,
       ],
     }).compile();
 
     service = module.get<ForecastNodeService>(ForecastNodeService);
-    supabaseService = module.get<SupabaseService>(SupabaseService);
+    supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
 
     // Clear logger mocks before each test
     (Logger.prototype.log as jest.Mock).mockClear();
@@ -98,14 +104,14 @@ describe('ForecastNodeService', () => {
     const dataNodeDto: CreateForecastNodeDto = {
       forecastId: testForecastId,
       kind: ForecastNodeKind.DATA,
-      attributes: { variableId: 'var-123', offsetMonths: 3 },
+      attributes: { name: 'Data Node', variableId: 'var-123', offsetMonths: 3 },
       position,
     };
 
     const constantNodeDto: CreateForecastNodeDto = {
       forecastId: testForecastId,
       kind: ForecastNodeKind.CONSTANT,
-      attributes: { value: 42 },
+      attributes: { name: 'Constant Node', value: 42 },
       position,
     };
 
@@ -130,7 +136,7 @@ describe('ForecastNodeService', () => {
       const mockInsertSingle = jest.fn().mockResolvedValue({ data: newNode, error: null });
       mockSupabaseInsert.mockReturnValue({ select: jest.fn().mockReturnThis(), single: mockInsertSingle });
 
-      const result = await service.create(dataNodeDto);
+      const result = await service.create(dataNodeDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseInsert).toHaveBeenCalledWith({
@@ -156,7 +162,7 @@ describe('ForecastNodeService', () => {
         id: 'new-constant-node',
         forecast_id: testForecastId,
         kind: ForecastNodeKind.CONSTANT,
-        attributes: { value: 42 },
+        attributes: { name: 'Constant Node', value: 42 },
         position,
         created_at: '2023-01-01T00:00:00.000Z',
         updated_at: '2023-01-01T00:00:00.000Z'
@@ -165,7 +171,7 @@ describe('ForecastNodeService', () => {
       const mockInsertSingle = jest.fn().mockResolvedValue({ data: newNode, error: null });
       mockSupabaseInsert.mockReturnValue({ select: jest.fn().mockReturnThis(), single: mockInsertSingle });
 
-      const result = await service.create(constantNodeDto);
+      const result = await service.create(constantNodeDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseInsert).toHaveBeenCalledWith({
@@ -174,7 +180,7 @@ describe('ForecastNodeService', () => {
         attributes: constantNodeDto.attributes,
         position: constantNodeDto.position,
       });
-      expect(result.attributes).toEqual({ value: 42 });
+      expect(result.attributes).toEqual({ name: 'Constant Node', value: 42 });
     });
 
     it('should create an OPERATOR node successfully', async () => {
@@ -191,7 +197,7 @@ describe('ForecastNodeService', () => {
       const mockInsertSingle = jest.fn().mockResolvedValue({ data: newNode, error: null });
       mockSupabaseInsert.mockReturnValue({ select: jest.fn().mockReturnThis(), single: mockInsertSingle });
 
-      const result = await service.create(operatorNodeDto);
+      const result = await service.create(operatorNodeDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseInsert).toHaveBeenCalledWith({
@@ -210,7 +216,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.create(dataNodeDto))
+      await expect(service.create(dataNodeDto, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to create forecast node: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -221,7 +227,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: null })
       });
 
-      await expect(service.create(dataNodeDto))
+      await expect(service.create(dataNodeDto, mockRequest))
         .rejects.toThrow(new InternalServerErrorException('Failed to create forecast node, data missing after insert.'));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -255,7 +261,7 @@ describe('ForecastNodeService', () => {
       const mockSelectEq = jest.fn().mockResolvedValue({ data: mockDbResult, error: null });
       mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
 
-      const result = await service.findByForecast(forecastId);
+      const result = await service.findByForecast(forecastId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
@@ -273,7 +279,7 @@ describe('ForecastNodeService', () => {
         eq: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.findByForecast(forecastId))
+      await expect(service.findByForecast(forecastId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to fetch forecast nodes: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -298,7 +304,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: mockDbResult, error: null })
       });
 
-      const result = await service.findOne(nodeId);
+      const result = await service.findOne(nodeId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
@@ -313,8 +319,8 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: null })
       });
 
-      await expect(service.findOne(nodeId))
-        .rejects.toThrow(new NotFoundException(`Forecast node with ID ${nodeId} not found.`));
+      await expect(service.findOne(nodeId, mockRequest))
+        .rejects.toThrow(new NotFoundException(`Forecast node with ID ${nodeId} not found (no data).`));
       expect(Logger.prototype.warn).toHaveBeenCalled();
     });
 
@@ -325,7 +331,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.findOne(nodeId))
+      await expect(service.findOne(nodeId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to retrieve forecast node details: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -336,7 +342,7 @@ describe('ForecastNodeService', () => {
     const nodeId = 'node-123';
     const updateDto: UpdateForecastNodeDto = {
       kind: ForecastNodeKind.CONSTANT,
-      attributes: { value: 99 },
+      attributes: { name: 'Updated Constant', value: 99 },
       position: { x: 150, y: 250 }
     };
 
@@ -347,7 +353,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: { id: nodeId }, error: null })
       });
 
-      await service.update(nodeId, updateDto);
+      await service.update(nodeId, updateDto, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseUpdate).toHaveBeenCalledWith(expect.objectContaining({
@@ -361,7 +367,7 @@ describe('ForecastNodeService', () => {
 
     it('should update only specified fields', async () => {
       const partialUpdate: UpdateForecastNodeDto = {
-        attributes: { value: 99 }
+        attributes: { name: 'Updated Name', value: 99 }
       };
 
       mockSupabaseUpdate.mockReturnValue({
@@ -370,7 +376,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: { id: nodeId }, error: null })
       });
 
-      await service.update(nodeId, partialUpdate);
+      await service.update(nodeId, partialUpdate, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseUpdate).toHaveBeenCalledWith(expect.objectContaining({
@@ -384,7 +390,7 @@ describe('ForecastNodeService', () => {
     });
 
     it('should do nothing if no update data is provided', async () => {
-      await service.update(nodeId, {});
+      await service.update(nodeId, {}, mockRequest);
 
       // The service implementation returns early without calling the client
       expect(mockSupabaseClient.from).not.toHaveBeenCalled();
@@ -398,7 +404,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: null })
       });
 
-      await expect(service.update(nodeId, updateDto))
+      await expect(service.update(nodeId, updateDto, mockRequest))
         .rejects.toThrow(new NotFoundException(`Forecast node with ID ${nodeId} not found.`));
       expect(Logger.prototype.warn).toHaveBeenCalled();
     });
@@ -411,7 +417,7 @@ describe('ForecastNodeService', () => {
         single: jest.fn().mockResolvedValue({ data: null, error: dbError })
       });
 
-      await expect(service.update(nodeId, updateDto))
+      await expect(service.update(nodeId, updateDto, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to update forecast node ${nodeId}: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
@@ -426,7 +432,19 @@ describe('ForecastNodeService', () => {
         eq: jest.fn().mockResolvedValue({ count: 1, error: null })
       });
 
-      await service.remove(nodeId);
+      // First mock the findOne call that remove() makes to verify existence
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
+        data: { id: nodeId, forecast_id: testForecastId }, 
+        error: null 
+      });
+      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
+
+      // Then mock the delete call
+      const mockDeleteEq = jest.fn().mockResolvedValue({ error: null });
+      mockSupabaseDelete.mockReturnValue({ eq: mockDeleteEq });
+
+      await service.remove(nodeId, mockRequest);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecast_nodes');
       expect(mockSupabaseDelete).toHaveBeenCalled();
@@ -434,22 +452,31 @@ describe('ForecastNodeService', () => {
     });
 
     it('should throw NotFoundException if node does not exist', async () => {
-      mockSupabaseDelete.mockReturnValue({
-        eq: jest.fn().mockResolvedValue({ count: 0, error: null })
-      });
+      // Mock findOne to throw NotFoundException (called by remove)
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      await expect(service.remove(nodeId))
-        .rejects.toThrow(new NotFoundException(`Forecast node with ID ${nodeId} not found.`));
+      await expect(service.remove(nodeId, mockRequest))
+        .rejects.toThrow(new NotFoundException(`Forecast node with ID ${nodeId} not found (no data).`));
       expect(Logger.prototype.warn).toHaveBeenCalled();
     });
 
     it('should throw InternalServerErrorException if DB delete fails', async () => {
-      const dbError = { message: 'Delete failed', code: 'DB500' };
-      mockSupabaseDelete.mockReturnValue({
-        eq: jest.fn().mockResolvedValue({ count: 0, error: dbError })
+      // First mock successful findOne
+      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
+        data: { id: nodeId, forecast_id: testForecastId }, 
+        error: null 
       });
+      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
 
-      await expect(service.remove(nodeId))
+      // Then mock delete failure
+      const dbError = { message: 'Delete failed', code: 'DB500' };
+      const mockDeleteEq = jest.fn().mockResolvedValue({ error: dbError });
+      mockSupabaseDelete.mockReturnValue({ eq: mockDeleteEq });
+
+      await expect(service.remove(nodeId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to delete forecast node ${nodeId}: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
     });

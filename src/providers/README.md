@@ -1,14 +1,14 @@
 # Providers Directory
 
-This directory contains React context providers that manage global application state and functionality. These providers wrap the application to provide authentication, theming, and modal management capabilities.
+This directory contains React context providers that manage global application state and functionality. These providers wrap the application to provide authentication, theming, error handling, and modal management capabilities.
 
 ## Structure
 
-- `auth-provider.tsx` - Authentication and session management provider
-- `theme-provider.tsx` - Theme management provider using next-themes
-- `modal-provider.tsx` - Modal rendering provider with portal support
-- `error-boundary-provider.tsx` - Error boundary for graceful error handling
-- `__tests__/` - Test files for provider components
+- **`auth-provider.tsx`** - Authentication and session management provider
+- **`theme-provider.tsx`** - Theme management provider using next-themes
+- **`modal-provider.tsx`** - Modal rendering provider with portal support
+- **`error-boundary-provider.tsx`** - Error boundary for graceful error handling
+- **`__tests__/`** - Test files for provider components
 
 ## Providers Overview
 
@@ -19,10 +19,11 @@ The `AuthProvider` is the core authentication provider that manages user session
 #### Features
 
 - **Session Management**: Handles Supabase authentication sessions and state changes
-- **Cookie Management**: Stores authentication tokens in HTTP-only cookies
+- **Cookie Management**: Stores authentication tokens in HTTP-only cookies with SameSite protection
 - **Data Coordination**: Orchestrates data fetching for organizations, variables, and forecasts
 - **Unsaved Changes Protection**: Preserves unsaved forecast data during session changes
 - **Automatic Data Clearing**: Clears application data on sign out or session expiry
+- **Smart Data Fetching**: Only fetches data when necessary, preventing unnecessary API calls
 
 #### Context Interface
 
@@ -120,21 +121,20 @@ function App() {
 
 ### Modal Provider (`modal-provider.tsx`)
 
-Provides modal rendering capabilities for the application.
+Provides modal rendering capabilities for the application using React portals.
 
 #### Features
 
-- **Modal Portal**: Creates a portal root for modal rendering
-- **Z-Index Management**: Ensures modals render above other content
-- **Pointer Events**: Manages pointer events for modal interactions
-- **Clean Architecture**: Focused solely on modal functionality without theme conflicts
+- **Modal Portal**: Creates a portal root for modal rendering at `#modal-root`
+- **Z-Index Management**: Ensures modals render above other content (`z-[100]`)
+- **Pointer Events**: Uses `pointer-events-none` to allow interaction with underlying content when no modal is active
+- **Clean Architecture**: Focused solely on modal functionality
 
 #### Structure
 
 - **Relative Container**: Wraps content in a relative positioned container
-- **Modal Root**: Creates a fixed portal container for modals at `#modal-root`
-- **Z-Index**: Uses `z-[100]` to ensure modals appear above other content
-- **Pointer Events**: Uses `pointer-events-none` to allow interaction with underlying content when no modal is active
+- **Modal Root**: Creates a fixed portal container for modals
+- **Non-Intrusive**: Doesn't interfere with normal page interactions
 
 #### Usage
 
@@ -180,7 +180,7 @@ Provides error boundary functionality to catch and handle JavaScript errors in t
 
 - **Error Catching**: Catches JavaScript errors anywhere in the child component tree
 - **Graceful Fallback**: Displays a user-friendly error message instead of a blank screen
-- **Error Logging**: Logs errors to the console (can be extended to external services)
+- **Error Logging**: Logs errors to the console (extensible to external services)
 - **Recovery Option**: Provides a refresh button to recover from errors
 - **Customizable Fallback**: Allows custom fallback UI to be provided
 
@@ -228,7 +228,7 @@ function AppWithCustomError() {
 
 The error boundary includes a styled fallback UI with:
 - **Warning icon** with red styling
-- **Clear error message** explaining what happened
+- **Clear error message** explaining what happened  
 - **Refresh button** to attempt recovery
 - **Responsive design** that works on all screen sizes
 - **Tailwind CSS styling** consistent with the application theme
@@ -279,8 +279,8 @@ This composition ensures:
 
 The providers directory includes comprehensive tests:
 
-- `auth-provider-preservation.test.tsx` - Tests for unsaved changes preservation during authentication state changes
-- `error-boundary-provider.test.tsx` - Tests for error boundary functionality and fallback UI rendering
+- **`auth-provider-preservation.test.tsx`** - Tests for unsaved changes preservation during authentication state changes
+- **`error-boundary-provider.test.tsx`** - Tests for error boundary functionality and fallback UI rendering
 
 ## Best Practices
 
@@ -299,7 +299,7 @@ The providers directory includes comprehensive tests:
 - **Supabase**: Authentication and database integration
 - **next-themes**: Theme management
 - **Next.js**: Navigation and routing
-- **Zustand**: State management integration
+- **Zustand**: State management integration  
 - **Tailwind CSS**: Styling for error boundary fallback UI
 
 ## Security Considerations
@@ -307,4 +307,5 @@ The providers directory includes comprehensive tests:
 - **Token Storage**: Authentication tokens are stored in HTTP-only cookies
 - **Session Validation**: Sessions are validated on every auth state change
 - **Data Clearing**: Sensitive data is automatically cleared on sign out
-- **CSRF Protection**: Uses SameSite cookie attributes for CSRF protection 
+- **CSRF Protection**: Uses SameSite cookie attributes for CSRF protection
+- **Unsaved Changes**: Preserves user work during authentication events 

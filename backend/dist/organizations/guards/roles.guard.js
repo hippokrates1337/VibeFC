@@ -33,7 +33,7 @@ let RolesGuard = class RolesGuard {
             throw new common_1.ForbiddenException('Organization ID is required');
         }
         try {
-            const userRole = await this.organizationsService.getUserRoleInOrganization(user.id, organizationId);
+            const userRole = await this.organizationsService.getUserRoleInOrganization(user.id, organizationId, request);
             if (!userRole) {
                 return false;
             }

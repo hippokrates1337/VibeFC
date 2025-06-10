@@ -12,13 +12,15 @@ var ForecastService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ForecastService = void 0;
 const common_1 = require("@nestjs/common");
-const supabase_service_1 = require("../../supabase/supabase.service");
+const supabase_optimized_service_1 = require("../../supabase/supabase-optimized.service");
+const performance_service_1 = require("../../common/services/performance.service");
 let ForecastService = ForecastService_1 = class ForecastService {
-    constructor(supabaseService) {
+    constructor(supabaseService, performanceService) {
         this.supabaseService = supabaseService;
+        this.performanceService = performanceService;
         this.logger = new common_1.Logger(ForecastService_1.name);
     }
-    async create(userId, dto) {
+    async create(userId, dto, request) {
         this.logger.debug(`ForecastService.create called by userId: ${userId}`);
         this.logger.debug(`CreateForecastDto: ${JSON.stringify(dto)}`);
         if (!userId) {
@@ -27,7 +29,8 @@ let ForecastService = ForecastService_1 = class ForecastService {
         }
         try {
             this.logger.debug('Attempting to insert forecast into Supabase...');
-            const { data: insertedForecast, error: insertError } = await this.supabaseService.client
+            const client = this.supabaseService.getClientForRequest(request);
+            const { data: insertedForecast, error: insertError } = await client
                 .from('forecasts')
                 .insert({
                 name: dto.name,
@@ -70,12 +73,13 @@ let ForecastService = ForecastService_1 = class ForecastService {
             throw new common_1.InternalServerErrorException('An unexpected error occurred in the forecast service during creation.');
         }
     }
-    async findAll(userId, organizationId) {
+    async findAll(userId, organizationId, request) {
         if (!userId) {
             this.logger.warn('Attempt to find forecasts without providing a userId');
             return [];
         }
-        const { data, error } = await this.supabaseService.client
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('forecasts')
             .select('*')
             .eq('organization_id', organizationId)
@@ -86,13 +90,14 @@ let ForecastService = ForecastService_1 = class ForecastService {
         }
         return data.map(forecast => this.mapDbEntityToDto(forecast));
     }
-    async findOne(id, userId) {
+    async findOne(id, userId, request) {
         this.logger.debug(`Finding forecast ${id} for user ${userId}`);
         if (!userId) {
             this.logger.warn(`Attempt to find forecast ${id} without providing a userId`);
             throw new common_1.NotFoundException(`Forecast with ID ${id} not found.`);
         }
-        const { data, error } = await this.supabaseService.client
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('forecasts')
             .select('*')
             .eq('id', id)
@@ -112,8 +117,8 @@ let ForecastService = ForecastService_1 = class ForecastService {
         }
         return this.mapDbEntityToDto(data);
     }
-    async update(id, userId, dto) {
-        await this.findOne(id, userId);
+    async update(id, userId, dto, request) {
+        await this.findOne(id, userId, request);
         if (Object.keys(dto).length === 0) {
             return;
         }
@@ -131,7 +136,8 @@ let ForecastService = ForecastService_1 = class ForecastService {
         if (Object.keys(updateData).length === 1 && updateData.updated_at) {
             return;
         }
-        const { data, error } = await this.supabaseService.client
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client
             .from('forecasts')
             .update(updateData)
             .match({ id, user_id: userId })
@@ -147,9 +153,9 @@ let ForecastService = ForecastService_1 = class ForecastService {
         }
         this.logger.log(`Forecast updated: ${id} by user: ${userId}`);
     }
-    async remove(id, userId) {
+    async remove(id, userId, request) {
         try {
-            await this.findOne(id, userId);
+            await this.findOne(id, userId, request);
         }
         catch (error) {
             if (error instanceof common_1.NotFoundException) {
@@ -158,7 +164,8 @@ let ForecastService = ForecastService_1 = class ForecastService {
             this.logger.error(`Unexpected error checking forecast before delete: ${error.message}`, error.stack);
             throw new common_1.InternalServerErrorException('An error occurred while trying to delete the forecast');
         }
-        const { error } = await this.supabaseService.client
+        const client = this.supabaseService.getClientForRequest(request);
+        const { error } = await client
             .from('forecasts')
             .delete()
             .match({ id, user_id: userId });
@@ -167,6 +174,44 @@ let ForecastService = ForecastService_1 = class ForecastService {
             throw new common_1.InternalServerErrorException(`Failed to delete forecast: ${error.message}`);
         }
         this.logger.log(`Forecast deleted: ${id} by user: ${userId}`);
+    }
+    async bulkSaveGraph(forecastId, userId, dto, request) {
+        return this.performanceService.trackOperation('forecast.bulkSaveGraph', async () => {
+            await this.findOne(forecastId, userId, request);
+            try {
+                this.logger.log(`Starting bulk save for forecast ${forecastId} with ${dto.nodes.length} nodes and ${dto.edges.length} edges`);
+                const client = this.supabaseService.getClientForRequest(request);
+                const { data, error } = await client
+                    .rpc('bulk_save_forecast_graph', {
+                    p_forecast_id: forecastId,
+                    p_forecast_data: dto.forecast,
+                    p_nodes_data: dto.nodes,
+                    p_edges_data: dto.edges
+                });
+                if (error) {
+                    this.logger.error(`Bulk save failed for forecast ${forecastId}: ${error.message}`, error.stack);
+                    throw new common_1.InternalServerErrorException(`Failed to save forecast: ${error.message}`);
+                }
+                if (!data) {
+                    this.logger.error(`Bulk save returned no data for forecast ${forecastId}`);
+                    throw new common_1.InternalServerErrorException('Failed to save forecast: No data returned');
+                }
+                this.logger.log(`Forecast ${forecastId} bulk saved successfully`);
+                return data;
+            }
+            catch (error) {
+                if (error instanceof common_1.InternalServerErrorException || error instanceof common_1.NotFoundException) {
+                    throw error;
+                }
+                this.logger.error(`Unexpected error in bulk save: ${error.message}`, error.stack);
+                throw new common_1.InternalServerErrorException('Failed to save forecast graph');
+            }
+        }, {
+            forecastId,
+            userId,
+            nodeCount: dto.nodes.length,
+            edgeCount: dto.edges.length
+        });
     }
     mapDbEntityToDto(entity) {
         return {
@@ -184,6 +229,7 @@ let ForecastService = ForecastService_1 = class ForecastService {
 exports.ForecastService = ForecastService;
 exports.ForecastService = ForecastService = ForecastService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [supabase_service_1.SupabaseService])
+    __metadata("design:paramtypes", [supabase_optimized_service_1.SupabaseOptimizedService,
+        performance_service_1.PerformanceService])
 ], ForecastService);
 //# sourceMappingURL=forecast.service.js.map
