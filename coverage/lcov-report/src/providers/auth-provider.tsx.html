@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">72% </span>
+                <span class="strong">70.12% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>270/375</span>
+                <span class='fraction'>270/385</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">72% </span>
+                <span class="strong">70.12% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>270/375</span>
+                <span class='fraction'>270/385</span>
             </div>
         
             
@@ -437,7 +437,17 @@
 <a name='L372'></a><a href='#L372'>372</a>
 <a name='L373'></a><a href='#L373'>373</a>
 <a name='L374'></a><a href='#L374'>374</a>
-<a name='L375'></a><a href='#L375'>375</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -740,6 +750,16 @@
 <span class="cline-any cline-yes">8x</span>
 <span class="cline-any cline-yes">8x</span>
 <span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1115,17 +1135,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 &nbsp;
   const signIn = <span class="fstat-no" title="function not covered" >async (email: string, password: string) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      console.log('🔐 [AuthProvider] Starting signIn for:', email);</span>
 <span class="cstat-no" title="statement not covered" >      const { data, error } = await supabase.auth.signInWithPassword({ email, password });</span>
 <span class="cstat-no" title="statement not covered" >      </span>
+<span class="cstat-no" title="statement not covered" >      console.log('🔐 [AuthProvider] SignIn result:', {</span>
+<span class="cstat-no" title="statement not covered" >        hasError: !!error,</span>
+<span class="cstat-no" title="statement not covered" >        hasSession: !!data.session,</span>
+<span class="cstat-no" title="statement not covered" >        hasUser: !!data.user,</span>
+<span class="cstat-no" title="statement not covered" >        errorMessage: error?.message</span>
+<span class="cstat-no" title="statement not covered" >      });</span>
+<span class="cstat-no" title="statement not covered" >      </span>
 <span class="cstat-no" title="statement not covered" >      if (!error &amp;&amp; data.session) {</span>
-<span class="cstat-no" title="statement not covered" >        window.location.href = '/';</span>
+<span class="cstat-no" title="statement not covered" >        console.log('🔐 [AuthProvider] Authentication successful, redirecting to home');</span>
+<span class="cstat-no" title="statement not covered" >        // Use router.push instead of window.location.href for better SPA behavior</span>
+<span class="cstat-no" title="statement not covered" >        router.push('/');</span>
 <span class="cstat-no" title="statement not covered" >      } else if (error) {</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Sign in error:', error);</span>
+<span class="cstat-no" title="statement not covered" >        console.error('🔐 [AuthProvider] Sign in error:', error);</span>
 <span class="cstat-no" title="statement not covered" >      }</span>
 <span class="cstat-no" title="statement not covered" >      </span>
 <span class="cstat-no" title="statement not covered" >      return { error };</span>
 <span class="cstat-no" title="statement not covered" >    } catch (err) {</span>
-<span class="cstat-no" title="statement not covered" >      console.error('Sign in error:', err);</span>
+<span class="cstat-no" title="statement not covered" >      console.error('🔐 [AuthProvider] Sign in exception:', err);</span>
 <span class="cstat-no" title="statement not covered" >      return { error: err };</span>
 <span class="cstat-no" title="statement not covered" >    }</span>
   };
@@ -1192,7 +1222,7 @@ export const useAuth = <span class="fstat-no" title="function not covered" >() =
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-06-10T06:59:32.726Z
+                at 2025-06-10T10:52:53.396Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

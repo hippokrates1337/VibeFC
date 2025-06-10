@@ -444,11 +444,6 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
             const lastPositionChange = positionChanges[positionChanges.length - 1];
             if (lastPositionChange.type === 'position' && lastPositionChange.position) {
               lastEditedNodePosition = lastPositionChange.position;
-              logger.log('[ForecastGraphStore] Node position changed, updating last edited position:', {
-                nodeId: lastPositionChange.id,
-                position: lastPositionChange.position,
-                dragging: lastPositionChange.dragging
-              });
             }
           }
           

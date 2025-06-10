@@ -22,6 +22,36 @@ describe('ForecastCalculationService Integration', () => {
     const testUserId = 'test-user-id';
     const testForecastId = 'test-forecast-id';
     const testOrgId = 'test-org-id';
+    const mockSupabaseClient = {
+        from: jest.fn().mockImplementation((table) => ({
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: {
+                            id: 'result-id',
+                            forecast_id: testForecastId,
+                            calculated_at: new Date().toISOString(),
+                            results: []
+                        },
+                        error: null
+                    })
+                })
+            }),
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    order: jest.fn().mockReturnValue({
+                        limit: jest.fn().mockReturnValue({
+                            single: jest.fn().mockResolvedValue({
+                                data: null,
+                                error: { code: 'PGRST116' }
+                            })
+                        }),
+                        mockResolvedValue: Promise.resolve({ data: [], error: null })
+                    })
+                })
+            })
+        }))
+    };
     beforeEach(async () => {
         const module = await testing_1.Test.createTestingModule({
             providers: [
@@ -29,10 +59,7 @@ describe('ForecastCalculationService Integration', () => {
                 {
                     provide: supabase_optimized_service_1.SupabaseOptimizedService,
                     useValue: {
-                        getClientForRequest: jest.fn(),
-                        storeCalculationResults: jest.fn(),
-                        getLatestCalculationResults: jest.fn(),
-                        getCalculationHistory: jest.fn(),
+                        getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
                     },
                 },
                 {
@@ -104,7 +131,7 @@ describe('ForecastCalculationService Integration', () => {
             jest.clearAllMocks();
             forecastService.findOne.mockResolvedValue(mockForecast);
             dataIntakeService.getVariablesByUser.mockResolvedValue(mockVariables);
-            supabaseService.storeCalculationResults.mockResolvedValue({ id: 'result-id' });
+            supabaseService.getClientForRequest.mockReturnValue(mockSupabaseClient);
         });
         it('should execute simple constant to metric calculation', async () => {
             const mockNodes = [
@@ -442,7 +469,6 @@ describe('ForecastCalculationService Integration', () => {
             nodeService.findByForecast.mockResolvedValue(mockNodes);
             edgeService.findByForecast.mockResolvedValue(mockEdges);
             dataIntakeService.getVariablesByUser.mockResolvedValue([]);
-            supabaseService.storeCalculationResults.mockResolvedValue({ id: 'result-id' });
             const startTime = Date.now();
             const result = await service.calculateForecast(testForecastId, testUserId, mockRequest);
             const endTime = Date.now();
