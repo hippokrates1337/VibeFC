@@ -3,8 +3,11 @@ import type {
   CalculationTree,
   CalculationTreeNode,
   ForecastCalculationResult,
+  ExtendedForecastCalculationResult,
   MetricCalculationResult,
+  NodeCalculationResult,
   MonthlyForecastValue,
+  MonthlyNodeValue,
   DataNodeAttributes,
   ConstantNodeAttributes,
   OperatorNodeAttributes,
@@ -26,6 +29,16 @@ interface ICalculationEngineService {
     forecastEndDate: Date,
     variables: readonly Variable[]
   ): Promise<ForecastCalculationResult>;
+
+  /**
+   * Extended calculation entry point that tracks all nodes
+   */
+  calculateForecastExtended(
+    trees: readonly CalculationTree[],
+    forecastStartDate: Date,
+    forecastEndDate: Date,
+    variables: readonly Variable[]
+  ): Promise<ExtendedForecastCalculationResult>;
 }
 
 interface CalculationContext {
@@ -34,6 +47,7 @@ interface CalculationContext {
   readonly forecastEndDate: Date;
   readonly calculationCache: Map<string, number | null>;
   readonly monthlyCache: Map<string, Map<number, MonthlyForecastValue>>;
+  readonly nodeCalculationResults?: Map<string, MonthlyNodeValue[]>; // For tracking all nodes
 }
 
 /**
@@ -90,6 +104,56 @@ export class CalculationEngine implements ICalculationEngineService {
     }
   }
 
+  async calculateForecastExtended(
+    trees: readonly CalculationTree[],
+    forecastStartDate: Date,
+    forecastEndDate: Date,
+    variables: readonly Variable[]
+  ): Promise<ExtendedForecastCalculationResult> {
+    try {
+      this.logger.log('[CalculationEngine] Starting extended forecast calculation');
+      this.logger.log(`[CalculationEngine] Period: ${forecastStartDate.toISOString()} to ${forecastEndDate.toISOString()}`);
+      this.logger.log(`[CalculationEngine] Processing ${trees.length} calculation trees`);
+
+      // Order trees by dependencies to handle cross-tree references
+      const orderedTrees = this.orderTreesByDependencies(trees);
+      this.logger.log(`[CalculationEngine] Tree processing order: [${orderedTrees.map(t => t.rootMetricNodeId).join(', ')}]`);
+
+      // Extended context with node tracking
+      const context: CalculationContext = {
+        variables,
+        forecastStartDate,
+        forecastEndDate,
+        calculationCache: new Map(),
+        monthlyCache: new Map(),
+        nodeCalculationResults: new Map(), // Track all nodes
+      };
+
+      const metrics: MetricCalculationResult[] = [];
+
+      for (let i = 0; i < orderedTrees.length; i++) {
+        const tree = orderedTrees[i];
+        this.logger.log(`[CalculationEngine] Processing tree ${i + 1}/${orderedTrees.length} (metric: ${tree.rootMetricNodeId})`);
+        
+        const metricResult = await this.calculateMetricTreeExtended(tree, context, orderedTrees);
+        metrics.push(metricResult);
+      }
+
+      // Collect all node calculation results
+      const allNodes: NodeCalculationResult[] = this.collectAllNodeResults(context.nodeCalculationResults!, trees);
+
+      return {
+        forecastId: '', // Will be set by caller
+        calculatedAt: new Date(),
+        metrics,
+        allNodes,
+      };
+    } catch (error) {
+      this.logger.error('[CalculationEngine] Extended forecast calculation failed:', error);
+      throw new Error(`Extended forecast calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   private async calculateMetricTree(
     tree: CalculationTree,
     context: CalculationContext,
@@ -119,6 +183,64 @@ export class CalculationEngine implements ICalculationEngineService {
       );
       
       const historicalValue = await this.evaluateNode(
+        tree.tree, 
+        normalizedDate, 
+        'historical', 
+        { ...context, currentMonth: monthOffset },
+        allTrees
+      );
+
+      const monthlyValue: MonthlyForecastValue = {
+        date: normalizedDate,
+        forecast: forecastValue,
+        budget: budgetValue,
+        historical: historicalValue,
+      };
+
+      monthlyValues.push(monthlyValue);
+      
+      if (!context.monthlyCache.has(tree.rootMetricNodeId)) {
+        context.monthlyCache.set(tree.rootMetricNodeId, new Map());
+      }
+      context.monthlyCache.get(tree.rootMetricNodeId)!.set(monthOffset, monthlyValue);
+      this.logger.log(`[CalculationEngine] - Cached month ${monthOffset} for metric ${tree.rootMetricNodeId}: forecast=${forecastValue}, budget=${budgetValue}, historical=${historicalValue}`);
+    }
+
+    return {
+      metricNodeId: tree.rootMetricNodeId,
+      values: monthlyValues,
+    };
+  }
+
+  private async calculateMetricTreeExtended(
+    tree: CalculationTree,
+    context: CalculationContext,
+    allTrees: readonly CalculationTree[]
+  ): Promise<MetricCalculationResult> {
+    const monthlyValues: MonthlyForecastValue[] = [];
+    const monthCount = this.getMonthsBetween(context.forecastStartDate, context.forecastEndDate);
+
+    for (let monthOffset = 0; monthOffset < monthCount; monthOffset++) {
+      const targetDate = this.addMonths(context.forecastStartDate, monthOffset);
+      const normalizedDate = this.normalizeToFirstOfMonth(targetDate);
+
+      const forecastValue = await this.evaluateNodeExtended(
+        tree.tree, 
+        normalizedDate, 
+        'forecast', 
+        { ...context, currentMonth: monthOffset },
+        allTrees
+      );
+      
+      const budgetValue = await this.evaluateNodeExtended(
+        tree.tree, 
+        normalizedDate, 
+        'budget', 
+        { ...context, currentMonth: monthOffset },
+        allTrees
+      );
+      
+      const historicalValue = await this.evaluateNodeExtended(
         tree.tree, 
         normalizedDate, 
         'historical', 
@@ -481,6 +603,272 @@ export class CalculationEngine implements ICalculationEngineService {
 
     this.logger.log(`[CalculationEngine] - SEED returning: ${result}`);
     return result;
+  }
+
+  private async evaluateNodeExtended(
+    node: CalculationTreeNode,
+    targetDate: Date,
+    calculationType: 'forecast' | 'budget' | 'historical',
+    context: CalculationContext & { currentMonth: number },
+    allTrees?: readonly CalculationTree[]
+  ): Promise<number | null> {
+    try {
+      const cacheKey = `${node.nodeId}-${targetDate.getTime()}-${calculationType}`;
+      
+      if (context.calculationCache.has(cacheKey)) {
+        return context.calculationCache.get(cacheKey)!;
+      }
+
+      let result: number | null = null;
+
+      switch (node.nodeType) {
+        case 'DATA':
+          result = await this.evaluateDataNodeExtended(node, targetDate, calculationType, context, allTrees);
+          break;
+        case 'CONSTANT':
+          result = await this.evaluateConstantNodeExtended(node, targetDate, calculationType, context, allTrees);
+          break;
+        case 'OPERATOR':
+          result = await this.evaluateOperatorNodeExtended(node, targetDate, calculationType, context, allTrees);
+          break;
+        case 'METRIC':
+          result = await this.evaluateMetricNodeExtended(node, targetDate, calculationType, context, allTrees);
+          break;
+        case 'SEED':
+          result = await this.evaluateSeedNodeExtended(node, targetDate, calculationType, context, allTrees);
+          break;
+        default:
+          throw new Error(`Unknown node type: ${(node as any).nodeType}`);
+      }
+
+      context.calculationCache.set(cacheKey, result);
+
+      // FIXED: Enhanced node result tracking for all node types
+      if (context.nodeCalculationResults) {
+        this.storeNodeCalculationResult(node, targetDate, calculationType, result, context);
+      }
+
+      return result;
+    } catch (error) {
+      throw new Error(`Node evaluation failed for ${node.nodeId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // NEW: Enhanced node result tracking method
+  private storeNodeCalculationResult(
+    node: CalculationTreeNode,
+    targetDate: Date,
+    calculationType: 'forecast' | 'budget' | 'historical',
+    calculatedValue: number | null,
+    context: CalculationContext & { currentMonth: number }
+  ): void {
+    if (!context.nodeCalculationResults) return;
+    
+    const nodeId = node.nodeId;
+    const monthKey = targetDate.toISOString().substring(0, 7); // YYYY-MM
+    
+    if (!context.nodeCalculationResults.has(nodeId)) {
+      context.nodeCalculationResults.set(nodeId, []);
+    }
+    
+    const nodeResults = context.nodeCalculationResults.get(nodeId)!;
+    const existingIndex = nodeResults.findIndex(r => r.date.toISOString().substring(0, 7) === monthKey);
+    
+    // Get existing values or create base values
+    const existingResult = existingIndex >= 0 ? nodeResults[existingIndex] : null;
+    
+    // Create new immutable result object
+    const newResult: MonthlyNodeValue = {
+      date: new Date(targetDate.getFullYear(), targetDate.getMonth(), 1),
+      forecast: existingResult?.forecast ?? null,
+      budget: existingResult?.budget ?? null,
+      historical: existingResult?.historical ?? null,
+      calculated: existingResult?.calculated ?? null,
+    };
+    
+    // Update the specific calculation type
+    switch (calculationType) {
+      case 'forecast':
+        // For non-METRIC nodes, store as both calculated and forecast
+        if (node.nodeType !== 'METRIC') {
+          (newResult as any).forecast = calculatedValue;
+          (newResult as any).calculated = calculatedValue;
+        } else {
+          // For METRIC nodes, only store as calculated (forecast comes from variables)
+          (newResult as any).calculated = calculatedValue;
+        }
+        break;
+      case 'budget':
+        (newResult as any).budget = calculatedValue;
+        break;
+      case 'historical':
+        (newResult as any).historical = calculatedValue;
+        break;
+    }
+    
+    // Replace or add the result
+    if (existingIndex >= 0) {
+      nodeResults[existingIndex] = newResult;
+    } else {
+      nodeResults.push(newResult);
+    }
+  }
+
+  private async evaluateOperatorNodeExtended(
+    node: CalculationTreeNode,
+    targetDate: Date,
+    calculationType: 'forecast' | 'budget' | 'historical',
+    context: CalculationContext & { currentMonth: number },
+    allTrees?: readonly CalculationTree[]
+  ): Promise<number | null> {
+    const operatorAttributes = node.nodeData as OperatorNodeAttributes;
+    
+    if (!operatorAttributes.op) {
+      throw new Error(`OPERATOR node ${node.nodeId} missing operator`);
+    }
+
+    const orderedChildren = operatorAttributes.inputOrder 
+      ? this.orderChildrenByInputOrder(node.children, operatorAttributes.inputOrder)
+      : node.children;
+
+    const childValues: number[] = [];
+    
+    for (const child of orderedChildren) {
+      const childValue = await this.evaluateNodeExtended(child, targetDate, calculationType, context, allTrees);
+      if (childValue === null) {
+        return null;
+      }
+      childValues.push(childValue);
+    }
+
+    if (childValues.length === 0) {
+      throw new Error(`OPERATOR node ${node.nodeId} has no valid children`);
+    }
+
+    let result = childValues[0];
+    for (let i = 1; i < childValues.length; i++) {
+      const rightValue = childValues[i];
+      
+      switch (operatorAttributes.op) {
+        case '+':
+          result += rightValue;
+          break;
+        case '-':
+          result -= rightValue;
+          break;
+        case '*':
+          result *= rightValue;
+          break;
+        case '/':
+          if (rightValue === 0) {
+            return null;
+          }
+          result /= rightValue;
+          break;
+        case '^':
+          result = Math.pow(result, rightValue);
+          break;
+        default:
+          throw new Error(`Unknown operator: ${operatorAttributes.op}`);
+      }
+    }
+
+    return result;
+  }
+
+  private async evaluateDataNodeExtended(
+    node: CalculationTreeNode,
+    targetDate: Date,
+    calculationType: 'forecast' | 'budget' | 'historical',
+    context: CalculationContext & { currentMonth: number },
+    allTrees?: readonly CalculationTree[]
+  ): Promise<number | null> {
+    // Delegate to the original method which fetches from variables
+    return await this.evaluateDataNode(node, targetDate, calculationType, context, allTrees);
+  }
+
+  private async evaluateConstantNodeExtended(
+    node: CalculationTreeNode,
+    targetDate: Date,
+    calculationType: 'forecast' | 'budget' | 'historical',
+    context: CalculationContext & { currentMonth: number },
+    allTrees?: readonly CalculationTree[]
+  ): Promise<number | null> {
+    // Delegate to the original method which returns constant value
+    return await this.evaluateConstantNode(node, targetDate, calculationType, context, allTrees);
+  }
+
+  private async evaluateMetricNodeExtended(
+    node: CalculationTreeNode,
+    targetDate: Date,
+    calculationType: 'forecast' | 'budget' | 'historical',
+    context: CalculationContext & { currentMonth: number },
+    allTrees?: readonly CalculationTree[]
+  ): Promise<number | null> {
+    // For METRIC nodes, use calculated value if available, otherwise fall back to original evaluation
+    const metricData = node.nodeData as MetricNodeAttributes;
+    
+    // Check if this node has children (calculated metric)
+    if (node.children.length > 0) {
+      // This is a calculated metric - evaluate the calculation tree
+      const childValues: number[] = [];
+      
+      for (const child of node.children) {
+        const childValue = await this.evaluateNodeExtended(child, targetDate, calculationType, context, allTrees);
+        if (childValue === null) {
+          return null;
+        }
+        childValues.push(childValue);
+      }
+      
+      // For calculated metrics, return the sum of children (typical behavior)
+      return childValues.reduce((sum, value) => sum + value, 0);
+    } else {
+      // This is a data-driven metric - delegate to original method
+      return await this.evaluateMetricNode(node, targetDate, calculationType, context, allTrees);
+    }
+  }
+
+  private async evaluateSeedNodeExtended(
+    node: CalculationTreeNode,
+    targetDate: Date,
+    calculationType: 'forecast' | 'budget' | 'historical',
+    context: CalculationContext & { currentMonth: number },
+    allTrees?: readonly CalculationTree[]
+  ): Promise<number | null> {
+    // Delegate to the original method which finds referenced metric values
+    return await this.evaluateSeedNode(node, targetDate, calculationType, context, allTrees);
+  }
+
+  private collectAllNodeResults(
+    nodeResults: Map<string, MonthlyNodeValue[]>,
+    trees: readonly CalculationTree[]
+  ): NodeCalculationResult[] {
+    const allNodes: NodeCalculationResult[] = [];
+    
+    // Collect all unique nodes from all trees
+    const nodeMap = new Map<string, { nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED' }>();
+    
+    const collectNodesFromTree = (node: CalculationTreeNode) => {
+      nodeMap.set(node.nodeId, { nodeType: node.nodeType });
+      node.children.forEach(child => collectNodesFromTree(child));
+    };
+    
+    trees.forEach(tree => collectNodesFromTree(tree.tree));
+    
+    // Build results for each node
+    nodeMap.forEach((nodeInfo, nodeId) => {
+      const values = nodeResults.get(nodeId) || [];
+      
+      allNodes.push({
+        nodeId,
+        nodeType: nodeInfo.nodeType,
+        values: values.sort((a, b) => a.date.getTime() - b.date.getTime()),
+      });
+    });
+    
+    this.logger.log(`[CalculationEngine] Collected results for ${allNodes.length} nodes`);
+    return allNodes;
   }
 
   private orderChildrenByInputOrder(

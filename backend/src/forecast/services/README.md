@@ -27,4 +27,31 @@ This directory houses the NestJS service classes for the Forecast module. Servic
     -   Handles Create, Read, and Delete operations for edges.
     -   Ensures that edges connect valid source and target nodes belonging to the same forecast.
 
+-   `forecast-calculation.service.ts`:
+    -   Orchestrates the complete forecast calculation workflow.
+    -   Integrates graph validation, data transformation, and calculation engine execution.
+    -   Handles result storage and retrieval with full history tracking.
+    -   Provides both standard and extended calculation results for visualization features.
+
+## Calculation Engine (`calculation-engine/`)
+
+The calculation engine is a specialized subsystem that performs the core forecast computation:
+
+-   `calculation-engine.ts`:
+    -   Implements graph-to-tree conversion and monthly evaluation logic.
+    -   Supports both standard calculation (`calculateForecast`) and extended tracking (`calculateForecastExtended`).
+    -   Handles cross-tree dependencies via SEED nodes and caches results for performance.
+
+-   `types.ts`:
+    -   Defines interfaces for calculation trees, node attributes, and result structures.
+    -   Includes extended types for visualization: `ExtendedForecastCalculationResult`, `NodeCalculationResult`, `MonthlyNodeValue`.
+
+-   `graph-converter.ts`:
+    -   Converts forecast graphs to calculation trees and validates graph structure.
+    -   Ensures graph integrity before calculation execution.
+
+-   `variable-data-service.ts`:
+    -   Provides time-series data access with month offset support.
+    -   Handles variable lookups and data interpolation for calculations.
+
 These services are injected into the `ForecastController` to be used for handling API requests. They promote a clear separation of concerns, keeping the controllers lean and the business logic centralized and testable. 

@@ -2,10 +2,10 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Edge, Node, applyNodeChanges, applyEdgeChanges, NodeChange, EdgeChange } from 'reactflow';
 import { v4 as uuidv4 } from 'uuid';
-import { useShallow } from 'zustand/react/shallow';
+import { useShallow } from 'zustand/shallow';
 import type { Forecast as ClientForecastSummary } from '@/lib/api/forecast';
 import { logger } from '@/lib/utils/logger';
-import type { GraphValidationResult, ForecastCalculationResult } from '@/types/forecast';
+import type { GraphValidationResult, ForecastCalculationResult, NodeVisualizationValue, ExtendedForecastCalculationResult, NodeCalculationResult, MonthlyNodeValue } from '@/types/forecast';
 import { GraphConverter } from '@/lib/services/forecast-calculation/graph-converter';
 import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
 import { useVariableStore } from './variables';
@@ -76,11 +76,15 @@ interface ForecastGraphState {
   graphValidation: GraphValidationResult | null;
   isValidatingGraph: boolean;
   
-  // NEW: Calculation results
-  calculationResults: ForecastCalculationResult | null;
+  // NEW: Calculation results - using extended type for visualization support
+  calculationResults: ExtendedForecastCalculationResult | null;
   isCalculating: boolean;
   calculationError: string | null;
   lastCalculatedAt: Date | null;
+  
+  // NEW: Visualization state
+  selectedVisualizationMonth: Date | null;
+  showVisualizationSlider: boolean;
 }
 
 // Store actions
@@ -133,10 +137,17 @@ interface ForecastGraphActions {
   // Calculation actions (only allowed when graph is valid)
   calculateForecast: () => Promise<void>;
   loadCalculationResults: () => Promise<void>;
-  setCalculationResults: (results: ForecastCalculationResult) => void;
+  setCalculationResults: (results: ExtendedForecastCalculationResult) => void;
   clearCalculationResults: () => void;
   setCalculating: (isCalculating: boolean) => void;
   setCalculationError: (error: string | null) => void;
+  
+  // Visualization actions
+  setSelectedVisualizationMonth: (month: Date | null) => void;
+  setShowVisualizationSlider: (show: boolean) => void;
+  updateVisualizationMonthForPeriodChange: (newStartDate: string | null, newEndDate: string | null) => void;
+  generateForecastMonths: (startDate: string, endDate: string) => Date[];
+  getNodeValueForMonth: (nodeId: string, month: Date) => NodeVisualizationValue | null;
 }
 
 // Helper functions
@@ -255,6 +266,8 @@ const initialState: ForecastGraphState = {
   isCalculating: false,
   calculationError: null,
   lastCalculatedAt: null,
+  selectedVisualizationMonth: null,
+  showVisualizationSlider: false,
 };
 
 // Create store with persist middleware
@@ -738,6 +751,170 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
         logger.log('[ForecastGraphStore] setCalculationError called with:', error);
         set({ calculationError: error });
       },
+
+      // Visualization actions
+      setSelectedVisualizationMonth: (month) => {
+        logger.log('[ForecastGraphStore] setSelectedVisualizationMonth called with:', month);
+        
+        // FIXED: Ensure we always store proper Date objects (handle any string inputs)
+        const properMonth = month === null ? null : (month instanceof Date ? month : new Date(month));
+        
+        set({ selectedVisualizationMonth: properMonth });
+      },
+
+      setShowVisualizationSlider: (show) => {
+        logger.log('[ForecastGraphStore] setShowVisualizationSlider called with:', show);
+        set({ showVisualizationSlider: show });
+      },
+
+      updateVisualizationMonthForPeriodChange: (newStartDate, newEndDate) => {
+        const state = get();
+        const currentSelectedMonth = state.selectedVisualizationMonth;
+        
+        logger.log('[ForecastGraphStore] updateVisualizationMonthForPeriodChange called with:', { newStartDate, newEndDate, currentSelectedMonth });
+        
+        if (!newStartDate || !newEndDate) {
+          set({ selectedVisualizationMonth: null });
+          return;
+        }
+        
+        const newMonths = get().generateForecastMonths(newStartDate, newEndDate);
+        
+        if (newMonths.length === 0) {
+          set({ selectedVisualizationMonth: null });
+          return;
+        }
+        
+        // Try to keep current selection if still valid
+        if (currentSelectedMonth) {
+          // FIXED: Ensure currentSelectedMonth is a proper Date object (handle persistence deserialization)
+          const currentMonth = currentSelectedMonth instanceof Date ? currentSelectedMonth : new Date(currentSelectedMonth);
+          
+          const isStillValid = newMonths.some(month => 
+            month.getTime() === currentMonth.getTime()
+          );
+          
+          if (isStillValid) {
+            // Ensure we store a proper Date object
+            set({ selectedVisualizationMonth: currentMonth });
+            return; // Keep current selection
+          }
+        }
+        
+        // Find closest month or default to first month
+        const closestMonth = newMonths[0]; // For now, just use first month
+        set({ selectedVisualizationMonth: closestMonth });
+      },
+
+      generateForecastMonths: (startDate, endDate) => {
+        const months: Date[] = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        // Normalize to first of month
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(1);
+        end.setHours(0, 0, 0, 0);
+        
+        const current = new Date(start);
+        while (current <= end) {
+          months.push(new Date(current));
+          current.setMonth(current.getMonth() + 1);
+        }
+        
+        return months;
+      },
+
+      getNodeValueForMonth: (nodeId, month) => {
+        const state = get();
+        const results = state.calculationResults;
+        
+        if (!results?.allNodes || !nodeId || !month) {
+          return null;
+        }
+        
+        // Find the node in calculation results
+        const nodeResult = results.allNodes.find((node: NodeCalculationResult) => node.nodeId === nodeId);
+        if (!nodeResult) {
+          return null;
+        }
+        
+        // FIXED: Skip constant nodes - they don't need visualization
+        if ((nodeResult.nodeType as ForecastNodeKind) === 'CONSTANT') {
+          return null;
+        }
+        
+        // FIXED: Ensure month is a proper Date object (handle persistence deserialization)
+        const monthDate = month instanceof Date ? month : new Date(month);
+        
+        const monthValue = nodeResult.values.find((value: MonthlyNodeValue) => 
+          new Date(value.date).getTime() === monthDate.getTime()
+        );
+        
+        if (!monthValue) {
+          return null;
+        }
+        
+        // FIXED: Extract forecast value based on node type
+        let value: number | null = null;
+        let valueType: 'forecast' | 'budget' | 'historical' | 'constant' | 'calculated' = 'forecast';
+        
+        switch (nodeResult.nodeType) {
+          case 'METRIC':
+            // For metrics, prefer forecast, fall back to calculated
+            value = monthValue.forecast ?? monthValue.calculated;
+            valueType = 'forecast';
+            break;
+            
+          case 'DATA':
+            // For data nodes, prefer calculated forecast value, fall back to forecast
+            value = monthValue.calculated ?? monthValue.forecast;
+            valueType = 'forecast';
+            break;
+            
+          case 'OPERATOR':
+          case 'SEED':
+            // For operator and seed nodes, use calculated value
+            value = monthValue.calculated;
+            valueType = 'calculated';
+            break;
+            
+          case 'CONSTANT':
+            // Constants should not reach here due to early return, but handle gracefully
+            return null;
+            
+          default:
+            // Fallback for any other node types
+            value = monthValue.calculated ?? monthValue.forecast;
+            valueType = 'forecast';
+        }
+        
+        if (value === null || value === undefined) {
+          return null;
+        }
+        
+        // Format the value for display
+        const formattedValue = Math.abs(value) >= 1000 
+          ? new Intl.NumberFormat('de-DE', { 
+              notation: 'compact', 
+              compactDisplay: 'short',
+              maximumFractionDigits: 1 
+            }).format(value)
+          : new Intl.NumberFormat('de-DE', {
+              style: 'decimal',
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2
+            }).format(value);
+        
+        return {
+          nodeId,
+          month: monthDate, // Use the properly typed Date object
+          value,
+          valueType,
+          formattedValue,
+        };
+      },
     }),
     {
       name: 'forecast-graph-store',
@@ -747,6 +924,14 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
           logger.error('[ForecastGraphStore] Failed to rehydrate', error);
         } else {
           logger.log('[ForecastGraphStore] Rehydration successful', state);
+          
+          // FIXED: Restore Date objects after persistence deserialization
+          if (state && state.selectedVisualizationMonth && typeof state.selectedVisualizationMonth === 'string') {
+            state.selectedVisualizationMonth = new Date(state.selectedVisualizationMonth);
+          }
+          if (state && state.lastCalculatedAt && typeof state.lastCalculatedAt === 'string') {
+            state.lastCalculatedAt = new Date(state.lastCalculatedAt);
+          }
         }
       },
     }
@@ -755,7 +940,7 @@ export const useForecastGraphStore = create<ForecastGraphState & ForecastGraphAc
 
 // Selectors for easy state access
 export const useForecastId = () => useForecastGraphStore((state) => state.forecastId);
-export const useForecastNodes = () => useForecastGraphStore((state) => state.nodes);
+export const useForecastNodes = () => useForecastGraphStore(useShallow((state) => state.nodes));
 export const useForecastEdges = () => useForecastGraphStore(useShallow((state) => state.edges));
 export const useForecastOrganizationId = () => useForecastGraphStore((state) => state.organizationId);
 export const useForecastMetadata = () => useForecastGraphStore(
@@ -769,7 +954,7 @@ export const useIsForecastDirty = () => useForecastGraphStore((state) => state.i
 export const useSelectedNodeId = () => useForecastGraphStore((state) => state.selectedNodeId);
 export const useSelectedNode = () => {
   const nodeId = useForecastGraphStore((state) => state.selectedNodeId);
-  const nodes = useForecastGraphStore((state) => state.nodes);
+  const nodes = useForecastGraphStore(useShallow((state) => state.nodes));
   return nodes.find((node) => node.id === nodeId);
 };
 export const useIsForecastLoading = () => useForecastGraphStore((state) => state.isLoading);
@@ -816,6 +1001,40 @@ export const useSetCalculationResults = () => useForecastGraphStore((state) => s
 export const useClearCalculationResults = () => useForecastGraphStore((state) => state.clearCalculationResults);
 export const useSetCalculating = () => useForecastGraphStore((state) => state.setCalculating);
 export const useSetCalculationError = () => useForecastGraphStore((state) => state.setCalculationError);
+
+// NEW: Visualization selectors - Fixed for Zustand v5 stability
+export const useSelectedVisualizationMonth = () => useForecastGraphStore((state) => {
+  const month = state.selectedVisualizationMonth;
+  // FIXED: Ensure selector always returns proper Date object or null
+  return month === null ? null : (month instanceof Date ? month : new Date(month));
+});
+export const useShowVisualizationSlider = () => useForecastGraphStore((state) => state.showVisualizationSlider);
+
+// Cache for memoized forecast months
+let forecastMonthsCache: { key: string; months: Date[] } | null = null;
+
+// FIXED: Use stable memoized selector for forecast months to prevent infinite re-renders
+export const useForecastMonths = () => useForecastGraphStore(useShallow((state) => {
+  if (!state.forecastStartDate || !state.forecastEndDate) return [];
+  
+  // Create a stable cache key based on dates to avoid regenerating months
+  const cacheKey = `${state.forecastStartDate}-${state.forecastEndDate}`;
+  
+  // Simple memoization to ensure stable reference
+  if (!forecastMonthsCache || forecastMonthsCache.key !== cacheKey) {
+    const months = state.generateForecastMonths(state.forecastStartDate, state.forecastEndDate);
+    forecastMonthsCache = { key: cacheKey, months };
+  }
+  
+  return forecastMonthsCache.months;
+}));
+
+// NEW: Visualization action hooks
+export const useSetSelectedVisualizationMonth = () => useForecastGraphStore((state) => state.setSelectedVisualizationMonth);
+export const useSetShowVisualizationSlider = () => useForecastGraphStore((state) => state.setShowVisualizationSlider);
+export const useUpdateVisualizationMonthForPeriodChange = () => useForecastGraphStore((state) => state.updateVisualizationMonthForPeriodChange);
+export const useGenerateForecastMonths = () => useForecastGraphStore((state) => state.generateForecastMonths);
+export const useGetNodeValueForMonth = () => useForecastGraphStore((state) => state.getNodeValueForMonth);
 
 /**
  * Calculate a smart position for a new node based on the last edited node position.

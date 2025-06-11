@@ -1,4 +1,4 @@
-import type { ForecastCalculationResult } from '@/types/forecast';
+import type { ForecastCalculationResult, ExtendedForecastCalculationResult } from '@/types/forecast';
 
 // Use NEXT_PUBLIC_BACKEND_URL to point to the backend service
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -13,9 +13,19 @@ interface MonthlyForecastValueDto {
   readonly historical: number | null;
 }
 
+interface MonthlyNodeValueDto extends MonthlyForecastValueDto {
+  readonly calculated: number | null;
+}
+
 interface MetricCalculationResultDto {
   readonly metricNodeId: string;
   readonly values: MonthlyForecastValueDto[];
+}
+
+interface NodeCalculationResultDto {
+  readonly nodeId: string;
+  readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+  readonly values: MonthlyNodeValueDto[];
 }
 
 interface ForecastCalculationResultDto {
@@ -23,6 +33,7 @@ interface ForecastCalculationResultDto {
   readonly forecastId: string;
   readonly calculatedAt: string;
   readonly metrics: MetricCalculationResultDto[];
+  readonly allNodes?: NodeCalculationResultDto[];
 }
 
 interface CalculationHealthDto {
@@ -115,10 +126,10 @@ async function fetchWithAuth<T>(
 }
 
 /**
- * Transform DTO to client format
+ * Transform DTO to client format (with extended results if available)
  */
-function transformFromDto(dto: ForecastCalculationResultDto): ForecastCalculationResult {
-  return {
+function transformFromDto(dto: ForecastCalculationResultDto): ExtendedForecastCalculationResult {
+  const baseResult: ForecastCalculationResult = {
     forecastId: dto.forecastId,
     calculatedAt: new Date(dto.calculatedAt),
     metrics: dto.metrics.map(metric => ({
@@ -131,15 +142,36 @@ function transformFromDto(dto: ForecastCalculationResultDto): ForecastCalculatio
       })),
     })),
   };
+
+  // Return extended result if allNodes data is available
+  if (dto.allNodes) {
+    return {
+      ...baseResult,
+      allNodes: dto.allNodes.map(node => ({
+        nodeId: node.nodeId,
+        nodeType: node.nodeType,
+        values: node.values.map(value => ({
+          date: new Date(value.date),
+          forecast: value.forecast,
+          budget: value.budget,
+          historical: value.historical,
+          calculated: value.calculated,
+        })),
+      })),
+    };
+  }
+
+  // Return base result for backward compatibility
+  return baseResult as ExtendedForecastCalculationResult;
 }
 
 /**
  * Forecast calculation API interface
  */
 interface ForecastCalculationApi {
-  calculateForecast(forecastId: string): Promise<ForecastCalculationResult>;
-  getCalculationResults(forecastId: string): Promise<ForecastCalculationResult | null>;
-  getCalculationHistory(forecastId: string): Promise<ForecastCalculationResult[]>;
+  calculateForecast(forecastId: string): Promise<ExtendedForecastCalculationResult>;
+  getCalculationResults(forecastId: string): Promise<ExtendedForecastCalculationResult | null>;
+  getCalculationHistory(forecastId: string): Promise<ExtendedForecastCalculationResult[]>;
   checkCalculationHealth(): Promise<CalculationHealthDto>;
 }
 
@@ -150,7 +182,7 @@ export const forecastCalculationApi: ForecastCalculationApi = {
   /**
    * Trigger forecast calculation
    */
-  async calculateForecast(forecastId: string): Promise<ForecastCalculationResult> {
+  async calculateForecast(forecastId: string): Promise<ExtendedForecastCalculationResult> {
     console.log(`[ForecastCalculationApi] Triggering calculation for forecast ${forecastId}`);
     
     const response = await fetchWithAuth<ForecastCalculationResultDto>(
@@ -176,7 +208,7 @@ export const forecastCalculationApi: ForecastCalculationApi = {
   /**
    * Get latest calculation results
    */
-  async getCalculationResults(forecastId: string): Promise<ForecastCalculationResult | null> {
+  async getCalculationResults(forecastId: string): Promise<ExtendedForecastCalculationResult | null> {
     console.log(`[ForecastCalculationApi] Fetching latest results for forecast ${forecastId}`);
     
     const response = await fetchWithAuth<ForecastCalculationResultDto>(
@@ -206,7 +238,7 @@ export const forecastCalculationApi: ForecastCalculationApi = {
   /**
    * Get calculation history
    */
-  async getCalculationHistory(forecastId: string): Promise<ForecastCalculationResult[]> {
+  async getCalculationHistory(forecastId: string): Promise<ExtendedForecastCalculationResult[]> {
     console.log(`[ForecastCalculationApi] Fetching calculation history for forecast ${forecastId}`);
     
     const response = await fetchWithAuth<ForecastCalculationResultDto[]>(

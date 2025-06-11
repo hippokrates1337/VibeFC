@@ -16,13 +16,22 @@ import {
   useIsForecastDirty,
   useLoadForecast,
   useForecastOrganizationId,
-  useForecastError
+  useForecastError,
+  useSelectedVisualizationMonth,
+  useSetSelectedVisualizationMonth,
+  useShowVisualizationSlider,
+  useSetShowVisualizationSlider,
+  useForecastMonths,
+  useCalculationResults,
+  useUpdateVisualizationMonthForPeriodChange
 } from '@/lib/store/forecast-graph-store';
 import { Toaster } from '@/components/ui/toaster';
 import { forecastApi, mapForecastToClientFormat } from '@/lib/api/forecast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useOrganizationStore } from '@/lib/store/organization';
 import { CalculationResultsTable } from '@/components/forecast/calculation-results-table';
+import MonthSlider from '@/components/forecast/month-slider';
+import VisualizationControls from '@/components/forecast/visualization-controls';
 
 export default function ForecastEditorPage() {
   const { forecastId } = useParams<{ forecastId: string }>();
@@ -43,6 +52,15 @@ export default function ForecastEditorPage() {
   const currentForecastOrgId = useForecastOrganizationId();
   const currentActiveOrg = useOrganizationStore((state) => state.currentOrganization);
   const storeError = useForecastError();
+
+  // Visualization state
+  const selectedMonth = useSelectedVisualizationMonth();
+  const setSelectedMonth = useSetSelectedVisualizationMonth();
+  const showSlider = useShowVisualizationSlider();
+  const setShowSlider = useSetShowVisualizationSlider();
+  const forecastMonths = useForecastMonths();
+  const calculationResults = useCalculationResults();
+  const updateVisualizationMonthForPeriodChange = useUpdateVisualizationMonthForPeriodChange();
   
   useEffect(() => {
     if (currentActiveOrg && currentForecastOrgId && currentActiveOrg.id !== currentForecastOrgId) {
@@ -99,6 +117,11 @@ export default function ForecastEditorPage() {
   useEffect(() => {
     fetchForecastData();
   }, [fetchForecastData]);
+
+  // Effect to handle forecast period changes for visualization
+  useEffect(() => {
+    updateVisualizationMonthForPeriodChange(startDate, endDate);
+  }, [startDate, endDate, updateVisualizationMonthForPeriodChange]);
   
   const handleSave = async () => {
     if (!forecastId) return;
@@ -202,6 +225,37 @@ export default function ForecastEditorPage() {
       
       {/* Canvas */}
       <div className="flex-1 relative bg-slate-900 flex flex-col">
+        {/* Visualization Controls and Month Slider */}
+        <div className="bg-slate-800 border-b border-slate-700 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-slate-200">Visualization</h3>
+            <VisualizationControls
+              showSlider={showSlider}
+              onToggleSlider={setShowSlider}
+              disabled={!calculationResults}
+            />
+          </div>
+          
+          {showSlider && calculationResults && forecastMonths.length > 0 && (
+            <div className="space-y-2">
+              <MonthSlider
+                months={forecastMonths}
+                selectedMonth={selectedMonth}
+                onMonthChange={setSelectedMonth}
+                disabled={!calculationResults}
+              />
+            </div>
+          )}
+          
+          {showSlider && !calculationResults && (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-400">
+                Run forecast calculation to enable month visualization
+              </p>
+            </div>
+          )}
+        </div>
+
         <div className="flex-1">
           <ForecastCanvas />
         </div>

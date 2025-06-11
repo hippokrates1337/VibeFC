@@ -5,7 +5,9 @@ import { Pencil } from 'lucide-react';
 /**
  * ConstantNode displays a constant value with a label.
  */
-const ConstantNode: React.FC<NodeProps> = ({ data, selected }) => {
+const ConstantNode: React.FC<NodeProps> = ({ data, selected, id }) => {
+  // REMOVED: Visualization state for constant nodes - they don't need month-based visualization
+  // Constants have fixed values and don't participate in forecast calculations
   return (
     <div className={`relative bg-slate-800 border-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 w-48 ${
       selected ? 'border-green-500 ring-2 ring-green-400/20' : 'border-slate-600 hover:border-green-400'
@@ -41,6 +43,9 @@ const ConstantNode: React.FC<NodeProps> = ({ data, selected }) => {
         className="!w-3 !h-3 !border-2 !border-slate-800 !bg-green-500 hover:!bg-green-600 transition-colors"
         style={{ bottom: -8 }}
       />
+      
+      {/* REMOVED: No visualization overlay for constant nodes */}
+      {/* Constants have fixed values and don't need month-based visualization */}
     </div>
   );
 };

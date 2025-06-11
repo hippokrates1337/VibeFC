@@ -88,10 +88,10 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
             this.logger.log(`[ForecastCalculation] Converting graph to calculation trees`);
             const trees = graphConverter.convertToTrees(nodes, edges);
             this.logger.log(`[ForecastCalculation] Generated ${trees.length} calculation trees`);
-            this.logger.log(`[ForecastCalculation] Executing calculation for period ${forecast.forecastStartDate} to ${forecast.forecastEndDate}`);
-            const result = await calculationEngine.calculateForecast(trees, new Date(forecast.forecastStartDate), new Date(forecast.forecastEndDate), variables);
+            this.logger.log(`[ForecastCalculation] Executing extended calculation for period ${forecast.forecastStartDate} to ${forecast.forecastEndDate}`);
+            const extendedResult = await calculationEngine.calculateForecastExtended(trees, new Date(forecast.forecastStartDate), new Date(forecast.forecastEndDate), variables);
             return {
-                ...result,
+                ...extendedResult,
                 forecastId
             };
         }
@@ -240,13 +240,17 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
     async storeCalculationResults(forecastId, organizationId, results, request) {
         try {
             const client = this.supabaseService.getClientForRequest(request);
+            const storedResults = {
+                metrics: results.metrics,
+                allNodes: results.allNodes
+            };
             const { data, error } = await client
                 .from('forecast_calculation_results')
                 .insert({
                 forecast_id: forecastId,
                 organization_id: organizationId,
                 calculated_at: new Date().toISOString(),
-                results: results.metrics
+                results: storedResults
             })
                 .select()
                 .single();
@@ -262,11 +266,13 @@ let ForecastCalculationService = ForecastCalculationService_1 = class ForecastCa
         }
     }
     mapDatabaseResultToDto(data) {
+        const results = data.results || {};
         return {
             id: data.id,
             forecastId: data.forecast_id,
             calculatedAt: data.calculated_at,
-            metrics: data.results || []
+            metrics: results.metrics || results || [],
+            allNodes: results.allNodes || undefined
         };
     }
 };

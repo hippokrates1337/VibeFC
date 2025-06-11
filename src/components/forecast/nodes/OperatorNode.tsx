@@ -1,12 +1,25 @@
 import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { Calculator } from 'lucide-react';
+import { useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } from '@/lib/store/forecast-graph-store';
+import NodeValueOverlay from '../node-value-overlay';
 
 /**
  * OperatorNode displays the operator and input order.
  */
-const OperatorNode: React.FC<NodeProps> = ({ data, selected }) => {
+const OperatorNode: React.FC<NodeProps> = ({ data, selected, id }) => {
   const inputCount = Array.isArray(data?.inputOrder) ? data.inputOrder.length : 0;
+  
+  // Visualization state
+  const selectedMonth = useSelectedVisualizationMonth();
+  const showSlider = useShowVisualizationSlider();
+  const getNodeValueForMonth = useGetNodeValueForMonth();
+
+  // Get node value for visualization
+  const nodeValue = React.useMemo(() => {
+    if (!selectedMonth || !showSlider || !id) return null;
+    return getNodeValueForMonth(id, selectedMonth);
+  }, [selectedMonth, showSlider, id, getNodeValueForMonth]);
   
   return (
     <div className={`relative bg-slate-800 border-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 w-44 ${
@@ -49,6 +62,17 @@ const OperatorNode: React.FC<NodeProps> = ({ data, selected }) => {
         className="!w-3 !h-3 !border-2 !border-slate-800 !bg-yellow-500 hover:!bg-yellow-600 transition-colors"
         style={{ bottom: -8 }}
       />
+      
+      {/* Visualization overlay */}
+      {showSlider && nodeValue && (
+        <NodeValueOverlay 
+          nodeId={id || ''}
+          value={nodeValue}
+          nodeType="OPERATOR"
+          position="bottom-right"
+          compact={true}
+        />
+      )}
     </div>
   );
 };

@@ -2,11 +2,13 @@ import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { useVariableStore } from '@/lib/store/variables';
 import { BarChart3, Calculator, Database } from 'lucide-react';
+import { useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } from '@/lib/store/forecast-graph-store';
+import NodeValueOverlay from '../node-value-overlay';
 
 /**
  * MetricNode displays label, budgetVariableId, and historicalVariableId.
  */
-const MetricNode: React.FC<NodeProps> = ({ data, selected }) => {
+const MetricNode: React.FC<NodeProps> = ({ data, selected, id }) => {
   const variables = useVariableStore((state) => state.variables);
   const budgetVariable = variables.find(v => v.id === data?.budgetVariableId);
   const historicalVariable = variables.find(v => v.id === data?.historicalVariableId);
@@ -14,6 +16,17 @@ const MetricNode: React.FC<NodeProps> = ({ data, selected }) => {
   const budgetDisplayName = budgetVariable?.name || data?.budgetVariableId || '-';
   const historicalDisplayName = historicalVariable?.name || data?.historicalVariableId || '-';
   const isCalculated = data?.useCalculated ?? false;
+
+  // Visualization state
+  const selectedMonth = useSelectedVisualizationMonth();
+  const showSlider = useShowVisualizationSlider();
+  const getNodeValueForMonth = useGetNodeValueForMonth();
+
+  // Get node value for visualization
+  const nodeValue = React.useMemo(() => {
+    if (!selectedMonth || !showSlider || !id) return null;
+    return getNodeValueForMonth(id, selectedMonth);
+  }, [selectedMonth, showSlider, id, getNodeValueForMonth]);
 
   return (
     <div className={`relative bg-slate-800 border-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 w-52 ${
@@ -24,13 +37,6 @@ const MetricNode: React.FC<NodeProps> = ({ data, selected }) => {
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 flex-shrink-0" />
           <span className="font-medium text-sm">Metric</span>
-          <div className="ml-auto flex items-center gap-1">
-            {isCalculated ? (
-              <Calculator className="h-3 w-3" />
-            ) : (
-              <Database className="h-3 w-3" />
-            )}
-          </div>
         </div>
       </div>
       
@@ -91,6 +97,17 @@ const MetricNode: React.FC<NodeProps> = ({ data, selected }) => {
         className="!w-3 !h-3 !border-2 !border-slate-800 !bg-purple-500 hover:!bg-purple-600 transition-colors"
         style={{ bottom: -8 }}
       />
+      
+      {/* Visualization overlay */}
+      {showSlider && nodeValue && (
+        <NodeValueOverlay 
+          nodeId={id || ''}
+          value={nodeValue}
+          nodeType="METRIC"
+          position="bottom-right"
+          compact={true}
+        />
+      )}
     </div>
   );
 };

@@ -18,6 +18,7 @@ These components are built using:
 - **`select.tsx`**: Dropdown select component with search and multi-select capabilities
 - **`date-picker.tsx`**: Date selection component with calendar integration
 - **`calendar.tsx`**: Calendar component for date selection
+- **`slider.tsx`**: Range slider component for numeric value selection
 
 ### Layout & Structure
 - **`card.tsx`**: Container component for grouping related content

@@ -36,15 +36,32 @@ export interface MonthlyForecastValue {
   readonly historical: number | null;
 }
 
+// Extended monthly value to include calculated values for all node types
+export interface MonthlyNodeValue extends MonthlyForecastValue {
+  readonly calculated: number | null; // For OPERATOR, SEED, and calculated METRIC nodes
+}
+
 export interface MetricCalculationResult {
   readonly metricNodeId: string;
   readonly values: MonthlyForecastValue[];
+}
+
+// New calculation result for all node types (extends existing pattern)
+export interface NodeCalculationResult {
+  readonly nodeId: string;
+  readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+  readonly values: MonthlyNodeValue[];
 }
 
 export interface ForecastCalculationResult {
   readonly forecastId: string;
   readonly calculatedAt: Date;
   readonly metrics: MetricCalculationResult[];
+}
+
+// Extend existing ForecastCalculationResult to include all nodes
+export interface ExtendedForecastCalculationResult extends ForecastCalculationResult {
+  readonly allNodes: NodeCalculationResult[]; // All node calculation results
 }
 
 // Tree structure for calculation

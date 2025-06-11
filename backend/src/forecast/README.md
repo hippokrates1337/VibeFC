@@ -16,6 +16,49 @@ This directory contains the comprehensive forecast calculation system for VibeFC
 - **Connection Overhead**: Eliminated via connection pooling
 - **Memory Usage**: Reduced via client caching
 
+## 🎯 Enhanced Visualization Support (Phase 5)
+
+**✅ COMPLETED ENHANCEMENTS:**
+- **Extended Calculation Results**: All node types now tracked during calculation for visualization
+- **Enhanced Node Tracking**: `calculateForecastExtended()` method provides comprehensive node value tracking
+- **Complete Node Coverage**: DATA, OPERATOR, SEED, and METRIC nodes all get tracked values 
+- **Forecast-Only Display**: Enhanced to display only forecast values (not budget/historical)
+- **Node Type Differentiation**: All non-constant node types display appropriate calculated values
+- **Constant Node Exclusion**: CONSTANT nodes excluded from visualization (fixed values don't need month-based display)
+
+**Technical Implementation:**
+```typescript
+// Extended result structure for visualization
+interface ExtendedForecastCalculationResult extends ForecastCalculationResult {
+  readonly allNodes: NodeCalculationResult[]; // All node calculation results for visualization
+}
+
+// Enhanced evaluation methods for complete tracking
+private async evaluateDataNodeExtended(): Promise<number | null>     // Tracks variable data fetching
+private async evaluateOperatorNodeExtended(): Promise<number | null> // Tracks mathematical operations
+private async evaluateSeedNodeExtended(): Promise<number | null>     // Tracks metric references
+private async evaluateMetricNodeExtended(): Promise<number | null>   // Tracks calculated metrics
+private async evaluateConstantNodeExtended(): Promise<number | null> // Tracks constants
+
+// Enhanced node tracking during calculation  
+private storeNodeCalculationResult(
+  node: CalculationTreeNode,
+  targetDate: Date,
+  calculationType: 'forecast' | 'budget' | 'historical',
+  calculatedValue: number | null,
+  context: CalculationContext & { currentMonth: number }
+): void {
+  // Stores calculated values for all node types for visualization overlay
+}
+```
+
+**Node Type Coverage:**
+- ✅ **DATA nodes**: Variable value fetching tracked for visualization
+- ✅ **OPERATOR nodes**: Mathematical operation results tracked for visualization
+- ✅ **SEED nodes**: Metric reference values tracked for visualization  
+- ✅ **METRIC nodes**: Both calculated and data-driven metrics tracked for visualization
+- ✅ **CONSTANT nodes**: Tracked but excluded from visualization display
+
 **Architecture Changes:**
 ```typescript
 // Before: Request-scoped service injection

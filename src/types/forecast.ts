@@ -17,6 +17,29 @@ export interface ForecastCalculationResult {
   readonly metrics: MetricCalculationResult[];
 }
 
+// Extended types for visualization feature
+export interface MonthlyNodeValue extends MonthlyForecastValue {
+  readonly calculated: number | null; // For OPERATOR, SEED, and calculated METRIC nodes
+}
+
+export interface NodeCalculationResult {
+  readonly nodeId: string;
+  readonly nodeType: import('@/lib/store/forecast-graph-store').ForecastNodeKind;
+  readonly values: MonthlyNodeValue[];
+}
+
+export interface ExtendedForecastCalculationResult extends ForecastCalculationResult {
+  readonly allNodes: NodeCalculationResult[]; // All node calculation results
+}
+
+export interface NodeVisualizationValue {
+  readonly nodeId: string;
+  readonly month: Date;
+  readonly value: number | null;
+  readonly valueType: 'forecast' | 'budget' | 'historical' | 'constant' | 'calculated';
+  readonly formattedValue: string;
+}
+
 // Tree structure for calculation
 export interface CalculationTreeNode {
   readonly nodeId: string;

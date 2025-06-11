@@ -12,9 +12,30 @@ jest.mock('reactflow', () => ({
   ),
 }));
 
-// Mock the forecast graph store
+// Mock lucide-react icons
+jest.mock('lucide-react', () => ({
+  Flame: ({ className }: { className?: string }) => (
+    <div data-testid="flame-icon" className={className}>🔥</div>
+  ),
+}));
+
+// Mock NodeValueOverlay component
+jest.mock('../node-value-overlay', () => {
+  return function MockNodeValueOverlay({ nodeId, value, nodeType, position, compact }: any) {
+    return (
+      <div data-testid="node-value-overlay" data-node-id={nodeId} data-value={value} data-node-type={nodeType} data-position={position} data-compact={compact}>
+        Value: {value?.value || 'N/A'}
+      </div>
+    );
+  };
+});
+
+// Mock the forecast graph store with all required hooks
 jest.mock('@/lib/store/forecast-graph-store', () => ({
   useForecastGraphStore: jest.fn(),
+  useSelectedVisualizationMonth: jest.fn(),
+  useShowVisualizationSlider: jest.fn(), 
+  useGetNodeValueForMonth: jest.fn(),
 }));
 
 // Create a helper function to create the minimum required props
@@ -35,13 +56,27 @@ const createNodeProps = (data: any) => ({
 
 describe('SeedNode', () => {
   beforeEach(() => {
-    // Reset the mock before each test
-    jest.mocked(useForecastGraphStore).mockClear();
+    // Reset all mocks before each test
+    jest.clearAllMocks();
+    
+    // Import the mocked modules
+    const { useForecastGraphStore, useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } = require('@/lib/store/forecast-graph-store');
+    
+    // Mock the main store hook (this will be overridden in individual tests)
+    (useForecastGraphStore as jest.Mock).mockReturnValue([]);
+    
+    // Mock visualization hooks with default values
+    (useSelectedVisualizationMonth as jest.Mock).mockReturnValue(null);
+    (useShowVisualizationSlider as jest.Mock).mockReturnValue(false);
+    (useGetNodeValueForMonth as jest.Mock).mockReturnValue(jest.fn(() => null));
   });
 
   it('renders sourceMetricId and shows truncated version when no metric node found', () => {
+    // Import the mocked modules
+    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
+    
     // Mock store with no nodes
-    jest.mocked(useForecastGraphStore).mockReturnValue([]);
+    (useForecastGraphStore as jest.Mock).mockReturnValue([]);
 
     const mockData = {
       sourceMetricId: 'metric-id-123'
@@ -60,6 +95,9 @@ describe('SeedNode', () => {
   });
 
   it('renders metric label when metric node is found in store', () => {
+    // Import the mocked modules
+    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
+    
     // Mock store with a metric node
     const mockNodes = [
       {
@@ -68,7 +106,7 @@ describe('SeedNode', () => {
         data: { label: 'Test Metric Label' }
       }
     ];
-    jest.mocked(useForecastGraphStore).mockReturnValue(mockNodes);
+    (useForecastGraphStore as jest.Mock).mockReturnValue(mockNodes);
 
     const mockData = {
       sourceMetricId: 'metric-id-123'
@@ -87,7 +125,10 @@ describe('SeedNode', () => {
   });
 
   it('renders default values when data is missing', () => {
-    jest.mocked(useForecastGraphStore).mockReturnValue([]);
+    // Import the mocked modules
+    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
+    
+    (useForecastGraphStore as jest.Mock).mockReturnValue([]);
 
     render(<SeedNode {...createNodeProps({})} />);
 
@@ -100,7 +141,10 @@ describe('SeedNode', () => {
   });
 
   it('renders source and target handles', () => {
-    jest.mocked(useForecastGraphStore).mockReturnValue([]);
+    // Import the mocked modules
+    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
+    
+    (useForecastGraphStore as jest.Mock).mockReturnValue([]);
 
     render(<SeedNode {...createNodeProps({})} />);
 
@@ -114,6 +158,9 @@ describe('SeedNode', () => {
   });
 
   it('handles metric node without label gracefully', () => {
+    // Import the mocked modules
+    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
+    
     // Mock store with a metric node that has no label
     const mockNodes = [
       {
@@ -122,7 +169,7 @@ describe('SeedNode', () => {
         data: {} // No label
       }
     ];
-    jest.mocked(useForecastGraphStore).mockReturnValue(mockNodes);
+    (useForecastGraphStore as jest.Mock).mockReturnValue(mockNodes);
 
     const mockData = {
       sourceMetricId: 'metric-id-123'
@@ -134,5 +181,58 @@ describe('SeedNode', () => {
     
     // Should show fallback format "Metric {first8chars}..."
     expect(screen.getByText('Metric metric-i...')).toBeInTheDocument();
+  });
+
+  it('shows visualization overlay when slider is enabled and has value', () => {
+    // Import the mocked modules
+    const { useForecastGraphStore, useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } = require('@/lib/store/forecast-graph-store');
+    
+    // Mock store and visualization state
+    (useForecastGraphStore as jest.Mock).mockReturnValue([]);
+    (useSelectedVisualizationMonth as jest.Mock).mockReturnValue(new Date('2025-01-01'));
+    (useShowVisualizationSlider as jest.Mock).mockReturnValue(true);
+    
+    const mockNodeValue = { value: 1000, nodeId: 'test-id', nodeType: 'SEED' };
+    const mockGetNodeValue = jest.fn(() => mockNodeValue);
+    (useGetNodeValueForMonth as jest.Mock).mockReturnValue(mockGetNodeValue);
+
+    const mockData = {
+      sourceMetricId: 'metric-id-123'
+    };
+
+    render(<SeedNode {...createNodeProps(mockData)} />);
+
+    expect(screen.getByText('Seed')).toBeInTheDocument();
+    
+    // Should show the overlay
+    const overlay = screen.getByTestId('node-value-overlay');
+    expect(overlay).toBeInTheDocument();
+    expect(overlay).toHaveAttribute('data-node-id', 'test-id');
+    expect(overlay).toHaveAttribute('data-node-type', 'SEED');
+    expect(overlay).toHaveAttribute('data-position', 'bottom-right');
+    expect(overlay).toHaveAttribute('data-compact', 'true');
+  });
+
+  it('does not show visualization overlay when slider is disabled', () => {
+    // Import the mocked modules
+    const { useForecastGraphStore, useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } = require('@/lib/store/forecast-graph-store');
+    
+    // Mock store and visualization state (slider disabled)
+    (useForecastGraphStore as jest.Mock).mockReturnValue([]);
+    (useSelectedVisualizationMonth as jest.Mock).mockReturnValue(new Date('2025-01-01'));
+    (useShowVisualizationSlider as jest.Mock).mockReturnValue(false); // Disabled
+    (useGetNodeValueForMonth as jest.Mock).mockReturnValue(jest.fn(() => null));
+
+    const mockData = {
+      sourceMetricId: 'metric-id-123'
+    };
+
+    render(<SeedNode {...createNodeProps(mockData)} />);
+
+    expect(screen.getByText('Seed')).toBeInTheDocument();
+    
+    // Should not show the overlay
+    const overlay = screen.queryByTestId('node-value-overlay');
+    expect(overlay).not.toBeInTheDocument();
   });
 }); 

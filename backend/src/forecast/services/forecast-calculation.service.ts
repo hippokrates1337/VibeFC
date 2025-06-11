@@ -10,7 +10,8 @@ import { GraphConverter } from './calculation-engine/graph-converter';
 import { CalculationEngine } from './calculation-engine/calculation-engine';
 import { VariableDataService } from './calculation-engine/variable-data-service';
 import type { 
-  ForecastCalculationResult, 
+  ForecastCalculationResult,
+  ExtendedForecastCalculationResult,
   ForecastNodeClient, 
   ForecastEdgeClient,
   Variable
@@ -127,7 +128,7 @@ export class ForecastCalculationService {
     nodes: ForecastNodeClient[],
     edges: ForecastEdgeClient[],
     variables: Variable[]
-  ): Promise<ForecastCalculationResult> {
+  ): Promise<ExtendedForecastCalculationResult> {
     try {
       this.logger.log(`[ForecastCalculation] Starting real calculation engine execution`);
       
@@ -157,18 +158,18 @@ export class ForecastCalculationService {
       const trees = graphConverter.convertToTrees(nodes, edges);
       this.logger.log(`[ForecastCalculation] Generated ${trees.length} calculation trees`);
       
-      // Execute calculation
-      this.logger.log(`[ForecastCalculation] Executing calculation for period ${forecast.forecastStartDate} to ${forecast.forecastEndDate}`);
-      const result = await calculationEngine.calculateForecast(
+      // Execute extended calculation to get all node results
+      this.logger.log(`[ForecastCalculation] Executing extended calculation for period ${forecast.forecastStartDate} to ${forecast.forecastEndDate}`);
+      const extendedResult = await calculationEngine.calculateForecastExtended(
         trees,
         new Date(forecast.forecastStartDate),
         new Date(forecast.forecastEndDate),
         variables
       );
       
-      // Return result with forecast ID
+      // Return the extended result with forecast ID (backward compatible as it extends ForecastCalculationResult)
       return {
-        ...result,
+        ...extendedResult,
         forecastId
       };
       
@@ -403,11 +404,17 @@ export class ForecastCalculationService {
   private async storeCalculationResults(
     forecastId: string,
     organizationId: string,
-    results: any,
+    results: ExtendedForecastCalculationResult,
     request: Request
   ): Promise<ForecastCalculationResultDto> {
     try {
       const client = this.supabaseService.getClientForRequest(request);
+      
+      // Store the complete extended results in JSONB
+      const storedResults = {
+        metrics: results.metrics,
+        allNodes: results.allNodes // Include all node results
+      };
       
       const { data, error } = await client
         .from('forecast_calculation_results')
@@ -415,7 +422,7 @@ export class ForecastCalculationService {
           forecast_id: forecastId,
           organization_id: organizationId,
           calculated_at: new Date().toISOString(),
-          results: results.metrics // Store the metrics array as JSONB
+          results: storedResults // Store both metrics and all nodes as JSONB
         })
         .select()
         .single();
@@ -437,11 +444,14 @@ export class ForecastCalculationService {
    * @private
    */
   private mapDatabaseResultToDto(data: any): ForecastCalculationResultDto {
+    const results = data.results || {};
+    
     return {
       id: data.id,
       forecastId: data.forecast_id,
       calculatedAt: data.calculated_at,
-      metrics: data.results || []
+      metrics: results.metrics || results || [], // Handle both old and new format
+      allNodes: results.allNodes || undefined // Include extended node results if available
     };
   }
 } 

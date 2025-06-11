@@ -29,14 +29,25 @@ export interface MonthlyForecastValue {
     readonly budget: number | null;
     readonly historical: number | null;
 }
+export interface MonthlyNodeValue extends MonthlyForecastValue {
+    readonly calculated: number | null;
+}
 export interface MetricCalculationResult {
     readonly metricNodeId: string;
     readonly values: MonthlyForecastValue[];
+}
+export interface NodeCalculationResult {
+    readonly nodeId: string;
+    readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+    readonly values: MonthlyNodeValue[];
 }
 export interface ForecastCalculationResult {
     readonly forecastId: string;
     readonly calculatedAt: Date;
     readonly metrics: MetricCalculationResult[];
+}
+export interface ExtendedForecastCalculationResult extends ForecastCalculationResult {
+    readonly allNodes: NodeCalculationResult[];
 }
 export interface CalculationTreeNode {
     readonly nodeId: string;

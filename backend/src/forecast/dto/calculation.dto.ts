@@ -30,6 +30,30 @@ export class MonthlyForecastValueDto {
 }
 
 /**
+ * DTO for extended monthly node value including calculated values
+ */
+export class MonthlyNodeValueDto extends MonthlyForecastValueDto {
+  @IsOptional()
+  @IsNumber()
+  readonly calculated: number | null;
+}
+
+/**
+ * DTO for node calculation result (all node types)
+ */
+export class NodeCalculationResultDto {
+  @IsUUID()
+  readonly nodeId: string;
+
+  @IsString()
+  readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+
+  @IsArray()
+  @Type(() => MonthlyNodeValueDto)
+  readonly values: MonthlyNodeValueDto[];
+}
+
+/**
  * DTO for metric calculation result
  */
 export class MetricCalculationResultDto {
@@ -57,6 +81,11 @@ export class ForecastCalculationResultDto {
   @IsArray()
   @Type(() => MetricCalculationResultDto)
   readonly metrics: MetricCalculationResultDto[];
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => NodeCalculationResultDto)
+  readonly allNodes?: NodeCalculationResultDto[];
 }
 
 /**

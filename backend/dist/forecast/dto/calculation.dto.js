@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CalculationHealthDto = exports.ForecastCalculationResultDto = exports.MetricCalculationResultDto = exports.MonthlyForecastValueDto = exports.CalculateForecastDto = void 0;
+exports.CalculationHealthDto = exports.ForecastCalculationResultDto = exports.MetricCalculationResultDto = exports.NodeCalculationResultDto = exports.MonthlyNodeValueDto = exports.MonthlyForecastValueDto = exports.CalculateForecastDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class CalculateForecastDto {
@@ -41,6 +41,30 @@ __decorate([
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Object)
 ], MonthlyForecastValueDto.prototype, "historical", void 0);
+class MonthlyNodeValueDto extends MonthlyForecastValueDto {
+}
+exports.MonthlyNodeValueDto = MonthlyNodeValueDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Object)
+], MonthlyNodeValueDto.prototype, "calculated", void 0);
+class NodeCalculationResultDto {
+}
+exports.NodeCalculationResultDto = NodeCalculationResultDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], NodeCalculationResultDto.prototype, "nodeId", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], NodeCalculationResultDto.prototype, "nodeType", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Type)(() => MonthlyNodeValueDto),
+    __metadata("design:type", Array)
+], NodeCalculationResultDto.prototype, "values", void 0);
 class MetricCalculationResultDto {
 }
 exports.MetricCalculationResultDto = MetricCalculationResultDto;
@@ -73,6 +97,12 @@ __decorate([
     (0, class_transformer_1.Type)(() => MetricCalculationResultDto),
     __metadata("design:type", Array)
 ], ForecastCalculationResultDto.prototype, "metrics", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Type)(() => NodeCalculationResultDto),
+    __metadata("design:type", Array)
+], ForecastCalculationResultDto.prototype, "allNodes", void 0);
 class CalculationHealthDto {
 }
 exports.CalculationHealthDto = CalculationHealthDto;

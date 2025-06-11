@@ -38,6 +38,41 @@ class CalculationEngine {
             throw new Error(`Forecast calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
+    async calculateForecastExtended(trees, forecastStartDate, forecastEndDate, variables) {
+        try {
+            this.logger.log('[CalculationEngine] Starting extended forecast calculation');
+            this.logger.log(`[CalculationEngine] Period: ${forecastStartDate.toISOString()} to ${forecastEndDate.toISOString()}`);
+            this.logger.log(`[CalculationEngine] Processing ${trees.length} calculation trees`);
+            const orderedTrees = this.orderTreesByDependencies(trees);
+            this.logger.log(`[CalculationEngine] Tree processing order: [${orderedTrees.map(t => t.rootMetricNodeId).join(', ')}]`);
+            const context = {
+                variables,
+                forecastStartDate,
+                forecastEndDate,
+                calculationCache: new Map(),
+                monthlyCache: new Map(),
+                nodeCalculationResults: new Map(),
+            };
+            const metrics = [];
+            for (let i = 0; i < orderedTrees.length; i++) {
+                const tree = orderedTrees[i];
+                this.logger.log(`[CalculationEngine] Processing tree ${i + 1}/${orderedTrees.length} (metric: ${tree.rootMetricNodeId})`);
+                const metricResult = await this.calculateMetricTreeExtended(tree, context, orderedTrees);
+                metrics.push(metricResult);
+            }
+            const allNodes = this.collectAllNodeResults(context.nodeCalculationResults, trees);
+            return {
+                forecastId: '',
+                calculatedAt: new Date(),
+                metrics,
+                allNodes,
+            };
+        }
+        catch (error) {
+            this.logger.error('[CalculationEngine] Extended forecast calculation failed:', error);
+            throw new Error(`Extended forecast calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
     async calculateMetricTree(tree, context, allTrees) {
         const monthlyValues = [];
         const monthCount = this.getMonthsBetween(context.forecastStartDate, context.forecastEndDate);
@@ -47,6 +82,33 @@ class CalculationEngine {
             const forecastValue = await this.evaluateNode(tree.tree, normalizedDate, 'forecast', { ...context, currentMonth: monthOffset }, allTrees);
             const budgetValue = await this.evaluateNode(tree.tree, normalizedDate, 'budget', { ...context, currentMonth: monthOffset }, allTrees);
             const historicalValue = await this.evaluateNode(tree.tree, normalizedDate, 'historical', { ...context, currentMonth: monthOffset }, allTrees);
+            const monthlyValue = {
+                date: normalizedDate,
+                forecast: forecastValue,
+                budget: budgetValue,
+                historical: historicalValue,
+            };
+            monthlyValues.push(monthlyValue);
+            if (!context.monthlyCache.has(tree.rootMetricNodeId)) {
+                context.monthlyCache.set(tree.rootMetricNodeId, new Map());
+            }
+            context.monthlyCache.get(tree.rootMetricNodeId).set(monthOffset, monthlyValue);
+            this.logger.log(`[CalculationEngine] - Cached month ${monthOffset} for metric ${tree.rootMetricNodeId}: forecast=${forecastValue}, budget=${budgetValue}, historical=${historicalValue}`);
+        }
+        return {
+            metricNodeId: tree.rootMetricNodeId,
+            values: monthlyValues,
+        };
+    }
+    async calculateMetricTreeExtended(tree, context, allTrees) {
+        const monthlyValues = [];
+        const monthCount = this.getMonthsBetween(context.forecastStartDate, context.forecastEndDate);
+        for (let monthOffset = 0; monthOffset < monthCount; monthOffset++) {
+            const targetDate = this.addMonths(context.forecastStartDate, monthOffset);
+            const normalizedDate = this.normalizeToFirstOfMonth(targetDate);
+            const forecastValue = await this.evaluateNodeExtended(tree.tree, normalizedDate, 'forecast', { ...context, currentMonth: monthOffset }, allTrees);
+            const budgetValue = await this.evaluateNodeExtended(tree.tree, normalizedDate, 'budget', { ...context, currentMonth: monthOffset }, allTrees);
+            const historicalValue = await this.evaluateNodeExtended(tree.tree, normalizedDate, 'historical', { ...context, currentMonth: monthOffset }, allTrees);
             const monthlyValue = {
                 date: normalizedDate,
                 forecast: forecastValue,
@@ -288,6 +350,176 @@ class CalculationEngine {
         }
         this.logger.log(`[CalculationEngine] - SEED returning: ${result}`);
         return result;
+    }
+    async evaluateNodeExtended(node, targetDate, calculationType, context, allTrees) {
+        try {
+            const cacheKey = `${node.nodeId}-${targetDate.getTime()}-${calculationType}`;
+            if (context.calculationCache.has(cacheKey)) {
+                return context.calculationCache.get(cacheKey);
+            }
+            let result = null;
+            switch (node.nodeType) {
+                case 'DATA':
+                    result = await this.evaluateDataNodeExtended(node, targetDate, calculationType, context, allTrees);
+                    break;
+                case 'CONSTANT':
+                    result = await this.evaluateConstantNodeExtended(node, targetDate, calculationType, context, allTrees);
+                    break;
+                case 'OPERATOR':
+                    result = await this.evaluateOperatorNodeExtended(node, targetDate, calculationType, context, allTrees);
+                    break;
+                case 'METRIC':
+                    result = await this.evaluateMetricNodeExtended(node, targetDate, calculationType, context, allTrees);
+                    break;
+                case 'SEED':
+                    result = await this.evaluateSeedNodeExtended(node, targetDate, calculationType, context, allTrees);
+                    break;
+                default:
+                    throw new Error(`Unknown node type: ${node.nodeType}`);
+            }
+            context.calculationCache.set(cacheKey, result);
+            if (context.nodeCalculationResults) {
+                this.storeNodeCalculationResult(node, targetDate, calculationType, result, context);
+            }
+            return result;
+        }
+        catch (error) {
+            throw new Error(`Node evaluation failed for ${node.nodeId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    storeNodeCalculationResult(node, targetDate, calculationType, calculatedValue, context) {
+        if (!context.nodeCalculationResults)
+            return;
+        const nodeId = node.nodeId;
+        const monthKey = targetDate.toISOString().substring(0, 7);
+        if (!context.nodeCalculationResults.has(nodeId)) {
+            context.nodeCalculationResults.set(nodeId, []);
+        }
+        const nodeResults = context.nodeCalculationResults.get(nodeId);
+        const existingIndex = nodeResults.findIndex(r => r.date.toISOString().substring(0, 7) === monthKey);
+        const existingResult = existingIndex >= 0 ? nodeResults[existingIndex] : null;
+        const newResult = {
+            date: new Date(targetDate.getFullYear(), targetDate.getMonth(), 1),
+            forecast: existingResult?.forecast ?? null,
+            budget: existingResult?.budget ?? null,
+            historical: existingResult?.historical ?? null,
+            calculated: existingResult?.calculated ?? null,
+        };
+        switch (calculationType) {
+            case 'forecast':
+                if (node.nodeType !== 'METRIC') {
+                    newResult.forecast = calculatedValue;
+                    newResult.calculated = calculatedValue;
+                }
+                else {
+                    newResult.calculated = calculatedValue;
+                }
+                break;
+            case 'budget':
+                newResult.budget = calculatedValue;
+                break;
+            case 'historical':
+                newResult.historical = calculatedValue;
+                break;
+        }
+        if (existingIndex >= 0) {
+            nodeResults[existingIndex] = newResult;
+        }
+        else {
+            nodeResults.push(newResult);
+        }
+    }
+    async evaluateOperatorNodeExtended(node, targetDate, calculationType, context, allTrees) {
+        const operatorAttributes = node.nodeData;
+        if (!operatorAttributes.op) {
+            throw new Error(`OPERATOR node ${node.nodeId} missing operator`);
+        }
+        const orderedChildren = operatorAttributes.inputOrder
+            ? this.orderChildrenByInputOrder(node.children, operatorAttributes.inputOrder)
+            : node.children;
+        const childValues = [];
+        for (const child of orderedChildren) {
+            const childValue = await this.evaluateNodeExtended(child, targetDate, calculationType, context, allTrees);
+            if (childValue === null) {
+                return null;
+            }
+            childValues.push(childValue);
+        }
+        if (childValues.length === 0) {
+            throw new Error(`OPERATOR node ${node.nodeId} has no valid children`);
+        }
+        let result = childValues[0];
+        for (let i = 1; i < childValues.length; i++) {
+            const rightValue = childValues[i];
+            switch (operatorAttributes.op) {
+                case '+':
+                    result += rightValue;
+                    break;
+                case '-':
+                    result -= rightValue;
+                    break;
+                case '*':
+                    result *= rightValue;
+                    break;
+                case '/':
+                    if (rightValue === 0) {
+                        return null;
+                    }
+                    result /= rightValue;
+                    break;
+                case '^':
+                    result = Math.pow(result, rightValue);
+                    break;
+                default:
+                    throw new Error(`Unknown operator: ${operatorAttributes.op}`);
+            }
+        }
+        return result;
+    }
+    async evaluateDataNodeExtended(node, targetDate, calculationType, context, allTrees) {
+        return await this.evaluateDataNode(node, targetDate, calculationType, context, allTrees);
+    }
+    async evaluateConstantNodeExtended(node, targetDate, calculationType, context, allTrees) {
+        return await this.evaluateConstantNode(node, targetDate, calculationType, context, allTrees);
+    }
+    async evaluateMetricNodeExtended(node, targetDate, calculationType, context, allTrees) {
+        const metricData = node.nodeData;
+        if (node.children.length > 0) {
+            const childValues = [];
+            for (const child of node.children) {
+                const childValue = await this.evaluateNodeExtended(child, targetDate, calculationType, context, allTrees);
+                if (childValue === null) {
+                    return null;
+                }
+                childValues.push(childValue);
+            }
+            return childValues.reduce((sum, value) => sum + value, 0);
+        }
+        else {
+            return await this.evaluateMetricNode(node, targetDate, calculationType, context, allTrees);
+        }
+    }
+    async evaluateSeedNodeExtended(node, targetDate, calculationType, context, allTrees) {
+        return await this.evaluateSeedNode(node, targetDate, calculationType, context, allTrees);
+    }
+    collectAllNodeResults(nodeResults, trees) {
+        const allNodes = [];
+        const nodeMap = new Map();
+        const collectNodesFromTree = (node) => {
+            nodeMap.set(node.nodeId, { nodeType: node.nodeType });
+            node.children.forEach(child => collectNodesFromTree(child));
+        };
+        trees.forEach(tree => collectNodesFromTree(tree.tree));
+        nodeMap.forEach((nodeInfo, nodeId) => {
+            const values = nodeResults.get(nodeId) || [];
+            allNodes.push({
+                nodeId,
+                nodeType: nodeInfo.nodeType,
+                values: values.sort((a, b) => a.date.getTime() - b.date.getTime()),
+            });
+        });
+        this.logger.log(`[CalculationEngine] Collected results for ${allNodes.length} nodes`);
+        return allNodes;
     }
     orderChildrenByInputOrder(children, inputOrder) {
         const childMap = new Map();

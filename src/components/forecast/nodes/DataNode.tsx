@@ -2,14 +2,27 @@ import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { useVariableStore } from '@/lib/store/variables';
 import { Database } from 'lucide-react';
+import { useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } from '@/lib/store/forecast-graph-store';
+import NodeValueOverlay from '../node-value-overlay';
 
 /**
  * DataNode displays a variable and offset.
  */
-const DataNode: React.FC<NodeProps> = ({ data, selected }) => {
+const DataNode: React.FC<NodeProps> = ({ data, selected, id }) => {
   const variables = useVariableStore((state) => state.variables);
   const variable = variables.find(v => v.id === data?.variableId);
   const displayName = variable?.name || data?.variableId || '-';
+
+  // Visualization state
+  const selectedMonth = useSelectedVisualizationMonth();
+  const showSlider = useShowVisualizationSlider();
+  const getNodeValueForMonth = useGetNodeValueForMonth();
+
+  // Get node value for visualization
+  const nodeValue = React.useMemo(() => {
+    if (!selectedMonth || !showSlider || !id) return null;
+    return getNodeValueForMonth(id, selectedMonth);
+  }, [selectedMonth, showSlider, id, getNodeValueForMonth]);
 
   return (
     <div className={`relative bg-slate-800 border-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 w-48 ${
@@ -53,6 +66,17 @@ const DataNode: React.FC<NodeProps> = ({ data, selected }) => {
         className="!w-3 !h-3 !border-2 !border-slate-800 !bg-blue-500 hover:!bg-blue-600 transition-colors"
         style={{ bottom: -8 }}
       />
+      
+      {/* Visualization overlay */}
+      {showSlider && nodeValue && (
+        <NodeValueOverlay 
+          nodeId={id || ''}
+          value={nodeValue}
+          nodeType="DATA"
+          position="bottom-right"
+          compact={true}
+        />
+      )}
     </div>
   );
 };
