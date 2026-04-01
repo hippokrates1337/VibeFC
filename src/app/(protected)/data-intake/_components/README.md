@@ -7,8 +7,11 @@ This directory contains components that are specifically used by the Data Intake
 ### `DataIntakeContainer` (`data-intake-container.tsx`)
 Manages the overall state for the data intake feature, including data fetching, API interactions via custom hooks, and modal states. It provides data and handlers to its children (typically `page.tsx`) using a render prop pattern.
 
-### `VariableCard` (`variable-card.tsx`)
-Displays a summary of a single financial variable in a card format. It shows the variable's name, type, time series range, and number of data points. Provides actions to view details (opening `VariableDetailsModal`) or delete the variable.
+### `VariableListRow` (`variable-list-row.tsx`)
+Displays one financial variable as a **compact row** (not a large card): name, type, time-series range, and data-point count on a secondary line; a delete control (clicks do not open the modal). Clicking the row opens `VariableDetailsModal`. Uses `data-testid="variable-item"` for tests and E2E.
+
+### `variable-categories.ts`
+Pure helpers for the main page layout: `VARIABLE_CATEGORY_ORDER` (Actual → Budget → Input → Other), `getVariableCategoryLabel()` for `<h2>` section titles, and `groupVariablesByType()` which buckets variables by `Variable['type']` and sorts by name within each bucket.
 
 ### `VariableDetailsModal` (`variable-details-modal.tsx`)
 A modal dialog for viewing and comprehensively editing the details of a variable. Allows users to modify the variable's name, type, and individual time-series data points.
@@ -62,7 +65,7 @@ This file contains various helper functions used within the data intake componen
 
 ## Testing
 
-Unit tests for `DataIntakeContainer` can be found in `../__tests__/data-intake-container.test.tsx`. Unit tests for other components like `VariableCard` and `VariableDetailsModal` are located within a nested `__tests__` directory inside `src/app/(protected)/data-intake/_components/`.
+Unit tests for `DataIntakeContainer` live in `../__tests__/data-intake-container.test.tsx`. Component and helper tests in this folder include `variable-list-row.test.tsx`, `variable-categories.test.ts`, and `variable-details-modal.test.tsx` under `__tests__/`.
 The tests utilize Jest and React Testing Library.
 
 ### Mocking Strategy

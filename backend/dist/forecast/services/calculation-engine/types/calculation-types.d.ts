@@ -99,8 +99,9 @@ export interface ConstantNodeAttributes {
     value: number;
 }
 export interface OperatorNodeAttributes {
-    op: '+' | '-' | '*' | '/' | '^';
+    op: '+' | '-' | '*' | '/' | '^' | 'offset';
     inputOrder: string[];
+    offsetMonths?: number;
 }
 export interface MetricNodeAttributes {
     label: string;

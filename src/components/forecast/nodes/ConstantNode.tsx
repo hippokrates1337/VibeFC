@@ -1,11 +1,18 @@
 import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { Pencil } from 'lucide-react';
+import { formatConstantNodeValue } from '@/lib/utils/format-constant-node-value';
 
 /**
  * ConstantNode displays a constant value with a label.
  */
 const ConstantNode: React.FC<NodeProps> = ({ data, selected, id }) => {
+  const raw = data?.value;
+  const displayValue =
+    raw != null && typeof raw === 'number' && Number.isFinite(raw)
+      ? formatConstantNodeValue(raw)
+      : '-';
+
   // REMOVED: Visualization state for constant nodes - they don't need month-based visualization
   // Constants have fixed values and don't participate in forecast calculations
   return (
@@ -24,8 +31,8 @@ const ConstantNode: React.FC<NodeProps> = ({ data, selected, id }) => {
       <div className="p-3">
         <div className="text-xs text-slate-300">
           <span className="font-medium">Value:</span>
-          <div className="font-mono text-slate-100 mt-1 p-2 bg-slate-700 rounded text-sm text-center border border-slate-600 truncate" title={String(data?.value ?? '-')}>
-            {data?.value ?? '-'}
+          <div className="font-mono text-slate-100 mt-1 p-2 bg-slate-700 rounded text-sm text-center border border-slate-600 truncate" title={displayValue}>
+            {displayValue}
           </div>
         </div>
       </div>

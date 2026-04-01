@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { CalculationTree, CalculationTreeNode, SeedNodeAttributes } from '../types/calculation-types';
+import { CalculationTree, CalculationTreeNode, OperatorNodeAttributes, SeedNodeAttributes } from '../types/calculation-types';
 
 @Injectable()
 export class TreeProcessor {
@@ -14,38 +14,60 @@ export class TreeProcessor {
    * SEED nodes may reference metrics from other trees, so we need proper ordering
    */
   orderByDependencies(trees: CalculationTree[]): CalculationTree[] {
+    if (trees.length <= 1) {
+      return [...trees];
+    }
+
+    const byRoot = new Map<string, CalculationTree>();
+    const rootsOrder = new Map<string, number>();
+    for (let i = 0; i < trees.length; i++) {
+      const t = trees[i];
+      byRoot.set(t.rootMetricNodeId, t);
+      rootsOrder.set(t.rootMetricNodeId, i);
+    }
+
+    const roots = trees.map((t) => t.rootMetricNodeId);
+    const adj = new Map<string, Set<string>>();
+    const indegree = new Map<string, number>();
+
+    for (const r of roots) {
+      adj.set(r, new Set());
+      indegree.set(r, 0);
+    }
+
+    // SEED sourceMetricId may reference another tree's root metric; that tree must run first.
+    for (const tree of trees) {
+      const r = tree.rootMetricNodeId;
+      const seedDeps = new Set(this.findSeedDependencies(tree.tree));
+      for (const dep of seedDeps) {
+        if (dep === r || !byRoot.has(dep)) {
+          continue;
+        }
+        const edges = adj.get(dep)!;
+        if (!edges.has(r)) {
+          edges.add(r);
+          indegree.set(r, indegree.get(r)! + 1);
+        }
+      }
+    }
+
     const orderedTrees: CalculationTree[] = [];
     const processed = new Set<string>();
-    const inProgress = new Set<string>();
 
-    const processTree = (tree: CalculationTree): void => {
-      if (processed.has(tree.rootMetricNodeId)) {
-        return; // Already processed
+    while (orderedTrees.length < trees.length) {
+      const ready = roots.filter((rootId) => !processed.has(rootId) && indegree.get(rootId) === 0);
+      if (ready.length === 0) {
+        throw new Error(
+          'Circular cross-tree SEED dependency detected (sourceMetricId graph has a cycle)'
+        );
       }
-
-      if (inProgress.has(tree.rootMetricNodeId)) {
-        throw new Error(`Circular dependency detected involving metric: ${tree.rootMetricNodeId}`);
+      ready.sort((a, b) => rootsOrder.get(a)! - rootsOrder.get(b)!);
+      const u = ready[0];
+      processed.add(u);
+      orderedTrees.push(byRoot.get(u)!);
+      for (const v of adj.get(u) || []) {
+        indegree.set(v, indegree.get(v)! - 1);
       }
-
-      inProgress.add(tree.rootMetricNodeId);
-
-      // SEED nodes represent references to previous calculation results
-      // They don't create ordering dependencies since they use historical data
-      // Skip SEED dependency processing to avoid artificial circular dependencies
-      
-      // Find non-SEED dependencies (if any future dependency types are added)
-      // const nonSeedDependencies = this.findNonSeedDependencies(tree.tree);
-      // Currently no other dependency types exist, so skip dependency processing
-
-      // Now process this tree
-      orderedTrees.push(tree);
-      processed.add(tree.rootMetricNodeId);
-      inProgress.delete(tree.rootMetricNodeId);
-    };
-
-    // Process all trees
-    for (const tree of trees) {
-      processTree(tree);
     }
 
     return orderedTrees;
@@ -183,12 +205,17 @@ export class TreeProcessor {
    */
   private validateNodeConstraints(node: CalculationTreeNode, errors: string[]): void {
     switch (node.nodeType) {
-      case 'OPERATOR':
-        // Reference nodes don't need children since they point to calculations elsewhere
-        if (!node.isReference && (!node.children || node.children.length === 0)) {
+      case 'OPERATOR': {
+        const opAttrs = node.nodeData as OperatorNodeAttributes | undefined;
+        if (opAttrs?.op === 'offset') {
+          if (!node.isReference && (!node.children || node.children.length !== 1)) {
+            errors.push(`OPERATOR offset node ${node.nodeId} must have exactly one child`);
+          }
+        } else if (!node.isReference && (!node.children || node.children.length === 0)) {
           errors.push(`OPERATOR node ${node.nodeId} must have at least one child`);
         }
         break;
+      }
 
       case 'METRIC':
         // Reference nodes don't need children since they point to calculations elsewhere

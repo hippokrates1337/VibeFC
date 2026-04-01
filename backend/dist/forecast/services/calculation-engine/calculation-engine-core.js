@@ -258,7 +258,8 @@ let CalculationEngineCore = class CalculationEngineCore {
             case 'historical':
                 return context.periods.actualMonths.includes(month);
             case 'budget':
-                return context.periods.forecastMonths.includes(month);
+                return (context.periods.forecastMonths.includes(month) ||
+                    context.periods.actualMonths.includes(month));
             default:
                 return false;
         }

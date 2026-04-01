@@ -24,9 +24,20 @@ import {
   AlertTriangle,
   CheckCircle2,
   Eye,
-  X
+  X,
+  Info
 } from 'lucide-react';
 import { formatExecutionTime, getNodeTypeColor } from '@/lib/api/debug-calculation';
+import { formatDebugNumber } from '@/lib/utils/debug-format';
+import { buildDebugNodeIdToLabelMap } from '@/lib/utils/debug-node-label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { 
   DebugCalculationStep, 
   StepExecutionLogProps, 
@@ -34,8 +45,10 @@ import type {
   CalculationType 
 } from '@/types/debug';
 
+type StepColumnKey = keyof DebugCalculationStep | 'nodeName' | 'actions';
+
 interface StepTableColumn {
-  key: keyof DebugCalculationStep | 'actions';
+  key: StepColumnKey;
   label: string;
   width?: string;
   sortable?: boolean;
@@ -43,15 +56,33 @@ interface StepTableColumn {
 }
 
 const STEP_COLUMNS: StepTableColumn[] = [
-  { key: 'stepNumber', label: '#', width: '60px', sortable: true },
+  { key: 'stepNumber', label: '#', width: '52px', sortable: true },
   { key: 'nodeId', label: 'Node ID', width: '200px', sortable: true, filterable: true },
+  { key: 'nodeName', label: 'Node name', width: '180px', sortable: false },
   { key: 'nodeType', label: 'Type', width: '100px', sortable: true, filterable: true },
   { key: 'month', label: 'Month', width: '100px', sortable: true, filterable: true },
-  { key: 'calculationType', label: 'Calc Type', width: '100px', sortable: true, filterable: true },
+  { key: 'calculationType', label: 'Calc Type', width: '120px', sortable: true, filterable: true },
   { key: 'output', label: 'Output', width: '120px', sortable: true },
   { key: 'executionTimeMs', label: 'Time', width: '100px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '100px' }
+  { key: 'actions', label: 'Actions', width: '88px' }
 ];
+
+function getMetricBudgetHint(step: DebugCalculationStep): string | null {
+  if (step.nodeType !== 'METRIC' || step.calculationType !== 'budget') {
+    return null;
+  }
+  const a = step.nodeAttributes as { useCalculated?: boolean; budgetVariableId?: string } | undefined;
+  if (!a) {
+    return null;
+  }
+  if (a.useCalculated) {
+    return 'Budget uses the calculated subtree (useCalculated=true). It may match forecast when child logic does not differ by calculation type.';
+  }
+  if (!a.budgetVariableId) {
+    return 'No budget variable is configured; the budget value is null.';
+  }
+  return 'Budget is read from the linked BUDGET variable.';
+}
 
 type SortDirection = 'asc' | 'desc';
 type SortConfig = {
@@ -160,7 +191,7 @@ function FilterPanel({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search nodes, types, months..."
+                placeholder="Search node id, name, types, months..."
                 value={filters.searchTerm}
                 onChange={(e) => onFiltersChange({ ...filters, searchTerm: e.target.value })}
                 className="pl-10 bg-slate-800 border-slate-600 text-slate-200"
@@ -277,11 +308,21 @@ interface StepRowProps {
   step: DebugCalculationStep;
   isSelected: boolean;
   isHighlighted: boolean;
+  nodeLabel?: string;
   onStepSelect: (stepNumber: number) => void;
   onNodeHighlight: (nodeId: string) => void;
+  onOpenDetails: (step: DebugCalculationStep) => void;
 }
 
-function StepRow({ step, isSelected, isHighlighted, onStepSelect, onNodeHighlight }: StepRowProps) {
+function StepRow({
+  step,
+  isSelected,
+  isHighlighted,
+  nodeLabel,
+  onStepSelect,
+  onNodeHighlight,
+  onOpenDetails
+}: StepRowProps) {
   const handleRowClick = useCallback(() => {
     onStepSelect(step.stepNumber);
   }, [step.stepNumber, onStepSelect]);
@@ -291,30 +332,7 @@ function StepRow({ step, isSelected, isHighlighted, onStepSelect, onNodeHighligh
     onNodeHighlight(step.nodeId);
   }, [step.nodeId, onNodeHighlight]);
 
-  const formatOutput = (output: number | null): string => {
-    if (output === null) return 'null';
-    if (typeof output === 'number') {
-      if (Number.isInteger(output)) {
-        return output.toLocaleString();
-      } else {
-        return output.toFixed(2);
-      }
-    }
-    return String(output);
-  };
-
-  const formatInputs = (inputs: any[]): string => {
-    if (!inputs || inputs.length === 0) return 'none';
-    return inputs.map(input => {
-      if (typeof input === 'object' && input.value !== undefined) {
-        return formatOutput(input.value);
-      }
-      if (typeof input === 'number') {
-        return formatOutput(input);
-      }
-      return JSON.stringify(input);
-    }).join(', ');
-  };
+  const budgetHint = getMetricBudgetHint(step);
 
   return (
     <tr
@@ -338,10 +356,18 @@ function StepRow({ step, isSelected, isHighlighted, onStepSelect, onNodeHighligh
           variant="ghost"
           size="sm"
           onClick={handleNodeClick}
-          className="h-auto p-1 text-left justify-start font-mono text-blue-400 hover:text-blue-300"
+          title={step.nodeId}
+          className="h-auto max-w-full p-1 text-left justify-start font-mono text-xs text-blue-400 hover:text-blue-300"
         >
-          {step.nodeId.substring(0, 8)}...
+          <span className="block truncate">{step.nodeId}</span>
         </Button>
+      </td>
+
+      {/* Node name */}
+      <td className="px-3 py-2 text-sm text-slate-200 max-w-[180px]">
+        <span className="line-clamp-2" title={nodeLabel || ''}>
+          {nodeLabel || '—'}
+        </span>
       </td>
 
       {/* Node Type */}
@@ -362,9 +388,28 @@ function StepRow({ step, isSelected, isHighlighted, onStepSelect, onNodeHighligh
 
       {/* Calculation Type */}
       <td className="px-3 py-2">
-        <Badge variant="secondary" className="text-xs bg-slate-600">
-          {step.calculationType}
-        </Badge>
+        <div className="flex items-center gap-1">
+          <Badge variant="secondary" className="text-xs bg-slate-600">
+            {step.calculationType}
+          </Badge>
+          {budgetHint && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="text-slate-400 hover:text-slate-200"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Budget calculation context"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs bg-slate-800 border-slate-600 text-slate-200">
+                {budgetHint}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </td>
 
       {/* Output */}
@@ -376,7 +421,7 @@ function StepRow({ step, isSelected, isHighlighted, onStepSelect, onNodeHighligh
               ? 'text-slate-500' 
               : 'text-green-400'
         }`}>
-          {formatOutput(step.output)}
+          {formatDebugNumber(step.output)}
         </span>
       </td>
 
@@ -396,20 +441,23 @@ function StepRow({ step, isSelected, isHighlighted, onStepSelect, onNodeHighligh
       {/* Actions */}
       <td className="px-3 py-2">
         <div className="flex items-center gap-1">
-          {step.errorMessage && (
-            <AlertTriangle className="h-4 w-4 text-red-400" title={step.errorMessage} />
-          )}
-          {!step.errorMessage && (
-            <CheckCircle2 className="h-4 w-4 text-green-400" />
+          {step.errorMessage ? (
+            <span title={step.errorMessage}>
+              <AlertTriangle className="h-4 w-4 text-red-400" aria-hidden />
+            </span>
+          ) : (
+            <CheckCircle2 className="h-4 w-4 text-green-400" aria-hidden title="No error" />
           )}
           <Button
             variant="ghost"
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              // TODO: Show step details modal
+              onOpenDetails(step);
             }}
             className="h-6 w-6 p-0 text-slate-400 hover:text-slate-200"
+            title="View step details"
+            aria-label="View step details"
           >
             <Eye className="h-3 w-3" />
           </Button>
@@ -434,13 +482,22 @@ export function StepExecutionLog({
     showErrorsOnly: false,
     searchTerm: ''
   },
-  onFiltersChange
+  onFiltersChange,
+  calculationTree = null
 }: StepExecutionLogProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [highlightedNode, setHighlightedNode] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [detailStep, setDetailStep] = useState<DebugCalculationStep | null>(null);
+
+  const idToLabel = useMemo(() => {
+    if (!calculationTree) {
+      return new Map<string, string>();
+    }
+    return buildDebugNodeIdToLabelMap(calculationTree);
+  }, [calculationTree]);
 
   // Extract unique values for filter options
   const filterOptions = useMemo(() => {
@@ -467,12 +524,14 @@ export function StepExecutionLog({
       // Search filter
       if (filters.searchTerm) {
         const searchLower = filters.searchTerm.toLowerCase();
+        const nodeLabel = idToLabel.get(step.nodeId);
         const searchMatch = 
           step.nodeId.toLowerCase().includes(searchLower) ||
           step.nodeType.toLowerCase().includes(searchLower) ||
           step.month.toLowerCase().includes(searchLower) ||
           step.calculationType.toLowerCase().includes(searchLower) ||
-          (step.errorMessage && step.errorMessage.toLowerCase().includes(searchLower));
+          (step.errorMessage && step.errorMessage.toLowerCase().includes(searchLower)) ||
+          (nodeLabel && nodeLabel.toLowerCase().includes(searchLower));
         
         if (!searchMatch) return false;
       }
@@ -520,7 +579,7 @@ export function StepExecutionLog({
     }
 
     return filtered;
-  }, [steps, filters, sortConfig]);
+  }, [steps, filters, sortConfig, idToLabel]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredAndSortedSteps.length / pageSize);
@@ -570,6 +629,33 @@ export function StepExecutionLog({
     setHighlightedNode(nodeId);
   }, []);
 
+  const handleExportSteps = useCallback(() => {
+    const rows = filteredAndSortedSteps;
+    if (rows.length === 0) {
+      return;
+    }
+    const exportedAt = new Date().toISOString();
+    const payload = {
+      exportedAt,
+      totalSteps: steps.length,
+      exportedStepCount: rows.length,
+      steps: rows
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const stamp = exportedAt.replace(/[:.]/g, '-').slice(0, 19);
+    a.download = `vibefc-debug-calculation-steps-${stamp}.json`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [filteredAndSortedSteps, steps.length]);
+
   const getSortIcon = (key: keyof DebugCalculationStep) => {
     if (sortConfig?.key !== key) return null;
     return sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />;
@@ -600,6 +686,7 @@ export function StepExecutionLog({
   }
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="space-y-4">
       {/* Filters */}
       <FilterPanel
@@ -661,7 +748,15 @@ export function StepExecutionLog({
                   </Button>
                 </div>
               )}
-              <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-slate-600 text-slate-300"
+                onClick={handleExportSteps}
+                disabled={filteredAndSortedSteps.length === 0}
+                title="Download all steps currently shown (after filters and sort) as JSON"
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
@@ -669,7 +764,7 @@ export function StepExecutionLog({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-auto" style={{ maxHeight: '600px' }}>
+          <div className="overflow-auto overscroll-contain" style={{ maxHeight: '600px' }}>
             <table className="w-full">
               <thead className="sticky top-0 bg-slate-800 border-b border-slate-600">
                 <tr>
@@ -698,8 +793,10 @@ export function StepExecutionLog({
                     step={step}
                     isSelected={selectedStep === step.stepNumber}
                     isHighlighted={highlightedNode === step.nodeId}
+                    nodeLabel={idToLabel.get(step.nodeId)}
                     onStepSelect={handleStepSelect}
                     onNodeHighlight={handleNodeHighlight}
+                    onOpenDetails={setDetailStep}
                   />
                 ))}
               </tbody>
@@ -707,6 +804,25 @@ export function StepExecutionLog({
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={detailStep !== null} onOpenChange={(open) => !open && setDetailStep(null)}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto border-slate-700 bg-slate-900 text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-slate-100">
+              Step {detailStep?.stepNumber ?? ''} · {detailStep?.nodeId ?? ''}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Full debug payload for this calculation step (inputs, output, dependencies, node attributes).
+            </DialogDescription>
+          </DialogHeader>
+          {detailStep && (
+            <pre className="max-h-[60vh] overflow-auto rounded-md bg-slate-950 p-3 text-xs font-mono text-slate-300">
+              {JSON.stringify(detailStep, null, 2)}
+            </pre>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   );
 }

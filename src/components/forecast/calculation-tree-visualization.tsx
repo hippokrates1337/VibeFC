@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useCallback, memo, useRef, useLayoutEffect } from 'react';
+import React, { useMemo, useState, useCallback, memo, useRef, useLayoutEffect, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,15 +12,14 @@ import {
   RotateCcw, 
   Maximize2,
   Minimize2,
-  Clock,
   AlertTriangle,
   CheckCircle2
 } from 'lucide-react';
 import { getNodeTypeColor, formatExecutionTime } from '@/lib/api/debug-calculation';
+import { getDebugNodeLabel } from '@/lib/utils/debug-node-label';
 import type { 
   DebugCalculationTree, 
   DebugTreeNode, 
-  DebugCalculationStep,
   CalculationTreeVisualizationProps 
 } from '@/types/debug';
 
@@ -50,12 +49,15 @@ interface TreeLayoutConfig {
 
 const DEFAULT_LAYOUT_CONFIG: TreeLayoutConfig = {
   nodeWidth: 180,
-  nodeHeight: 60,
-  horizontalSpacing: 240,
-  verticalSpacing: 100,
+  nodeHeight: 72,
+  horizontalSpacing: 100,
+  verticalSpacing: 96,
   marginTop: 50,
   marginLeft: 50
 };
+
+/** Horizontal gap between separate root metric trees (not sibling spacing within a tree). */
+const INTER_TREE_GAP = 40;
 
 const CONTENT_PADDING = 48;
 
@@ -73,7 +75,7 @@ function calculateTreeLayout(
   const positions = new Map<string, { x: number; y: number }>();
   let currentTreeX = config.marginLeft;
 
-  trees.forEach((tree, treeIndex) => {
+  trees.forEach((tree) => {
     // Calculate positions for this tree
     const treePositions = calculateNodePositions(tree, currentTreeX, config.marginTop, config);
     
@@ -84,7 +86,7 @@ function calculateTreeLayout(
 
     // Calculate tree width for next tree positioning
     const treeWidth = calculateTreeWidth(tree, config);
-    currentTreeX += treeWidth + config.horizontalSpacing * 2;
+    currentTreeX += treeWidth + INTER_TREE_GAP;
   });
 
   return positions;
@@ -133,26 +135,8 @@ function calculateTreeWidth(node: DebugTreeNode, config: TreeLayoutConfig): numb
   return Math.max(config.nodeWidth, totalChildrenWidth + spacingWidth);
 }
 
-/**
- * Extract node label from node data
- */
-function getNodeLabel(node: DebugTreeNode): string {
-  const nodeData = node.nodeData as any;
-  
-  switch (node.nodeType) {
-    case 'METRIC':
-      return nodeData?.label || 'Unnamed Metric';
-    case 'DATA':
-      return nodeData?.name || `Data Node`;
-    case 'CONSTANT':
-      return `Constant: ${nodeData?.value !== undefined ? nodeData.value : 'N/A'}`;
-    case 'OPERATOR':
-      return `${nodeData?.op || 'Op'} (${node.children?.length || 0} inputs)`;
-    case 'SEED':
-      return 'Seed Node';
-    default:
-      return 'Unknown Node';
-  }
+function formatNodeIdPreview(nodeId: string): string {
+  return nodeId.length > 10 ? `${nodeId.substring(0, 8)}…` : nodeId;
 }
 
 /**
@@ -200,30 +184,44 @@ const TreeNodeComponent = memo(function TreeNodeComponent({ node, onNodeClick, o
               className="transition-all duration-200"
             />
 
-            {/* Node Label */}
+            {/* Node name */}
             <text
               x={DEFAULT_LAYOUT_CONFIG.nodeWidth / 2}
-              y={DEFAULT_LAYOUT_CONFIG.nodeHeight / 2 - 5}
+              y={20}
               textAnchor="middle"
               dominantBaseline="middle"
               fill="white"
-              fontSize={12}
+              fontSize={11}
               fontWeight="500"
               className="select-none pointer-events-none"
             >
               <tspan x={DEFAULT_LAYOUT_CONFIG.nodeWidth / 2} dy="0">
-                {node.label.length > 20 ? `${node.label.substring(0, 17)}...` : node.label}
+                {node.label.length > 22 ? `${node.label.substring(0, 19)}…` : node.label}
               </tspan>
             </text>
 
-            {/* Node Type Badge */}
+            {/* Node id (short) */}
             <text
               x={DEFAULT_LAYOUT_CONFIG.nodeWidth / 2}
-              y={DEFAULT_LAYOUT_CONFIG.nodeHeight / 2 + 10}
+              y={DEFAULT_LAYOUT_CONFIG.nodeHeight / 2 + 2}
               textAnchor="middle"
               dominantBaseline="middle"
-              fill="rgba(255, 255, 255, 0.8)"
-              fontSize={10}
+              fill="rgba(226, 232, 240, 0.85)"
+              fontSize={9}
+              fontFamily="ui-monospace, monospace"
+              className="select-none pointer-events-none"
+            >
+              {formatNodeIdPreview(node.id)}
+            </text>
+
+            {/* Node type */}
+            <text
+              x={DEFAULT_LAYOUT_CONFIG.nodeWidth / 2}
+              y={DEFAULT_LAYOUT_CONFIG.nodeHeight - 10}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="rgba(255, 255, 255, 0.75)"
+              fontSize={9}
               className="select-none pointer-events-none"
             >
               {node.type}
@@ -277,9 +275,10 @@ const TreeNodeComponent = memo(function TreeNodeComponent({ node, onNodeClick, o
             )}
           </g>
         </TooltipTrigger>
-        <TooltipContent className="bg-slate-800 border-slate-600 text-slate-200">
+        <TooltipContent className="bg-slate-800 border-slate-600 text-slate-200 max-w-sm">
           <div className="space-y-1">
             <div className="font-medium">{node.label}</div>
+            <div className="text-xs font-mono text-slate-400 break-all">ID: {node.id}</div>
             <div className="text-sm text-slate-400">Type: {node.type}</div>
             {node.executionTime !== undefined && (
               <div className="text-sm text-slate-400">
@@ -401,12 +400,15 @@ export function CalculationTreeVisualization({
       nodes.push({
         id: node.nodeId,
         type: node.nodeType,
-        label: getNodeLabel(node),
+        label: getDebugNodeLabel(node),
         position: positions.get(node.nodeId) || { x: 0, y: 0 },
         color: getNodeTypeColor(node.nodeType),
         isSelected: selectedNode === node.nodeId,
         isHighlighted: highlightedNodes.has(node.nodeId) || hoveredNode === node.nodeId,
-        executionOrder: tree.executionOrder.indexOf(node.nodeId) + 1 || undefined,
+        executionOrder: (() => {
+          const i = tree.executionOrder.indexOf(node.nodeId);
+          return i >= 0 ? i + 1 : undefined;
+        })(),
         executionTime,
         hasError,
         children: node.children?.map(child => child.nodeId) || [],
@@ -474,6 +476,20 @@ export function CalculationTreeVisualization({
     requestAnimationFrame(() => centerView());
   }, [isFullscreen, centerView]);
 
+  const handleWheelNative = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    setZoom(z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z + delta)));
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleWheelNative, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheelNative);
+  }, [handleWheelNative, tree]);
+
   const handleNodeClick = useCallback((nodeId: string) => {
     onNodeSelect(nodeId);
   }, [onNodeSelect]);
@@ -489,12 +505,6 @@ export function CalculationTreeVisualization({
   const handleZoomOut = () => setZoom(z => Math.max(ZOOM_MIN, z - ZOOM_STEP));
   const handleResetZoom = () => centerView();
   const handleToggleFullscreen = () => setIsFullscreen(!isFullscreen);
-
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    setZoom(z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z + delta)));
-  }, []);
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -594,11 +604,10 @@ export function CalculationTreeVisualization({
         </p>
         <div
           ref={containerRef}
-          className={`relative overflow-hidden bg-slate-900 rounded-lg touch-none select-none ${
+          className={`relative overflow-hidden overscroll-contain bg-slate-900 rounded-lg touch-none select-none ${
             isPanning ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           style={{ height: isFullscreen ? 'calc(100vh - 200px)' : '600px' }}
-          onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -660,18 +669,23 @@ export function CalculationTreeVisualization({
               </div>
             ))}
           </div>
-          <div className="mt-3 flex items-center gap-4 text-xs text-slate-400">
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3 text-green-500" />
-              <span>Success</span>
+          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+              <span>Green dot: step completed without error</span>
             </div>
-            <div className="flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3 text-red-500" />
-              <span>Error</span>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+              <span>Red dot: error during evaluation</span>
             </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-blue-500" />
-              <span>Execution Order</span>
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white ring-2 ring-white"
+                aria-hidden
+              >
+                n
+              </span>
+              <span>Blue badge: execution order (global sequence in this calculation)</span>
             </div>
           </div>
         </div>

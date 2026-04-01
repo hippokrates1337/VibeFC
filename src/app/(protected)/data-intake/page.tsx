@@ -1,23 +1,17 @@
 'use client'
 
 import { DataIntakeContainer } from './_components/data-intake-container'
-import { VariableCard } from './_components/variable-card'
+import { VariableListRow } from './_components/variable-list-row'
 import { VariableDetailsModal } from './_components/variable-details-modal'
 import { EmptyState } from './_components/state-display'
+import {
+  groupVariablesByType,
+  VARIABLE_CATEGORY_ORDER,
+  getVariableCategoryLabel
+} from './_components/variable-categories'
 import { ReactNode } from 'react'
 
-// Add debugging at the top of the page component
-console.log('🔍 DATA-INTAKE PAGE ENV CHECK:', {
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL,
-  hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-  hasBackendUrl: !!process.env.NEXT_PUBLIC_BACKEND_URL,
-  processEnvKeys: typeof process !== 'undefined' ? Object.keys(process.env).filter(k => k.startsWith('NEXT_PUBLIC_')) : 'no process'
-});
-
 export default function DataIntake(): ReactNode {
-  console.log('📊 DATA-INTAKE PAGE REACHED - Navigation successful!');
-  
   return (
     <DataIntakeContainer>
       {(props) => {
@@ -32,30 +26,48 @@ export default function DataIntake(): ReactNode {
           selectedOrgIdFromOrgStore
         } = props;
 
-        // Show empty state when no variables
         if (filteredVariables.length === 0) {
           return (
-            <EmptyState 
-              message="No variables found for the selected organization. Upload a CSV file to get started." 
+            <EmptyState
+              message="No variables found for the selected organization. Upload a CSV file to get started."
             />
           );
         }
 
+        const grouped = groupVariablesByType(filteredVariables);
+
         return (
           <>
-            {/* Variable Cards Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8" data-testid="data-table">
-              {filteredVariables.map((variable) => (
-                <VariableCard
-                  key={variable.id}
-                  variable={variable}
-                  onDelete={handleDeleteClick}
-                  onViewDetails={handleOpenDetailsModal}
-                />
-              ))}
+            <div className="mt-8 flex flex-col gap-8" data-testid="data-table">
+              {VARIABLE_CATEGORY_ORDER.map((type) => {
+                const vars = grouped[type];
+                if (vars.length === 0) {
+                  return null;
+                }
+                const sectionId = `data-intake-category-${type}`;
+                return (
+                  <section key={type} aria-labelledby={sectionId}>
+                    <h2
+                      id={sectionId}
+                      className="mb-3 text-lg font-semibold tracking-tight text-slate-200"
+                    >
+                      {getVariableCategoryLabel(type)}
+                    </h2>
+                    <div className="flex flex-col gap-2">
+                      {vars.map((variable) => (
+                        <VariableListRow
+                          key={variable.id}
+                          variable={variable}
+                          onDelete={handleDeleteClick}
+                          onViewDetails={handleOpenDetailsModal}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
 
-            {/* Variable Details Modal */}
             <VariableDetailsModal
               isOpen={isDetailsModalOpen}
               onClose={closeDetailsModal}
@@ -68,4 +80,4 @@ export default function DataIntake(): ReactNode {
       }}
     </DataIntakeContainer>
   );
-} 
+}

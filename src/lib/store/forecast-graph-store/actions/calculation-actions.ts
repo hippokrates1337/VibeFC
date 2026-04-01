@@ -10,7 +10,7 @@ import type {
   UpdatePeriodsRequest
 } from '../types';
 import type { UnifiedCalculationResult } from '@/types/forecast';
-import { monthsFromUnifiedCalculationResults } from '../utils/date-utils';
+import { compareMmYyyyAsc, monthsFromUnifiedCalculationResults } from '../utils/date-utils';
 
 function syncVisualizationMonthToResults(
   set: (partial: unknown) => void,
@@ -197,18 +197,40 @@ export const createCalculationActions = (set: (partial: any) => void, get: () =>
       // Update periods via API
       await forecastApi.updateForecastPeriods(state.forecastId, periods);
       
-      // Update local state
-      set((currentState: ForecastGraphState) => ({
-        forecastPeriods: currentState.forecastPeriods ? {
-          ...currentState.forecastPeriods,
-          ...periods,
-        } : {
-          forecastStartMonth: periods.forecastStartMonth || '',
-          forecastEndMonth: periods.forecastEndMonth || '',
-          actualStartMonth: periods.actualStartMonth || '',
-          actualEndMonth: periods.actualEndMonth || '',
-        }
-      }));
+      // Update local state and keep calculation snapshot periodInfo in sync (tables read forecastPeriods;
+      // exports/debug may still use calculationResults.periodInfo)
+      set((currentState: ForecastGraphState) => {
+        const nextForecastPeriods = currentState.forecastPeriods
+          ? {
+              ...currentState.forecastPeriods,
+              ...periods,
+            }
+          : {
+              forecastStartMonth: periods.forecastStartMonth || '',
+              forecastEndMonth: periods.forecastEndMonth || '',
+              actualStartMonth: periods.actualStartMonth || '',
+              actualEndMonth: periods.actualEndMonth || '',
+            };
+
+        const cr = currentState.calculationResults;
+        const nextCalculationResults =
+          cr && nextForecastPeriods
+            ? {
+                ...cr,
+                periodInfo: {
+                  forecastStartMonth: nextForecastPeriods.forecastStartMonth,
+                  forecastEndMonth: nextForecastPeriods.forecastEndMonth,
+                  actualStartMonth: nextForecastPeriods.actualStartMonth,
+                  actualEndMonth: nextForecastPeriods.actualEndMonth,
+                },
+              }
+            : cr;
+
+        return {
+          forecastPeriods: nextForecastPeriods,
+          calculationResults: nextCalculationResults,
+        };
+      });
       
       logger.log('[ForecastGraphStore] Forecast periods updated successfully');
     } catch (error) {
@@ -292,9 +314,14 @@ export const createCalculationActions = (set: (partial: any) => void, get: () =>
     
     // Convert unified monthly values to merged format with MM-YYYY
     const values = node.values.map((monthlyValue: any) => {
-      // Check if month is in actual period (MM-YYYY comparison)
-      const isPeriodActual = monthlyValue.month >= state.forecastPeriods!.actualStartMonth && 
-                              monthlyValue.month <= state.forecastPeriods!.actualEndMonth;
+      const actStart = state.forecastPeriods!.actualStartMonth;
+      const actEnd = state.forecastPeriods!.actualEndMonth;
+      const isPeriodActual = Boolean(
+        actStart &&
+          actEnd &&
+          compareMmYyyyAsc(actStart, monthlyValue.month) <= 0 &&
+          compareMmYyyyAsc(monthlyValue.month, actEnd) <= 0
+      );
       
       return {
         month: monthlyValue.month, // Use MM-YYYY format as required

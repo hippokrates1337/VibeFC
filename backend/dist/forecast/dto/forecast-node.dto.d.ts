@@ -19,14 +19,17 @@ export interface ConstantNodeAttributes {
     value: number;
 }
 export interface OperatorNodeAttributes {
-    op: '+' | '-' | '*' | '/' | '^';
+    op: '+' | '-' | '*' | '/' | '^' | 'offset';
     inputOrder: string[];
+    offsetMonths?: number;
 }
+export type MetricSeriesKind = 'stock' | 'flow';
 export interface MetricNodeAttributes {
     label: string;
     budgetVariableId: string;
     historicalVariableId: string;
     useCalculated: boolean;
+    metricSeriesKind?: MetricSeriesKind;
 }
 export interface SeedNodeAttributes {
     sourceMetricId: string;

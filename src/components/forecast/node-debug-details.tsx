@@ -353,7 +353,7 @@ function MonthlyResults({ steps, nodeType }: MonthlyResultsProps) {
         <CardTitle className="text-slate-100 text-sm">Monthly Calculation Results</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3 max-h-80 overflow-y-auto">
+        <div className="space-y-3 max-h-80 overflow-y-auto overscroll-contain">
           {monthlyData.map(({ month, byCalcType }) => (
             <div key={month} className="p-3 bg-slate-800 rounded">
               <div className="font-medium text-slate-200 mb-2">{month}</div>

@@ -39,6 +39,12 @@ describe('ConstantNode', () => {
     expect(screen.getByText('42')).toBeInTheDocument();
   });
 
+  it('formats large values with de-DE thousand separators', () => {
+    const mockData = { value: 1234 };
+    render(<ConstantNode {...createNodeProps(mockData)} />);
+    expect(screen.getByText('1.234')).toBeInTheDocument();
+  });
+
   it('renders default value when data is missing', () => {
     render(<ConstantNode {...createNodeProps({})} />);
 

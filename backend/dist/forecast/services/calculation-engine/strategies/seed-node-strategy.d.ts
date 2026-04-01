@@ -13,6 +13,7 @@ export declare class SeedNodeStrategy implements NodeEvaluationStrategy {
         errors: string[];
     };
     private isFirstMonthInPeriod;
+    private getSameMonthHistoricalValueFromSourceMetric;
     private getHistoricalValueFromSourceMetric;
     private getPreviousMonthValueFromSourceMetric;
     private findSourceMetricNode;

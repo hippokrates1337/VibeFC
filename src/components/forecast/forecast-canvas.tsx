@@ -1,4 +1,4 @@
-import React, { useCallback, MouseEvent, useEffect, useState, useRef } from 'react';
+import React, { useCallback, MouseEvent, useEffect, useRef } from 'react';
 import ReactFlow, {
   Controls,
   Background,
@@ -48,7 +48,7 @@ const ReactFlowErrorSuppressor: React.FC = () => {
  * This is critical for React Flow v11+ to prevent warnings about creating new objects.
  */
 const ForecastCanvas: React.FC = () => {
-  const { nodes, edges } = useForecastGraph();
+  const { nodes, edges, configPanelOpen } = useForecastGraph();
   const { deleteNode, deleteEdge, openConfigPanelForNode, onNodesChange: onNodesChangeFromStore, onEdgesChange: onEdgesChangeFromStore, addEdge: addEdgeStore, setSelectedNodeId } = useForecastGraphActions();
   
   // Use refs to track selected elements to avoid triggering useEffect on selection changes
@@ -58,24 +58,25 @@ const ForecastCanvas: React.FC = () => {
   // Custom keyboard handling for delete functionality
   const deletePressed = useKeyPress(['Delete', 'Backspace']);
 
-  // Handle deletion when delete key is pressed - only depends on deletePressed
+  // Handle deletion when delete key is pressed (skip while node config sheet is open)
   useEffect(() => {
-    if (deletePressed) {
-      // Delete selected nodes (and their connected edges will be deleted automatically by the store)
-      selectedNodesRef.current.forEach((node) => {
-        deleteNode(node.id);
-      });
-      
-      // Delete selected edges
-      selectedEdgesRef.current.forEach((edge) => {
-        deleteEdge(edge.id);
-      });
-      
-      // Clear the refs after deletion
-      selectedNodesRef.current = [];
-      selectedEdgesRef.current = [];
+    if (!deletePressed || configPanelOpen) {
+      return;
     }
-  }, [deletePressed]); // Only depend on deletePressed to avoid infinite loops
+    // Delete selected nodes (and their connected edges will be deleted automatically by the store)
+    selectedNodesRef.current.forEach((node) => {
+      deleteNode(node.id);
+    });
+
+    // Delete selected edges
+    selectedEdgesRef.current.forEach((edge) => {
+      deleteEdge(edge.id);
+    });
+
+    // Clear the refs after deletion
+    selectedNodesRef.current = [];
+    selectedEdgesRef.current = [];
+  }, [deletePressed, configPanelOpen, deleteNode, deleteEdge]);
 
   // Track selection changes to know what to delete - update refs instead of state
   const onSelectionChange: OnSelectionChangeFunc = useCallback(({ nodes: selectedNodes, edges: selectedEdges }) => {

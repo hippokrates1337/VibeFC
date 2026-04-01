@@ -7,24 +7,10 @@ const mockUpdateNodeData = jest.fn();
 const mockDeleteNode = jest.fn();
 const mockSetSelectedNodeId = jest.fn();
 
-jest.mock('@/lib/store/forecast-graph-store', () => ({
-  useForecastGraphStore: jest.fn((selector: any) => {
-    const mockState = {
-      selectedNodeId: 'test-node',
-      nodes: [
-        {
-          id: 'test-node',
-          type: 'DATA',
-          data: { variableId: 'var1', offsetMonths: 3 },
-          position: { x: 100, y: 100 },
-        },
-      ],
-      updateNodeData: mockUpdateNodeData,
-      deleteNode: mockDeleteNode,
-      setSelectedNodeId: mockSetSelectedNodeId,
-    };
-    return selector(mockState);
-  }),
+jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
+  useForecastGraph: jest.fn(),
+  useForecastGraphActions: jest.fn(),
+  useSelectedNode: jest.fn()
 }));
 
 jest.mock('@/lib/store/variables', () => ({
@@ -110,32 +96,61 @@ jest.mock('@/components/ui/toggle', () => ({
 // Import after mocks
 const NodeConfigPanel = require('../node-config-panel').default;
 
+const { useForecastGraph, useForecastGraphActions, useSelectedNode } = jest.requireMock(
+  '@/lib/store/forecast-graph-store/hooks'
+);
+
+const defaultDataNode = {
+  id: 'test-node',
+  type: 'DATA',
+  data: { variableId: 'var1', offsetMonths: 3 },
+  position: { x: 100, y: 100 }
+};
+
+function buildGraphState(overrides: Record<string, unknown> = {}) {
+  return {
+    forecastId: '',
+    forecastName: '',
+    forecastStartDate: '',
+    forecastEndDate: '',
+    organizationId: null as string | null,
+    organizationForecasts: [] as unknown[],
+    nodes: [defaultDataNode],
+    edges: [] as unknown[],
+    isDirty: false,
+    lastEditedNodePosition: null as { x: number; y: number } | null,
+    selectedNodeId: 'test-node' as string | null,
+    configPanelOpen: false,
+    isLoading: false,
+    error: null as string | null,
+    ...overrides
+  };
+}
+
+let graphState: ReturnType<typeof buildGraphState>;
+
 describe('NodeConfigPanel', () => {
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Reset to default mock state for each test
-    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
-    useForecastGraphStore.mockImplementation((selector: any) => {
-      const mockState = {
-        selectedNodeId: 'test-node',
-        nodes: [
-          {
-            id: 'test-node',
-            type: 'DATA',
-            data: { variableId: 'var1', offsetMonths: 3 },
-            position: { x: 100, y: 100 },
-          },
-        ],
-        updateNodeData: mockUpdateNodeData,
-        deleteNode: mockDeleteNode,
-        setSelectedNodeId: mockSetSelectedNodeId,
-      };
-      return selector(mockState);
+
+    graphState = buildGraphState();
+
+    useForecastGraph.mockImplementation(() => graphState);
+    useForecastGraphActions.mockImplementation(() => ({
+      updateNodeData: mockUpdateNodeData,
+      deleteNode: mockDeleteNode,
+      setSelectedNodeId: mockSetSelectedNodeId
+    }));
+    useSelectedNode.mockImplementation(() => {
+      const id = graphState.selectedNodeId;
+      if (!id) {
+        return null;
+      }
+      return graphState.nodes.find((n) => n.id === id) ?? null;
     });
-    
+
     // Use fake timers for tests that need them
     jest.useFakeTimers();
   });
@@ -166,30 +181,43 @@ describe('NodeConfigPanel', () => {
     expect(screen.getByLabelText('offsetMonths')).toBeInTheDocument();
   });
 
+  it('renders CONSTANT value with de-DE thousand separators', () => {
+    graphState = buildGraphState({
+      selectedNodeId: 'const-node',
+      nodes: [
+        {
+          id: 'const-node',
+          type: 'CONSTANT',
+          data: { name: 'My const', value: 1234 },
+          position: { x: 0, y: 0 }
+        }
+      ]
+    });
+
+    render(
+      React.createElement(NodeConfigPanel, { open: true, onOpenChange: jest.fn() })
+    );
+
+    expect(screen.getByText('Configure CONSTANT Node')).toBeInTheDocument();
+    expect(screen.getByLabelText('constant-node-value')).toHaveValue('1.234');
+  });
+
   it('renders METRIC node configuration form with toggle', () => {
-    // Override mock for METRIC node
-    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
-    useForecastGraphStore.mockImplementation((selector: any) => {
-      const mockState = {
-        selectedNodeId: 'metric-node',
-        nodes: [
-          {
-            id: 'metric-node',
-            type: 'METRIC',
-            data: { 
-              label: 'Test Metric',
-              budgetVariableId: 'var2',
-              historicalVariableId: 'var1',
-              useCalculated: false
-            },
-            position: { x: 100, y: 100 },
+    graphState = buildGraphState({
+      selectedNodeId: 'metric-node',
+      nodes: [
+        {
+          id: 'metric-node',
+          type: 'METRIC',
+          data: {
+            label: 'Test Metric',
+            budgetVariableId: 'var2',
+            historicalVariableId: 'var1',
+            useCalculated: false
           },
-        ],
-        updateNodeData: mockUpdateNodeData,
-        deleteNode: mockDeleteNode,
-        setSelectedNodeId: mockSetSelectedNodeId,
-      };
-      return selector(mockState);
+          position: { x: 100, y: 100 }
+        }
+      ]
     });
 
     render(
@@ -257,29 +285,21 @@ describe('NodeConfigPanel', () => {
   });
 
   it('toggles between Variable and Calculated mode for METRIC nodes', async () => {
-    // Override mock for METRIC node
-    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
-    useForecastGraphStore.mockImplementation((selector: any) => {
-      const mockState = {
-        selectedNodeId: 'metric-node',
-        nodes: [
-          {
-            id: 'metric-node',
-            type: 'METRIC',
-            data: { 
-              label: 'Test Metric',
-              budgetVariableId: 'var2',
-              historicalVariableId: 'var1',
-              useCalculated: false
-            },
-            position: { x: 100, y: 100 },
+    graphState = buildGraphState({
+      selectedNodeId: 'metric-node',
+      nodes: [
+        {
+          id: 'metric-node',
+          type: 'METRIC',
+          data: {
+            label: 'Test Metric',
+            budgetVariableId: 'var2',
+            historicalVariableId: 'var1',
+            useCalculated: false
           },
-        ],
-        updateNodeData: mockUpdateNodeData,
-        deleteNode: mockDeleteNode,
-        setSelectedNodeId: mockSetSelectedNodeId,
-      };
-      return selector(mockState);
+          position: { x: 100, y: 100 }
+        }
+      ]
     });
 
     render(
@@ -299,19 +319,11 @@ describe('NodeConfigPanel', () => {
   });
 
   it('renders nothing when no node is selected', () => {
-    // Override mock for no selection
-    const { useForecastGraphStore } = require('@/lib/store/forecast-graph-store');
-    useForecastGraphStore.mockImplementation((selector: any) => {
-      const mockState = {
-        selectedNodeId: null,
-        nodes: [],
-        updateNodeData: mockUpdateNodeData,
-        deleteNode: mockDeleteNode,
-        setSelectedNodeId: mockSetSelectedNodeId,
-      };
-      return selector(mockState);
+    graphState = buildGraphState({
+      selectedNodeId: null,
+      nodes: []
     });
-    
+
     const { container } = render(
       React.createElement(NodeConfigPanel, { open: true, onOpenChange: jest.fn() })
     );

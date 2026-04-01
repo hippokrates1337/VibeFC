@@ -5,6 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { NodeEvaluationStrategy } from './node-evaluation-strategy';
+import { PeriodService } from '../services/period-service';
 import { 
   CalculationTreeNode, 
   CalculationType, 
@@ -14,7 +15,8 @@ import {
 
 @Injectable()
 export class OperatorNodeStrategy implements NodeEvaluationStrategy {
-  
+  constructor(private readonly periodService: PeriodService) {}
+
   getNodeType(): string {
     return 'OPERATOR';
   }
@@ -50,9 +52,20 @@ export class OperatorNodeStrategy implements NodeEvaluationStrategy {
         return result;
       }
 
-      // Get NodeEvaluator from context to evaluate children
-      // We'll need to inject this or get it from a service locator
       const nodeEvaluator = this.getNodeEvaluator(context);
+
+      if (attributes.op === 'offset') {
+        const result = await this.evaluateOffset(
+          node,
+          month,
+          calculationType,
+          context,
+          nodeEvaluator,
+          attributes,
+          cacheKey
+        );
+        return result;
+      }
       
       // Evaluate children in the specified input order
       const childValues: number[] = [];
@@ -102,6 +115,72 @@ export class OperatorNodeStrategy implements NodeEvaluationStrategy {
     }
   }
 
+  /**
+   * Offset: evaluate the single child in the current month (cache), then return its value
+   * from `offsetMonths` periods earlier.
+   */
+  private async evaluateOffset(
+    node: CalculationTreeNode,
+    month: string,
+    calculationType: CalculationType,
+    context: CalculationContext,
+    nodeEvaluator: ReturnType<OperatorNodeStrategy['getNodeEvaluator']>,
+    attributes: OperatorNodeAttributes,
+    cacheKey: string
+  ): Promise<number | null> {
+    const offsetMonths = this.normalizeOffsetMonths(attributes.offsetMonths);
+    if (offsetMonths === null) {
+      context.logger.error(
+        `[OperatorNodeStrategy] OPERATOR offset node ${node.nodeId} has invalid offsetMonths`
+      );
+      const result = null;
+      context.cache.set(cacheKey, result);
+      return result;
+    }
+
+    const childOrder = attributes.inputOrder || node.children!.map((child) => child.nodeId);
+    if (childOrder.length !== 1) {
+      context.logger.error(
+        `[OperatorNodeStrategy] OPERATOR offset node ${node.nodeId} must have exactly one input`
+      );
+      const result = null;
+      context.cache.set(cacheKey, result);
+      return result;
+    }
+
+    const child = node.children!.find((c) => c.nodeId === childOrder[0]);
+    if (!child) {
+      context.logger.warn(
+        `[OperatorNodeStrategy] Child node ${childOrder[0]} not found for OPERATOR offset ${node.nodeId}`
+      );
+      const result = null;
+      context.cache.set(cacheKey, result);
+      return result;
+    }
+
+    await nodeEvaluator.evaluate(child, month, calculationType, context);
+
+    const priorMonth = this.periodService.subtractMonths(month, offsetMonths);
+    const result = await nodeEvaluator.evaluate(child, priorMonth, calculationType, context);
+
+    context.logger.log(
+      `[OperatorNodeStrategy] OPERATOR offset node ${node.nodeId} result: ${result} for month ${month} (lag ${offsetMonths} -> ${priorMonth})`
+    );
+    context.cache.set(cacheKey, result);
+    return result;
+  }
+
+  /** Non-negative integer, or null if invalid / missing. */
+  private normalizeOffsetMonths(raw: number | undefined): number | null {
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+    if (!Number.isFinite(raw) || raw < 0 || !Number.isInteger(raw)) {
+      return null;
+    }
+    return raw;
+  }
+
   validateNode(node: CalculationTreeNode): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
@@ -115,13 +194,19 @@ export class OperatorNodeStrategy implements NodeEvaluationStrategy {
       return { isValid: false, errors };
     }
 
-    const validOperators = ['+', '-', '*', '/', '^'];
+    const validOperators = ['+', '-', '*', '/', '^', 'offset'];
     if (!attributes.op || !validOperators.includes(attributes.op)) {
       errors.push(`Invalid operator: ${attributes.op}. Valid operators are: ${validOperators.join(', ')}`);
     }
 
-    // OPERATOR nodes must have children
-    if (!node.children || node.children.length === 0) {
+    if (attributes.op === 'offset') {
+      if (this.normalizeOffsetMonths(attributes.offsetMonths) === null) {
+        errors.push('Offset operator requires offsetMonths as a non-negative integer');
+      }
+      if (!node.children || node.children.length !== 1) {
+        errors.push('Offset operator requires exactly one child');
+      }
+    } else if (!node.children || node.children.length === 0) {
       errors.push('OPERATOR nodes must have at least one child');
     }
 

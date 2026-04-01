@@ -27,7 +27,6 @@ import {
   List,
   BarChart3,
   Settings2,
-  RefreshCw,
   Download,
   Maximize2
 } from 'lucide-react';
@@ -323,10 +322,6 @@ function DebugResultsOverview({ debugResults, onViewModeChange, currentViewMode,
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
-            <Button variant="outline" size="sm" className="border-slate-600 text-slate-300">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
           </div>
         </div>
       </CardHeader>
@@ -396,20 +391,34 @@ function DebugResultsOverview({ debugResults, onViewModeChange, currentViewMode,
 
         {/* Errors and Warnings */}
         {(debugInfo.errors?.length > 0 || debugInfo.warnings?.length > 0) && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {debugInfo.errors?.length > 0 && (
               <Alert className="border-red-600 bg-red-900/20">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-red-400">
-                  {debugInfo.errors.length} error(s) detected during calculation
+                <AlertDescription className="text-red-300">
+                  <div className="font-medium mb-2">
+                    {debugInfo.errors.length} error(s) detected during calculation
+                  </div>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-red-200/90">
+                    {debugInfo.errors.map((msg: string, i: number) => (
+                      <li key={`err-${i}`}>{msg}</li>
+                    ))}
+                  </ul>
                 </AlertDescription>
               </Alert>
             )}
             {debugInfo.warnings?.length > 0 && (
               <Alert className="border-yellow-600 bg-yellow-900/20">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-yellow-400">
-                  {debugInfo.warnings.length} warning(s) detected during calculation
+                <AlertDescription className="text-yellow-200">
+                  <div className="font-medium mb-2">
+                    {debugInfo.warnings.length} warning(s) detected during calculation
+                  </div>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-yellow-100/90">
+                    {debugInfo.warnings.map((msg: string, i: number) => (
+                      <li key={`warn-${i}`}>{msg}</li>
+                    ))}
+                  </ul>
                 </AlertDescription>
               </Alert>
             )}
@@ -651,6 +660,7 @@ export default function DebugCalcPage() {
                 onStepSelect={debugActions.selectStep}
                 filters={debug.filters}
                 onFiltersChange={debugActions.updateDebugFilters}
+                calculationTree={debug.calculationTree}
               />
             )}
 

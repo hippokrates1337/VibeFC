@@ -3,6 +3,8 @@
  * Types for the debug calculation system frontend interface
  */
 
+import type { DebugCalculationTree } from '@/lib/api/debug-calculation';
+
 // Re-export types from the API for consistency
 export type {
   DebugLevel,
@@ -88,6 +90,8 @@ export interface StepExecutionLogProps {
   onStepSelect: (stepNumber: number) => void;
   filters?: DebugFilters;
   onFiltersChange?: (filters: DebugFilters) => void;
+  /** When set, node labels are resolved for display and search. */
+  calculationTree?: DebugCalculationTree | null;
 }
 
 export interface NodeDebugDetailsProps {
@@ -144,7 +148,7 @@ export interface EdgeVisualization {
 // Export Types
 // ========================================
 
-export type ExportFormat = 'json' | 'csv' | 'xlsx';
+export type ExportFormat = 'json' | 'xlsx';
 
 export interface ExportOptions {
   format: ExportFormat;

@@ -159,8 +159,10 @@ export interface ConstantNodeAttributes {
 }
 
 export interface OperatorNodeAttributes {
-  op: '+' | '-' | '*' | '/' | '^';
+  op: '+' | '-' | '*' | '/' | '^' | 'offset';
   inputOrder: string[];
+  /** Months to lag backward; used when op === 'offset' */
+  offsetMonths?: number;
 }
 
 export interface MetricNodeAttributes {

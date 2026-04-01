@@ -1,10 +1,10 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@/test-utils';
 import '@testing-library/jest-dom';
-import { VariableCard } from '../variable-card';
+import { VariableListRow } from '../variable-list-row';
 import { Variable } from '@/lib/store/variables';
 
-describe('VariableCard', () => {
+describe('VariableListRow', () => {
   const mockVariable: Variable = {
     id: '123',
     name: 'Test Variable',
@@ -26,25 +26,26 @@ describe('VariableCard', () => {
 
   test('renders variable information correctly', () => {
     render(
-      <VariableCard 
-        variable={mockVariable} 
-        onDelete={mockOnDelete} 
-        onViewDetails={mockOnViewDetails} 
+      <VariableListRow
+        variable={mockVariable}
+        onDelete={mockOnDelete}
+        onViewDetails={mockOnViewDetails}
       />
     );
 
     expect(screen.getByText('Test Variable')).toBeInTheDocument();
-    expect(screen.getByText(/Type: ACTUAL/)).toBeInTheDocument();
-    expect(screen.getByText(/3 data points/)).toBeInTheDocument();
-    expect(screen.getByText(/01\/2023 - 03\/2023/)).toBeInTheDocument();
+    expect(screen.getByTestId('variable-item')).toHaveTextContent('ACTUAL');
+    expect(screen.getByTestId('variable-item')).toHaveTextContent('3 data points');
+    expect(screen.getByTestId('variable-item')).toHaveTextContent('01/2023');
+    expect(screen.getByTestId('variable-item')).toHaveTextContent('03/2023');
   });
 
   test('calls onDelete when delete button is clicked', () => {
     render(
-      <VariableCard 
-        variable={mockVariable} 
-        onDelete={mockOnDelete} 
-        onViewDetails={mockOnViewDetails} 
+      <VariableListRow
+        variable={mockVariable}
+        onDelete={mockOnDelete}
+        onViewDetails={mockOnViewDetails}
       />
     );
 
@@ -55,20 +56,17 @@ describe('VariableCard', () => {
     expect(mockOnViewDetails).not.toHaveBeenCalled();
   });
 
-  test('calls onViewDetails when card is clicked', () => {
+  test('calls onViewDetails when row is clicked', () => {
     render(
-      <VariableCard 
-        variable={mockVariable} 
-        onDelete={mockOnDelete} 
-        onViewDetails={mockOnViewDetails} 
+      <VariableListRow
+        variable={mockVariable}
+        onDelete={mockOnDelete}
+        onViewDetails={mockOnViewDetails}
       />
     );
 
-    // Click on the card but not on the delete button
-    const card = screen.getByText('Test Variable').closest('div');
-    if (card) {
-      fireEvent.click(card);
-    }
+    const row = screen.getByTestId('variable-item');
+    fireEvent.click(row);
 
     expect(mockOnViewDetails).toHaveBeenCalledWith(mockVariable);
     expect(mockOnDelete).not.toHaveBeenCalled();
@@ -81,16 +79,15 @@ describe('VariableCard', () => {
     };
 
     render(
-      <VariableCard 
-        variable={emptyVariable} 
-        onDelete={mockOnDelete} 
-        onViewDetails={mockOnViewDetails} 
+      <VariableListRow
+        variable={emptyVariable}
+        onDelete={mockOnDelete}
+        onViewDetails={mockOnViewDetails}
       />
     );
 
     expect(screen.getByText('Test Variable')).toBeInTheDocument();
-    expect(screen.getByText(/Type: ACTUAL/)).toBeInTheDocument();
-    expect(screen.getByText(/0 data points/)).toBeInTheDocument();
-    expect(screen.getByText('No time series data')).toBeInTheDocument();
+    expect(screen.getByTestId('variable-item')).toHaveTextContent('No time series data');
+    expect(screen.getByTestId('variable-item')).toHaveTextContent('0 data points');
   });
-}); 
+});

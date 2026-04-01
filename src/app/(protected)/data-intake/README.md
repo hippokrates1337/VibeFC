@@ -60,9 +60,10 @@ All import actions maintain synchronization between the frontend Zustand store a
 
 The main data intake page consists of:
 - File upload area for selecting CSV files (with drag-and-drop support)
-- Card-based view displaying imported variables using `VariableCard` components
-- Import button to initiate the CSV import process
-- Delete functionality for individual variables (accessible via variable cards and details modal)
+- A **single-column, vertically scrollable list** of variables, **grouped by type** in this order: **Actual** (`ACTUAL`), **Budget** (`BUDGET`), **Input** (`INPUT`), and **Other** (`UNKNOWN`). Empty groups are hidden. Within each group, variables are sorted alphabetically by name.
+- Each variable is shown as a **compact row** (`VariableListRow`): name, type, time-series date range, point count, and delete; clicking a row opens the details modal (delete uses a separate control with click propagation stopped).
+- Import flow and API status messaging as before
+- Delete functionality for individual variables (from each row and from the details modal)
 
 ### Import Modal
 
@@ -118,12 +119,13 @@ The date handling logic:
 
 The Data Intake module is organized as follows:
 
-- **`page.tsx`**: Client component that renders the main container and variable cards
+- **`page.tsx`**: Client component that renders `DataIntakeContainer` with a render prop, groups variables via `groupVariablesByType` / `VARIABLE_CATEGORY_ORDER` from `variable-categories.ts`, and renders one `<section>` per non-empty category with `VariableListRow` items. The root list wrapper keeps `data-testid="data-table"`; each row uses `data-testid="variable-item"`.
 - **`import-modal.tsx`**: Modal for reviewing and confirming data imports
 - **`delete-confirmation-modal.tsx`**: Modal for confirming variable deletion
 - **`_components/`**: Directory containing private components used only within this module
-  - `data-intake-container.tsx`: Main container component managing state and API interactions
-  - `variable-card.tsx`: Displays a summary of a single variable in card format
+  - `data-intake-container.tsx`: Main container component managing state and API interactions (render prop for `page.tsx`)
+  - `variable-list-row.tsx`: Compact row for one variable (summary + delete + open details on row click)
+  - `variable-categories.ts`: Category order, human-readable section labels, and `groupVariablesByType()` (name sort within groups)
   - `variable-details-modal.tsx`: Modal for viewing and editing variable details
   - `api-hooks.ts`: Custom hooks for API operations and CSV processing
   - `data-status.tsx`: Component for displaying API operation status notifications
@@ -145,8 +147,8 @@ The Data Intake module is organized as follows:
 3. Review the variables in the import modal
 4. Choose to add new variables or update existing ones
 5. Apply the changes to complete the import
-6. View the imported data in the variable cards
-7. Click on a variable card to view or edit its details
+6. View the imported data in the grouped list (scroll vertically; use section headings to find Actual, Budget, or Input)
+7. Click a variable row to view or edit its details in the modal
 
 ## Error Handling
 

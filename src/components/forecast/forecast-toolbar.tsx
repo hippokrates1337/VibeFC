@@ -552,12 +552,8 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
         setGraphValidation(validation);
       }} />
       
-      {/* NEW: Unified Calculation Section (Phase 7) */}
+      {/* Unified calculation trigger */}
       <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
-        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
-          <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
-          Unified Calculation
-        </h3>
         <div className="space-y-3">
           <Button 
             onClick={handleCalculate}
@@ -572,7 +568,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
             ) : (
               <>
                 <Calculator className="mr-2 h-4 w-4" />
-                Calculate All (Forecast, Historical, Budget)
+                Calculate
               </>
             )}
           </Button>

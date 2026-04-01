@@ -1,5 +1,6 @@
 import { ForecastNodeClient, ForecastEdgeClient } from '@/lib/store/forecast-graph-store';
 import { formatToMmYyyy } from '@/lib/store/forecast-graph-store/utils/date-utils';
+import type { ForecastPeriods } from '@/types/forecast';
 
 /** YYYY-MM-DD (date-only), matches backend expectations for bulk-save metadata */
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -190,6 +191,7 @@ export function mapForecastToClientFormat(combinedData: FlattenedForecastWithDet
   organizationId: string;
   nodes: ForecastNodeClient[];
   edges: ForecastEdgeClient[];
+  forecastPeriods: ForecastPeriods | null;
 } {
   // Add a check to ensure combinedData and its core forecast properties are valid
   if (!combinedData || !combinedData.id || typeof combinedData.name === 'undefined') {
@@ -202,6 +204,18 @@ export function mapForecastToClientFormat(combinedData: FlattenedForecastWithDet
     console.error('Missing date information in forecast data:', combinedData);
     throw new Error('Incomplete forecast data: Date information is missing for client mapping.');
   }
+
+  const forecastPeriods =
+    combinedData.forecastStartMonth && combinedData.forecastEndMonth
+      ? {
+          forecastStartMonth: String(combinedData.forecastStartMonth),
+          forecastEndMonth: String(combinedData.forecastEndMonth),
+          actualStartMonth:
+            combinedData.actualStartMonth != null ? String(combinedData.actualStartMonth) : '',
+          actualEndMonth:
+            combinedData.actualEndMonth != null ? String(combinedData.actualEndMonth) : ''
+        }
+      : null;
 
   return {
     id: combinedData.id,
@@ -220,6 +234,7 @@ export function mapForecastToClientFormat(combinedData: FlattenedForecastWithDet
       source: edge.sourceNodeId,
       target: edge.targetNodeId,
     })) as ForecastEdgeClient[],
+    forecastPeriods
   };
 }
 

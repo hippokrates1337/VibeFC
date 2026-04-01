@@ -8,7 +8,7 @@ A collaborative platform for creating and maintaining financial forecasts.
   - Import financial data from CSV files (comma or semicolon delimited) with flexible date and number format support (German/English).
   - Automatic date normalization to the first of the month.
   - Manage variables (types: ACTUAL, BUDGET, INPUT, UNKNOWN) with preview, add, update, or skip options during import.
-  - View, edit, and delete variables and their time series data through a card-based interface and detailed modals.
+  - View, edit, and delete variables and their time series data through a single-column list grouped by type (Actual, Budget, Input, and Other for unknown types), with detailed modals for editing.
   - Data managed via Zustand (localStorage) and synchronized with a backend per organization.
 - **Forecast Definition:** 
   - Define and configure forecast calculations
@@ -272,7 +272,7 @@ The `src/setupTests.ts` file configures the Jest testing environment, ensuring b
 **Forecast Nodes**: Calculation components
 - **DATA**: References variables with time offset
 - **CONSTANT**: Fixed numerical values
-- **OPERATOR**: Mathematical operations (+, -, *, /, ^)
+- **OPERATOR**: Mathematical operations (+, -, *, /, ^) and **Offset** (lag): returns the child’s value from N month(s) earlier, after evaluating the child in the current month
 - **METRIC**: Computes values from historical/budget data
 - **SEED**: Initializes forecast calculations
 

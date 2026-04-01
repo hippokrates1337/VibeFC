@@ -132,6 +132,17 @@ export class GraphConverter implements GraphConverterService {
       }
     });
 
+    // Rule 3b: Offset operator accepts exactly one input
+    Array.from(inputCounts.entries()).forEach(([nodeId, inputCount]) => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (node && node.type === 'OPERATOR') {
+        const op = (node.data as OperatorNodeAttributes)?.op;
+        if (op === 'offset' && inputCount !== 1) {
+          errors.push(`Offset operator node ${nodeId} must have exactly one input (found ${inputCount})`);
+        }
+      }
+    });
+
     // Additional validation rules
     this.validateNodeConnections(nodes, edges, errors, warnings);
     this.validateSeedNodeConnections(nodes, edges, errors, warnings);

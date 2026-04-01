@@ -215,6 +215,21 @@ export function flattenHierarchy(
 }
 
 /**
+ * Depth-first flatten of the full tree, ignoring expand/collapse. Used for exports.
+ */
+export function flattenHierarchyDeep(
+  hierarchicalNodes: HierarchicalNode[]
+): HierarchicalNode[] {
+  const result: HierarchicalNode[] = [];
+  const walk = (node: HierarchicalNode) => {
+    result.push(node);
+    node.children.forEach(walk);
+  };
+  hierarchicalNodes.forEach((node) => walk(node));
+  return result;
+}
+
+/**
  * Gets the complete path from root to a specific node in the hierarchy.
  * Useful for breadcrumb navigation or understanding node ancestry.
  * 
@@ -324,8 +339,14 @@ export function getNodeDisplayName(node: ForecastNodeClient): string {
       return (node.data as any).label || 'Unnamed Metric';
     case 'DATA':
       return (node.data as any).name || 'Unnamed Data';
-    case 'OPERATOR':
-      return `Operator (${(node.data as any).op || '?'})`;
+    case 'OPERATOR': {
+      const d = node.data as { op?: string; offsetMonths?: number };
+      if (d.op === 'offset') {
+        const lag = d.offsetMonths != null ? ` ${d.offsetMonths}m` : '';
+        return `Operator (offset${lag})`;
+      }
+      return `Operator (${d.op || '?'})`;
+    }
     case 'SEED':
       return 'Seed Node';
     case 'CONSTANT':

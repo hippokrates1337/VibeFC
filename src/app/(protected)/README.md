@@ -7,7 +7,7 @@ This directory utilizes a Next.js Route Group `(protected)` to organize routes t
 
 ## Available Protected Routes
 
-- **`data-intake/`** - Data management and variable upload functionality
+- **`data-intake/`** - CSV import, organization-scoped variables, and a grouped list UI (Actual / Budget / Input / Other)
 - **`forecast-definition/`** - Forecast creation and editing with graphical interface
 - **`forecast-display/`** - Forecast results visualization and historical comparison (NEW)
 - **`organizations/`** - Organization settings and member management 
