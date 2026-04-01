@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Calendar, AlertTriangle, CheckCircle, Info, Calculator } from 'lucide-react';
-import { format, isAfter, isBefore, isValid, parseISO } from 'date-fns';
+import { Calendar, AlertTriangle, CheckCircle, Calculator } from 'lucide-react';
+import { format, isValid, parseISO } from 'date-fns';
 
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   useCalculations,
   useCalculationActions
 } from '@/lib/store/forecast-graph-store/hooks';
+import { useForecastGraphStore } from '@/lib/store/forecast-graph-store/store';
 
 interface PeriodManagementPanelProps {
   className?: string;
@@ -25,14 +26,6 @@ interface ValidationResult {
   errors: string[];
   warnings: string[];
 }
-
-// Helper to format MM-YYYY to display format
-const formatMMYYYY = (mmyyyy: string): string => {
-  if (!mmyyyy || !mmyyyy.match(/^\d{2}-\d{4}$/)) return 'Not set';
-  const [month, year] = mmyyyy.split('-');
-  const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-  return format(date, 'MMM yyyy');
-};
 
 // Helper to convert Date to MM-YYYY
 const dateToMMYYYY = (date: Date): string => {
@@ -199,6 +192,10 @@ export function PeriodManagementPanel({ className }: PeriodManagementPanelProps)
 
   // Handle period changes and auto-save
   const handlePeriodChange = async (field: 'forecastStart' | 'forecastEnd' | 'actualStart' | 'actualEnd', value: string) => {
+    // Merge with latest store-backed periods so we never save empty/stale forecast months (persisted
+    // or local state can lag behind the DB after navigation).
+    const storePeriods = useForecastGraphStore.getState().forecastPeriods;
+
     // Update local state
     switch (field) {
       case 'forecastStart':
@@ -215,12 +212,19 @@ export function PeriodManagementPanel({ className }: PeriodManagementPanelProps)
         break;
     }
 
-    // Auto-save if all required fields are present and valid
     const newPeriods = {
-      forecastStartMonth: field === 'forecastStart' ? value : localForecastStart,
-      forecastEndMonth: field === 'forecastEnd' ? value : localForecastEnd,
-      actualStartMonth: field === 'actualStart' ? value : localActualStart,
-      actualEndMonth: field === 'actualEnd' ? value : localActualEnd,
+      forecastStartMonth:
+        field === 'forecastStart'
+          ? value
+          : storePeriods?.forecastStartMonth ?? localForecastStart,
+      forecastEndMonth:
+        field === 'forecastEnd'
+          ? value
+          : storePeriods?.forecastEndMonth ?? localForecastEnd,
+      actualStartMonth:
+        field === 'actualStart' ? value : storePeriods?.actualStartMonth ?? localActualStart,
+      actualEndMonth:
+        field === 'actualEnd' ? value : storePeriods?.actualEndMonth ?? localActualEnd,
     };
 
     // Only save if all required periods are set
@@ -234,20 +238,18 @@ export function PeriodManagementPanel({ className }: PeriodManagementPanelProps)
     }
   };
 
-  // Handle unified calculation
   const handleCalculate = async () => {
     if (!validation.isValid) {
       return;
     }
 
     try {
-      // Trigger all calculation types
       await calculateUnified({
         calculationTypes: ['historical', 'forecast', 'budget'],
         includeIntermediateNodes: true,
       });
     } catch (error) {
-      console.error('[PeriodManagementPanel] Unified calculation failed:', error);
+      console.error('[PeriodManagementPanel] Calculation failed:', error);
     }
   };
 
@@ -261,7 +263,7 @@ export function PeriodManagementPanel({ className }: PeriodManagementPanelProps)
           Period Management & Calculation
         </CardTitle>
         <CardDescription className="text-slate-400">
-          Configure forecast and actual periods using MM-YYYY format, then trigger unified calculation for all value types.
+          Configure forecast and actual periods (MM-YYYY), then calculate historical, forecast, and budget values in one run.
         </CardDescription>
       </CardHeader>
       
@@ -378,26 +380,6 @@ export function PeriodManagementPanel({ className }: PeriodManagementPanelProps)
           </div>
         </div>
 
-        {/* Period Summary */}
-        {(localForecastStart && localForecastEnd) && (
-          <Alert className="bg-slate-700/50 border-slate-600">
-            <Info className="h-4 w-4" />
-            <AlertTitle className="text-slate-200">Current Configuration</AlertTitle>
-            <AlertDescription className="text-slate-300">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                <div>
-                  <strong>Forecast:</strong> {formatMMYYYY(localForecastStart)} to {formatMMYYYY(localForecastEnd)}
-                </div>
-                {localActualStart && localActualEnd && (
-                  <div>
-                    <strong>Actual:</strong> {formatMMYYYY(localActualStart)} to {formatMMYYYY(localActualEnd)}
-                  </div>
-                )}
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Validation Messages */}
         {validation.errors.length > 0 && (
           <Alert variant="destructive">
@@ -442,13 +424,12 @@ export function PeriodManagementPanel({ className }: PeriodManagementPanelProps)
             <CheckCircle className="h-4 w-4" />
             <AlertTitle>Periods Configured</AlertTitle>
             <AlertDescription>
-              Periods are properly configured and saved. 
-              {isCalculating ? ' Calculating all value types...' : ' Ready for unified calculation.'}
+              Periods are properly configured and saved.
+              {isCalculating ? ' Calculating…' : ' You can run calculation when ready.'}
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Unified Calculation Button */}
         <div className="flex flex-col sm:flex-row gap-4 items-start">
           <Button
             onClick={handleCalculate}
@@ -456,7 +437,7 @@ export function PeriodManagementPanel({ className }: PeriodManagementPanelProps)
             className="bg-blue-600 hover:bg-blue-700 text-white min-w-48"
           >
             <Calculator className="h-4 w-4 mr-2" />
-            {isCalculating ? 'Calculating...' : 'Calculate All (Historical, Forecast, Budget)'}
+            {isCalculating ? 'Calculating...' : 'Calculate'}
           </Button>
           
           {calculationResults && (

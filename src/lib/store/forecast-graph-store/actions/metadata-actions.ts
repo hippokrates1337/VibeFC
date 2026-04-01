@@ -32,35 +32,33 @@ export const createMetadataActions = (set: (partial: any) => void, get: () => an
       isDirty: false, // Fresh data from server should not be dirty
       isLoading: false,
       error: null,
+      // DB-backed periods from GET /forecasts/:id — replaces stale persisted zustand values
+      forecastPeriods: data.forecastPeriods ?? null,
     });
 
-    // Auto-set reasonable default actual period if not already configured
-    // We'll set this in the state update to avoid circular dependencies
-    const forecastStart = new Date(data.startDate);
-    const currentDate = new Date();
-    
-    // Set actual period from start of previous year to end of previous month
-    const actualStart = new Date(forecastStart.getFullYear() - 1, 0, 1); // Jan 1 of previous year
-    const actualEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0); // Last day of previous month
-    
-    // Only set if actual period would be before forecast period (logical constraint)
-    if (actualEnd < forecastStart) {
-      const actualStartStr = actualStart.toISOString().split('T')[0];
-      const actualEndStr = actualEnd.toISOString().split('T')[0];
-      
-      logger.log('[ForecastGraphStore] Setting default actual period:', { actualStartStr, actualEndStr });
-      
-      set({
-        forecastPeriods: {
-          forecastStartMonth: formatToMmYyyy(data.startDate),
-          forecastEndMonth: formatToMmYyyy(data.endDate),
-          actualStartMonth: formatToMmYyyy(actualStartStr),
-          actualEndMonth: formatToMmYyyy(actualEndStr),
-        },
-      });
-      
-      // Note: Unified calculation should be triggered manually by the user
-      // to avoid circular dependencies and infinite loops
+    // Auto-set reasonable default actual period only when API did not supply MM-YYYY periods
+    if (data.forecastPeriods == null) {
+      const forecastStart = new Date(data.startDate);
+      const currentDate = new Date();
+
+      const actualStart = new Date(forecastStart.getFullYear() - 1, 0, 1);
+      const actualEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+
+      if (actualEnd < forecastStart) {
+        const actualStartStr = actualStart.toISOString().split('T')[0];
+        const actualEndStr = actualEnd.toISOString().split('T')[0];
+
+        logger.log('[ForecastGraphStore] Setting default actual period:', { actualStartStr, actualEndStr });
+
+        set({
+          forecastPeriods: {
+            forecastStartMonth: formatToMmYyyy(data.startDate),
+            forecastEndMonth: formatToMmYyyy(data.endDate),
+            actualStartMonth: formatToMmYyyy(actualStartStr),
+            actualEndMonth: formatToMmYyyy(actualEndStr),
+          },
+        });
+      }
     }
 
     logger.log('[ForecastGraphStore] Forecast loaded and store updated.');

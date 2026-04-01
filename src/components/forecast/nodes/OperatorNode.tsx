@@ -9,6 +9,12 @@ import NodeValueOverlay from '../node-value-overlay';
  */
 const OperatorNode: React.FC<NodeProps> = ({ data, selected, id }) => {
   const inputCount = Array.isArray(data?.inputOrder) ? data.inputOrder.length : 0;
+  const op = data?.op as string | undefined;
+  const offsetMonths = (data as { offsetMonths?: number })?.offsetMonths;
+  const operationLabel =
+    op === 'offset'
+      ? `offset${offsetMonths != null ? ` (${offsetMonths}m)` : ''}`
+      : op || '-';
   
   const { showVisualizationSlider: showSlider } = useVisualization();
   const nodeValue = useNodeVisualizationValue(id);
@@ -30,7 +36,7 @@ const OperatorNode: React.FC<NodeProps> = ({ data, selected, id }) => {
         <div className="text-xs text-slate-300">
           <span className="font-medium">Operation:</span>
           <div className="font-mono text-slate-100 mt-1 p-2 bg-slate-700 rounded text-lg text-center border border-slate-600 font-bold">
-            {data?.op || '-'}
+            {operationLabel}
           </div>
         </div>
         <div className="text-xs text-slate-300">

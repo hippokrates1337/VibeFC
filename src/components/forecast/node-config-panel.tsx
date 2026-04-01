@@ -31,6 +31,12 @@ import { useVariableStore, Variable } from '@/lib/store/variables';
 import { X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toggle } from '@/components/ui/toggle';
+import {
+  formatConstantNodeValue,
+  parseConstantNodeValueInput
+} from '@/lib/utils/format-constant-node-value';
+
+const PANEL_SYNC_UNSET = Symbol('panelSyncUnset');
 
 interface NodeConfigPanelProps {
   open: boolean;
@@ -177,19 +183,70 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   
   // Local state for form inputs to provide immediate UI feedback
   const [localFormData, setLocalFormData] = useState<Record<string, any>>({});
+  /** Text field for CONSTANT value (de-DE); avoids number input leading-zero issues */
+  const [constantValueText, setConstantValueText] = useState('');
+  /** Integer text drafts — avoid `type="number"` + `|| 0` forcing a stuck leading zero */
+  const [dataOffsetMonthsText, setDataOffsetMonthsText] = useState('');
+  const [operatorOffsetMonthsText, setOperatorOffsetMonthsText] = useState('');
+
+  const prevPanelNodeIdRef = useRef<string | null | typeof PANEL_SYNC_UNSET>(PANEL_SYNC_UNSET);
 
   // Debounced update function
   const debouncedUpdate = useDebouncedUpdate(300);
 
-  // Initialize local form data when selected node changes
-  // Use selectedNodeId to avoid infinite loops
+  // Initialize local form + numeric drafts only when the selected node id changes (not when `nodes` updates from store)
   useEffect(() => {
-    if (selectedNode?.data) {
-      setLocalFormData(selectedNode.data);
-    } else {
-      setLocalFormData({});
+    const sid = selectedNodeId ?? null;
+    if (sid === prevPanelNodeIdRef.current) {
+      return;
     }
-  }, [selectedNodeId]); // Only depend on selectedNodeId, not the entire node object
+    prevPanelNodeIdRef.current = sid;
+
+    if (!sid) {
+      setLocalFormData({});
+      setConstantValueText('');
+      setDataOffsetMonthsText('');
+      setOperatorOffsetMonthsText('');
+      return;
+    }
+
+    const node = nodes.find((n) => n.id === sid);
+    if (!node?.data) {
+      setLocalFormData({});
+      setConstantValueText('');
+      setDataOffsetMonthsText('');
+      setOperatorOffsetMonthsText('');
+      return;
+    }
+
+    setLocalFormData(node.data);
+
+    if (node.type === 'CONSTANT') {
+      const d = node.data as ConstantNodeAttributes;
+      const v = typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 0;
+      setConstantValueText(formatConstantNodeValue(v));
+    } else {
+      setConstantValueText('');
+    }
+
+    if (node.type === 'DATA') {
+      const d = node.data as DataNodeAttributes;
+      setDataOffsetMonthsText(String(d.offsetMonths ?? 0));
+    } else {
+      setDataOffsetMonthsText('');
+    }
+
+    if (node.type === 'OPERATOR') {
+      const d = node.data as OperatorNodeAttributes;
+      if (d.op === 'offset') {
+        setOperatorOffsetMonthsText(String(d.offsetMonths ?? 1));
+      } else {
+        setOperatorOffsetMonthsText('');
+      }
+    } else {
+      setOperatorOffsetMonthsText('');
+    }
+  }, [selectedNodeId, nodes]);
   
   const handleDeleteNode = () => {
     if (selectedNodeId) {
@@ -214,6 +271,102 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         updateNodeData(selectedNode.id, updates);
       }
     }, { [field]: value });
+  };
+
+  const handleConstantValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setConstantValueText(text);
+    const parsed = parseConstantNodeValueInput(text);
+    if (parsed !== null && Number.isFinite(parsed)) {
+      setLocalFormData((prev) => ({ ...prev, value: parsed }));
+      debouncedUpdate((updates: Record<string, any>) => {
+        if (selectedNode) {
+          updateNodeData(selectedNode.id, updates);
+        }
+      }, { value: parsed });
+    }
+  };
+
+  const handleConstantValueBlur = () => {
+    const parsed = parseConstantNodeValueInput(constantValueText);
+    const final = parsed !== null && Number.isFinite(parsed) ? parsed : 0;
+    setConstantValueText(formatConstantNodeValue(final));
+    setLocalFormData((prev) => ({ ...prev, value: final }));
+    if (selectedNode) {
+      updateNodeData(selectedNode.id, { value: final });
+    }
+  };
+
+  const handleDataOffsetMonthsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const t = e.target.value.replace(/[^\d-]/g, '');
+    setDataOffsetMonthsText(t);
+    if (t === '' || t === '-') {
+      return;
+    }
+    const p = parseInt(t, 10);
+    if (Number.isFinite(p)) {
+      setLocalFormData((prev) => ({ ...prev, offsetMonths: p }));
+      debouncedUpdate((updates: Record<string, any>) => {
+        if (selectedNode) {
+          updateNodeData(selectedNode.id, updates);
+        }
+      }, { offsetMonths: p });
+    }
+  };
+
+  const handleDataOffsetMonthsBlur = () => {
+    const p = parseInt(dataOffsetMonthsText, 10);
+    const final = Number.isFinite(p) ? p : 0;
+    setDataOffsetMonthsText(String(final));
+    setLocalFormData((prev) => ({ ...prev, offsetMonths: final }));
+    if (selectedNode) {
+      updateNodeData(selectedNode.id, { offsetMonths: final });
+    }
+  };
+
+  const handleOperatorOffsetMonthsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const t = e.target.value.replace(/\D/g, '');
+    setOperatorOffsetMonthsText(t);
+    if (t === '') {
+      return;
+    }
+    const p = parseInt(t, 10);
+    if (Number.isFinite(p)) {
+      const offsetMonths = Math.max(0, p);
+      setLocalFormData((prev) => ({ ...prev, offsetMonths }));
+      debouncedUpdate((updates: Record<string, any>) => {
+        if (selectedNode) {
+          updateNodeData(selectedNode.id, updates);
+        }
+      }, { offsetMonths });
+    }
+  };
+
+  const handleOperatorOffsetMonthsBlur = () => {
+    const p = parseInt(operatorOffsetMonthsText, 10);
+    const final = Number.isFinite(p) ? Math.max(0, p) : 1;
+    setOperatorOffsetMonthsText(String(final));
+    setLocalFormData((prev) => ({ ...prev, offsetMonths: final }));
+    if (selectedNode) {
+      updateNodeData(selectedNode.id, { offsetMonths: final });
+    }
+  };
+
+  const handleOperatorOpChange = (value: string) => {
+    if (value === 'offset') {
+      const offsetMonths = localFormData.offsetMonths ?? 1;
+      setOperatorOffsetMonthsText(String(offsetMonths));
+      const newData = { ...localFormData, op: value, offsetMonths };
+      setLocalFormData(newData);
+      debouncedUpdate((updates: Record<string, any>) => {
+        if (selectedNode) {
+          updateNodeData(selectedNode.id, updates);
+        }
+      }, { op: value, offsetMonths });
+    } else {
+      setOperatorOffsetMonthsText('');
+      handleInputChange('op', value);
+    }
   };
 
   // Render appropriate form based on node type
@@ -265,11 +418,14 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         
         <div className="space-y-1">
           <label htmlFor="offsetMonths" className="text-sm font-medium text-slate-300">Offset (months)</label>
-          <Input 
+          <Input
             id="offsetMonths"
-            type="number" 
-            value={localFormData.offsetMonths || 0}
-            onChange={(e) => handleInputChange('offsetMonths', parseInt(e.target.value) || 0)}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            value={dataOffsetMonthsText}
+            onChange={handleDataOffsetMonthsChange}
+            onBlur={handleDataOffsetMonthsBlur}
             className="bg-slate-700 border-slate-600 text-slate-200"
           />
         </div>
@@ -291,11 +447,17 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           />
         </div>
         <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-300">Value</label>
-          <Input 
-            type="number" 
-            value={localFormData.value || 0}
-            onChange={(e) => handleInputChange('value', parseFloat(e.target.value) || 0)}
+          <label className="text-sm font-medium text-slate-300" htmlFor="constant-node-value">
+            Value
+          </label>
+          <Input
+            id="constant-node-value"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            value={constantValueText}
+            onChange={handleConstantValueChange}
+            onBlur={handleConstantValueBlur}
             className="bg-slate-700 border-slate-600 text-slate-200"
           />
         </div>
@@ -303,26 +465,46 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     );
   };
 
-  const renderOperatorNodeForm = (node: ForecastNodeClient) => {
-    const data = node.data as OperatorNodeAttributes;
+  const renderOperatorNodeForm = (_node: ForecastNodeClient) => {
+    const isOffset = localFormData.op === 'offset';
     return (
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-300">Operation</label>
-        <Select 
-          value={localFormData.op || '+'} 
-          onValueChange={(value) => handleInputChange('op', value)}
-        >
-          <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
-            <SelectValue placeholder="Select operation" />
-          </SelectTrigger>
-          <SelectContent className="bg-slate-800 border-slate-600">
-            <SelectItem value="+" className="text-slate-200 hover:bg-slate-700">Add (+)</SelectItem>
-            <SelectItem value="-" className="text-slate-200 hover:bg-slate-700">Subtract (-)</SelectItem>
-            <SelectItem value="*" className="text-slate-200 hover:bg-slate-700">Multiply (*)</SelectItem>
-            <SelectItem value="/" className="text-slate-200 hover:bg-slate-700">Divide (/)</SelectItem>
-            <SelectItem value="^" className="text-slate-200 hover:bg-slate-700">Power (^)</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300">Operation</label>
+          <Select 
+            value={localFormData.op || '+'} 
+            onValueChange={handleOperatorOpChange}
+          >
+            <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
+              <SelectValue placeholder="Select operation" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-600">
+              <SelectItem value="+" className="text-slate-200 hover:bg-slate-700">Add (+)</SelectItem>
+              <SelectItem value="-" className="text-slate-200 hover:bg-slate-700">Subtract (-)</SelectItem>
+              <SelectItem value="*" className="text-slate-200 hover:bg-slate-700">Multiply (*)</SelectItem>
+              <SelectItem value="/" className="text-slate-200 hover:bg-slate-700">Divide (/)</SelectItem>
+              <SelectItem value="^" className="text-slate-200 hover:bg-slate-700">Power (^)</SelectItem>
+              <SelectItem value="offset" className="text-slate-200 hover:bg-slate-700">Offset (lag)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {isOffset && (
+          <div className="space-y-1">
+            <label htmlFor="operatorOffsetMonths" className="text-sm font-medium text-slate-300">
+              Lag (months)
+            </label>
+            <Input
+              id="operatorOffsetMonths"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={operatorOffsetMonthsText}
+              onChange={handleOperatorOffsetMonthsChange}
+              onBlur={handleOperatorOffsetMonthsBlur}
+              className="bg-slate-700 border-slate-600 text-slate-200"
+            />
+          </div>
+        )}
       </div>
     );
   };
@@ -354,6 +536,31 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             onValueChange={(value) => handleInputChange('useCalculated', value === 'calculated')}
             className="w-full"
           />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-300">FY series kind</label>
+          <p className="text-xs text-slate-500 mb-1">
+            Stock: FY uses December values. Flow: FY sums months in the calendar year.
+          </p>
+          <Select
+            value={(localFormData.metricSeriesKind as string) || 'flow'}
+            onValueChange={(value) =>
+              handleInputChange('metricSeriesKind', value as 'stock' | 'flow')
+            }
+          >
+            <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-200">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-600">
+              <SelectItem value="flow" className="text-slate-200">
+                Flow (sum months)
+              </SelectItem>
+              <SelectItem value="stock" className="text-slate-200">
+                Stock (December)
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         
         <div className="space-y-1">

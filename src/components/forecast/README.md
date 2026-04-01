@@ -11,7 +11,6 @@ This directory contains the UI components for the Graphical Forecast Definition 
 ## New Calculation Components
 
 - `graph-validation-display.tsx` - Component for displaying graph validation status with error/warning details and validation controls
-- `calculation-results-display.tsx` - Component for displaying forecast calculation results with export functionality and metric filtering
 - `calculation-results-table.tsx` - Simple scrollable table component (available as reference, no longer used in editor)
 - `calculation-error-boundary.tsx` - Error boundary component for graceful handling of calculation-related UI errors
 

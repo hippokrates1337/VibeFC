@@ -375,8 +375,11 @@ export class CalculationEngineCore {
       case 'historical':
         return context.periods.actualMonths.includes(month);
       case 'budget':
-        // Budget calculations typically use forecast period
-        return context.periods.forecastMonths.includes(month);
+        // Budget variable values for both forecast months and actual months (e.g. Jan–Mar actuals)
+        return (
+          context.periods.forecastMonths.includes(month) ||
+          context.periods.actualMonths.includes(month)
+        );
       default:
         return false;
     }

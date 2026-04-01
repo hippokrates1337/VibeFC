@@ -36,15 +36,24 @@ let SeedNodeStrategy = class SeedNodeStrategy {
         try {
             context.logger.log(`[SeedNodeStrategy] Evaluating SEED node ${node.nodeId} for month ${month}, type: ${calculationType}, sourceMetric: ${attributes.sourceMetricId}`);
             let result = null;
-            const isFirstMonth = this.isFirstMonthInPeriod(month, calculationType, context);
-            if (isFirstMonth) {
-                result = await this.getHistoricalValueFromSourceMetric(attributes.sourceMetricId, month, context);
+            const isForecastOnActualOnlyMonth = calculationType === 'forecast' &&
+                context.periods.actualMonths.includes(month) &&
+                !context.periods.forecastMonths.includes(month);
+            if (isForecastOnActualOnlyMonth) {
+                result = await this.getSameMonthHistoricalValueFromSourceMetric(attributes.sourceMetricId, month, context);
+                context.logger.log(`[SeedNodeStrategy] SEED node ${node.nodeId} (${calculationType}) result: ${result} for month ${month} (forecast on actual-only month: same-month historical)`);
             }
             else {
-                const previousMonth = this.periodService.subtractMonths(month, 1);
-                result = await this.getPreviousMonthValueFromSourceMetric(attributes.sourceMetricId, previousMonth, calculationType, context);
+                const isFirstMonth = this.isFirstMonthInPeriod(month, calculationType, context);
+                if (isFirstMonth) {
+                    result = await this.getHistoricalValueFromSourceMetric(attributes.sourceMetricId, month, context);
+                }
+                else {
+                    const previousMonth = this.periodService.subtractMonths(month, 1);
+                    result = await this.getPreviousMonthValueFromSourceMetric(attributes.sourceMetricId, previousMonth, calculationType, context);
+                }
+                context.logger.log(`[SeedNodeStrategy] SEED node ${node.nodeId} (${calculationType}) result: ${result} for month ${month} (first month: ${isFirstMonth})`);
             }
-            context.logger.log(`[SeedNodeStrategy] SEED node ${node.nodeId} (${calculationType}) result: ${result} for month ${month} (first month: ${isFirstMonth})`);
             context.cache.set(cacheKey, result);
             return result;
         }
@@ -87,6 +96,38 @@ let SeedNodeStrategy = class SeedNodeStrategy {
             default:
                 return false;
         }
+    }
+    async getSameMonthHistoricalValueFromSourceMetric(sourceMetricId, month, context) {
+        context.logger.log(`[SeedNodeStrategy] Same-month historical from metric ${sourceMetricId} for ${month} (forecast on actual-only month)`);
+        const sourceMetricNode = this.findSourceMetricNode(sourceMetricId, context);
+        if (sourceMetricNode) {
+            const metricAttributes = sourceMetricNode.nodeData;
+            if (metricAttributes?.historicalVariableId) {
+                const targetDate = this.periodService.mmyyyyToFirstOfMonth(month);
+                const historicalValue = await this.variableDataService.getVariableValue(metricAttributes.historicalVariableId, targetDate, context.variables);
+                if (historicalValue !== null) {
+                    context.logger.log(`[SeedNodeStrategy] Found historical value ${historicalValue} for month ${month} (same-month)`);
+                    return historicalValue;
+                }
+                context.logger.log(`[SeedNodeStrategy] historicalVariableId ${metricAttributes.historicalVariableId} returned null for month ${month} (same-month)`);
+            }
+            else {
+                context.logger.warn(`[SeedNodeStrategy] Source metric ${sourceMetricId} has no historicalVariableId`);
+            }
+        }
+        else {
+            context.logger.warn(`[SeedNodeStrategy] Could not find source metric node ${sourceMetricId} in calculation trees`);
+        }
+        const sourceNodeResult = context.nodeResults.get(sourceMetricId);
+        if (sourceNodeResult) {
+            const monthlyValue = sourceNodeResult.values.find((v) => v.month === month);
+            if (monthlyValue && monthlyValue.historical !== null) {
+                context.logger.log(`[SeedNodeStrategy] Fallback: calculated historical ${monthlyValue.historical} for ${month}`);
+                return monthlyValue.historical;
+            }
+        }
+        context.logger.warn(`[SeedNodeStrategy] No same-month historical data for source metric ${sourceMetricId} at ${month}`);
+        return null;
     }
     async getHistoricalValueFromSourceMetric(sourceMetricId, currentMonth, context) {
         const previousMonth = this.periodService.subtractMonths(currentMonth, 1);

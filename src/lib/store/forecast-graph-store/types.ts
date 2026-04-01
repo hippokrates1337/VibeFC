@@ -29,15 +29,22 @@ export interface ConstantNodeAttributes {
 }
 
 export interface OperatorNodeAttributes {
-  op: '+' | '-' | '*' | '/' | '^';
+  op: '+' | '-' | '*' | '/' | '^' | 'offset';
   inputOrder?: string[];
+  /** Months to lag backward; used when op === 'offset' */
+  offsetMonths?: number;
 }
+
+/** How calendar-year FY totals aggregate: stock = December point-in-time; flow = sum of months. */
+export type MetricSeriesKind = 'stock' | 'flow';
 
 export interface MetricNodeAttributes {
   label: string;
   budgetVariableId: string;
   historicalVariableId: string;
   useCalculated: boolean;
+  /** Defaults to flow when omitted (backward compatible). */
+  metricSeriesKind?: MetricSeriesKind;
 }
 
 export interface SeedNodeAttributes {
@@ -68,6 +75,8 @@ export interface LoadForecastParams {
   organizationId: string | null;
   nodes: ForecastNodeClient[];
   edges: ForecastEdgeClient[];
+  /** MM-YYYY periods from GET /forecasts/:id (DB); overrides stale persisted store periods */
+  forecastPeriods?: ForecastPeriods | null;
 }
 
 export interface ForecastMetadataUpdate {

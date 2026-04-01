@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,14 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Download, 
-  FileJson, 
-  FileText, 
-  FileSpreadsheet,
-  Info,
-  Loader2 
-} from 'lucide-react';
+import { Download, FileJson, FileSpreadsheet, Info, Loader2 } from 'lucide-react';
 import { exportDebugData, type ExportOptions, type ExportFormat } from '@/lib/utils/debug-export';
 import type { DebugCalculationResult } from '@/types/debug';
 
@@ -47,15 +40,9 @@ const EXPORT_FORMATS: Array<{
     recommended: true
   },
   {
-    value: 'csv',
-    label: 'CSV',
-    description: 'Step-by-step data for spreadsheet analysis',
-    icon: <FileText className="h-4 w-4" />
-  },
-  {
     value: 'xlsx',
     label: 'Excel',
-    description: 'Formatted spreadsheet with multiple sheets',
+    description: 'Workbook with summary, steps, tree, and metrics when selected',
     icon: <FileSpreadsheet className="h-4 w-4" />
   }
 ];
@@ -72,18 +59,11 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
   const [exportError, setExportError] = useState<string | null>(null);
 
   const handleFormatChange = (format: ExportFormat) => {
-    setExportOptions(prev => ({
-      ...prev,
-      format,
-      // Auto-adjust options based on format
-      includeSteps: format === 'csv' ? true : prev.includeSteps,
-      includeTree: format === 'csv' ? false : prev.includeTree,
-      includeMetrics: format === 'csv' ? false : prev.includeMetrics
-    }));
+    setExportOptions((prev) => ({ ...prev, format }));
   };
 
   const handleOptionChange = (option: keyof ExportOptions, value: boolean | string) => {
-    setExportOptions(prev => ({
+    setExportOptions((prev) => ({
       ...prev,
       [option]: value
     }));
@@ -94,13 +74,8 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
     setExportError(null);
 
     try {
-      // Validate options
       if (!exportOptions.includeSteps && !exportOptions.includeTree && !exportOptions.includeMetrics) {
         throw new Error('At least one data type must be included in the export');
-      }
-
-      if (exportOptions.format === 'csv' && !exportOptions.includeSteps) {
-        throw new Error('CSV format requires step data to be included');
       }
 
       await exportDebugData(debugData, exportOptions);
@@ -114,15 +89,15 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
 
   const getEstimatedFileSize = (): string => {
     let estimatedKB = 0;
-    
+
     if (exportOptions.includeSteps) {
-      estimatedKB += debugData.debugInfo.calculationSteps.length * 0.5; // ~0.5KB per step
+      estimatedKB += debugData.debugInfo.calculationSteps.length * 0.5;
     }
     if (exportOptions.includeTree) {
-      estimatedKB += debugData.debugInfo.calculationTree.totalNodes * 0.2; // ~0.2KB per node
+      estimatedKB += debugData.debugInfo.calculationTree.totalNodes * 0.2;
     }
     if (exportOptions.includeMetrics) {
-      estimatedKB += 5; // ~5KB for metrics
+      estimatedKB += 5;
     }
 
     if (estimatedKB < 1) return '< 1 KB';
@@ -136,7 +111,7 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
     return `debug-calc-${forecastId}-${timestamp}`;
   };
 
-  const selectedFormat = EXPORT_FORMATS.find(f => f.value === exportOptions.format);
+  const selectedFormat = EXPORT_FORMATS.find((f) => f.value === exportOptions.format);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -152,7 +127,6 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Format Selection */}
           <div className="space-y-3">
             <Label className="text-slate-200 font-medium">Export Format</Label>
             <RadioGroup
@@ -160,15 +134,11 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
               onValueChange={handleFormatChange}
               className="space-y-2"
             >
-              {EXPORT_FORMATS.map(format => (
+              {EXPORT_FORMATS.map((format) => (
                 <div key={format.value} className="flex items-start space-x-3">
-                  <RadioGroupItem 
-                    value={format.value} 
-                    id={format.value}
-                    className="mt-1"
-                  />
+                  <RadioGroupItem value={format.value} id={format.value} className="mt-1" />
                   <div className="flex-1">
-                    <Label 
+                    <Label
                       htmlFor={format.value}
                       className="flex items-center gap-2 text-slate-200 cursor-pointer"
                     >
@@ -180,16 +150,13 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
                         </span>
                       )}
                     </Label>
-                    <p className="text-sm text-slate-400 mt-1">
-                      {format.description}
-                    </p>
+                    <p className="text-sm text-slate-400 mt-1">{format.description}</p>
                   </div>
                 </div>
               ))}
             </RadioGroup>
           </div>
 
-          {/* Data Selection */}
           <div className="space-y-3">
             <Label className="text-slate-200 font-medium">Include Data</Label>
             <div className="space-y-3">
@@ -198,12 +165,8 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
                   id="include-steps"
                   checked={exportOptions.includeSteps}
                   onCheckedChange={(checked) => handleOptionChange('includeSteps', !!checked)}
-                  disabled={exportOptions.format === 'csv'} // CSV requires steps
                 />
-                <Label 
-                  htmlFor="include-steps" 
-                  className="text-slate-200 cursor-pointer"
-                >
+                <Label htmlFor="include-steps" className="text-slate-200 cursor-pointer">
                   Calculation Steps ({debugData.debugInfo.calculationSteps.length} steps)
                 </Label>
               </div>
@@ -213,12 +176,8 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
                   id="include-tree"
                   checked={exportOptions.includeTree}
                   onCheckedChange={(checked) => handleOptionChange('includeTree', !!checked)}
-                  disabled={exportOptions.format === 'csv'} // CSV doesn't support tree
                 />
-                <Label 
-                  htmlFor="include-tree" 
-                  className="text-slate-200 cursor-pointer"
-                >
+                <Label htmlFor="include-tree" className="text-slate-200 cursor-pointer">
                   Calculation Tree ({debugData.debugInfo.calculationTree.totalNodes} nodes)
                 </Label>
               </div>
@@ -228,19 +187,14 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
                   id="include-metrics"
                   checked={exportOptions.includeMetrics}
                   onCheckedChange={(checked) => handleOptionChange('includeMetrics', !!checked)}
-                  disabled={exportOptions.format === 'csv'} // CSV doesn't support metrics
                 />
-                <Label 
-                  htmlFor="include-metrics" 
-                  className="text-slate-200 cursor-pointer"
-                >
+                <Label htmlFor="include-metrics" className="text-slate-200 cursor-pointer">
                   Performance Metrics & Errors
                 </Label>
               </div>
             </div>
           </div>
 
-          {/* Filename */}
           <div className="space-y-2">
             <Label htmlFor="filename" className="text-slate-200 font-medium">
               Filename (optional)
@@ -257,7 +211,6 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
             </p>
           </div>
 
-          {/* Export Info */}
           <Alert className="bg-slate-700 border-slate-600">
             <Info className="h-4 w-4" />
             <AlertDescription className="text-slate-300">
@@ -265,22 +218,22 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
                 <div>Format: {selectedFormat?.label}</div>
                 <div>Estimated size: {getEstimatedFileSize()}</div>
                 <div>
-                  Data: {[
+                  Data:{' '}
+                  {[
                     exportOptions.includeSteps && 'Steps',
-                    exportOptions.includeTree && 'Tree', 
+                    exportOptions.includeTree && 'Tree',
                     exportOptions.includeMetrics && 'Metrics'
-                  ].filter(Boolean).join(', ')}
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
                 </div>
               </div>
             </AlertDescription>
           </Alert>
 
-          {/* Error Display */}
           {exportError && (
             <Alert className="bg-red-900/20 border-red-500">
-              <AlertDescription className="text-red-400">
-                {exportError}
-              </AlertDescription>
+              <AlertDescription className="text-red-400">{exportError}</AlertDescription>
             </Alert>
           )}
         </div>
@@ -294,11 +247,7 @@ export function DebugExportModal({ isOpen, onClose, debugData }: DebugExportModa
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
+          <Button onClick={handleExport} disabled={isExporting} className="bg-blue-600 hover:bg-blue-700">
             {isExporting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

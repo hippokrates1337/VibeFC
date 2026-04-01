@@ -19,7 +19,13 @@ export const getDefaultNodeData = (type: ForecastNodeKind): ForecastNodeData => 
     case 'OPERATOR':
       return { op: '+', inputOrder: [] };
     case 'METRIC':
-      return { label: 'New Metric', budgetVariableId: '', historicalVariableId: '', useCalculated: false };
+      return {
+        label: 'New Metric',
+        budgetVariableId: '',
+        historicalVariableId: '',
+        useCalculated: false,
+        metricSeriesKind: 'flow'
+      };
     case 'SEED':
       return { sourceMetricId: '' };
     default:

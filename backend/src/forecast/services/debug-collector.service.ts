@@ -301,6 +301,9 @@ export class DebugCollectorService implements DebugCollector {
       case 'CONSTANT':
         return `Constant: ${nodeData?.value || 0}`;
       case 'OPERATOR':
+        if (nodeData?.op === 'offset' && nodeData?.offsetMonths != null) {
+          return `Operator: offset (${nodeData.offsetMonths}m)`;
+        }
         return `Operator: ${nodeData?.op || 'Unknown'}`;
       case 'SEED':
         return 'Seed Node';

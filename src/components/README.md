@@ -74,5 +74,5 @@ The `ui/` directory contains reusable UI components based on shadcn/ui, includin
 ## Note on Feature-Specific Components
 
 Some feature-specific components are co-located with their pages in the app directory:
-- **Data Intake Components**: Located in `src/app/(protected)/data-intake/_components/` for better feature encapsulation
-- **Variable Components**: Part of the data intake feature components 
+- **Data Intake Components**: Located in `src/app/(protected)/data-intake/_components/` (container, grouped variable list rows, modals, upload, hooks) for feature encapsulation
+- **Variable list UI**: Rows are rendered by `VariableListRow`; variables are grouped by `ACTUAL` / `BUDGET` / `INPUT` / `UNKNOWN` on the data intake page

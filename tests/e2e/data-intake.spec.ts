@@ -1478,22 +1478,22 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
     
     // --- Check Final UI State --- 
     const emptyStateLocator = page.locator('[data-testid="empty-state"]'); 
-    const dataTableLocator = page.locator('[data-testid="data-table"]'); // This is actually a grid with cards
+    const dataTableLocator = page.locator('[data-testid="data-table"]'); // Vertical sections with variable rows
     const anyTableLocator = page.locator('table');
     
     // Updated selectors for card-based display (actual implementation)
     const variableCardsGrid = page.locator('[data-testid="data-table"]'); // Grid container
-    const variableCards = page.locator('[data-testid="data-table"] > div'); // Individual card containers
+    const variableCards = page.locator('[data-testid="data-table"] [data-testid="variable-item"]');
     const revenueCard = page.locator('[data-testid="data-table"] div:has-text("Revenue A")');
     const costsCard = page.locator('[data-testid="data-table"] div:has-text("Costs A")');
     
     // Legacy selectors for backward compatibility
     const dataCardsLocator = page.locator('div:has-text("Revenue A"), div:has-text("Costs A")');
-    const revenueCardLocator = page.locator('div:has-text("Revenue A"):has-text("Type: ACTUAL")');
-    const costsCardLocator = page.locator('div:has-text("Costs A"):has-text("Type: ACTUAL")');
+    const revenueCardLocator = page.locator('div:has-text("Revenue A"):has-text("ACTUAL")');
+    const costsCardLocator = page.locator('div:has-text("Costs A"):has-text("ACTUAL")');
     const revenueCardAltLocator = page.locator('div:has-text("Revenue AType: ACTUALTime")');
     const costsCardAltLocator = page.locator('div:has-text("Costs AType: ACTUALTime")');
-    const anyDataCardLocator = page.locator('div:has-text("Type: ACTUAL")');
+    const anyDataCardLocator = page.locator('[data-testid="variable-item"]');
 
     // Check what's actually visible
     const hasEmptyState = await emptyStateLocator.isVisible();
@@ -1568,7 +1568,7 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
         console.log('✅ Costs A card found');
       }
       if (hasAnyDataCard && !hasRevenueCardLegacy && !hasCostsCardLegacy && !hasRevenueCardAlt && !hasCostsCardAlt) {
-        console.log('✅ Found data cards with "Type: ACTUAL" text');
+        console.log('✅ Found data rows with variable-item test id');
         await expect(anyDataCardLocator.first()).toBeVisible();
       }
     } else {
@@ -1737,14 +1737,14 @@ Test Costs,ACTUAL,2000,2200`;
     const dataTable = page.locator('[data-testid="data-table"], table');
     const hasTable = await dataTable.isVisible({ timeout: 5000 });
     
-    // Check for variable cards (updated UI format)
-    const variableCards = page.locator('[data-testid="data-table"] > div');
+    // Check for variable rows (updated UI format)
+    const variableCards = page.locator('[data-testid="data-table"] [data-testid="variable-item"]');
     const hasCards = await variableCards.count() > 0;
     
     if (hasTable && hasCards) {
-      console.log('✅ Data grid with variable cards found after import');
+      console.log('✅ Data grid with variable rows found after import');
       const cardCount = await variableCards.count();
-      console.log(`📊 Found ${cardCount} variable cards`);
+      console.log(`📊 Found ${cardCount} variable rows`);
       
       // Check for imported test data
       const gridText = await dataTable.textContent();

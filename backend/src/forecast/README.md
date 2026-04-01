@@ -56,17 +56,19 @@ The forecast calculation system processes user-defined forecast graphs to produc
 - **Validation**: Value must be a valid finite number
 
 ### OPERATOR Nodes
-- **Purpose**: Perform mathematical operations on child values
+- **Purpose**: Perform mathematical operations on child values, or time-lag via **Offset**
 - **Attributes**:
-  - `op`: Operator type ('+', '-', '*', '/', '^')
+  - `op`: Operator type ('+', '-', '*', '/', '^', 'offset')
   - `inputOrder`: Array defining order of child evaluation
+  - `offsetMonths`: Non-negative integer; required when `op` is `'offset'` (months to look back)
 - **Evaluation Rules**:
   - **Addition (+)**: Sum of all child values
   - **Subtraction (-)**: First value minus subsequent values (unary minus if single child)
   - **Multiplication (*)**: Product of all child values
   - **Division (/)**: Sequential division (reciprocal if single child)
   - **Power (^)**: Requires exactly 2 operands, first raised to power of second
-  - **Null Propagation**: If any child returns null, result is null
+  - **Offset (offset)**: Exactly one child. Evaluates that child in the current period (cache), then returns its value for the period `offsetMonths` earlier (same calculation type).
+  - **Null Propagation**: If any child returns null, result is null (arithmetic operators); offset returns the lagged evaluation (may be null if the child is null for that month)
   - **Division by Zero**: Returns null for division by zero
 - **Child Order**: Uses `inputOrder` if specified, otherwise natural order
 

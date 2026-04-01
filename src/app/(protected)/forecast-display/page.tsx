@@ -132,7 +132,7 @@ export default function ForecastDisplayPage() {
   const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
   const { loadForecast } = useForecastGraphActions();
   
-  // Get forecast data and unified calculation results
+  // Get forecast data and calculation results
   const { forecastName, forecastStartDate, forecastEndDate } = useForecastGraph();
   const { calculationResults, isCalculating, calculationError } = useCalculations();
   const { loadUnifiedCalculationResults } = useCalculationActions();
@@ -207,7 +207,7 @@ export default function ForecastDisplayPage() {
           <div>
             <h1 className="text-3xl font-bold text-slate-100">Forecast Display</h1>
             <p className="text-slate-400 mt-1">
-              Configure periods and analyze unified forecast results with historical comparison
+              Configure periods and analyze forecast results with historical comparison
             </p>
           </div>
           <div className="flex items-center gap-2 text-slate-400">
@@ -223,7 +223,7 @@ export default function ForecastDisplayPage() {
           <CardHeader>
             <CardTitle className="text-slate-100">Forecast Selection</CardTitle>
             <CardDescription className="text-slate-400">
-              Choose a forecast to configure periods and view unified calculation results
+              Choose a forecast to configure periods and view calculation results
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -234,32 +234,10 @@ export default function ForecastDisplayPage() {
               isLoading={isForecastListLoading}
               error={forecastError}
             />
-            
-            {selectedForecastMeta && (
-              <div className="mt-4 p-4 bg-slate-700 rounded-lg border border-slate-600">
-                <h3 className="text-lg font-medium text-slate-100 mb-2">
-                  {selectedForecastMeta.name}
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-slate-400">Forecast Period:</span>
-                    <div className="text-slate-200 font-medium">
-                      {formatForecastPeriod(selectedForecastMeta.startDate, selectedForecastMeta.endDate)}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Last Updated:</span>
-                    <div className="text-slate-200 font-medium">
-                      {formatDateSafe(selectedForecastMeta.updatedAt, 'MMM d, yyyy')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
-        {/* Period Management & Unified Calculation */}
+        {/* Period management and calculation */}
         {selectedForecast && (
           <>
             <PeriodManagementPanel />
@@ -279,14 +257,14 @@ export default function ForecastDisplayPage() {
               <Alert className="mt-4 border-red-600 text-red-400">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Unified calculation error: {calculationError}
+                  Calculation error: {calculationError}
                 </AlertDescription>
               </Alert>
             )}
           </>
         )}
 
-        {/* Results Display — ForecastResultsTable provides its own card ("Unified Forecast Results") */}
+        {/* Results — ForecastResultsTable provides its own card */}
         {selectedForecast && (
           showResults ? (
             <ForecastResultsTable />
@@ -301,7 +279,7 @@ export default function ForecastDisplayPage() {
                   <p className="text-slate-400 text-sm">
                     {forecastName ? (
                       <>
-                        Forecast is loaded. Configure periods above and trigger unified calculation
+                        Forecast is loaded. Configure periods above and run calculation
                         to see results for all value types (historical, forecast, budget).
                       </>
                     ) : (
@@ -332,8 +310,8 @@ export default function ForecastDisplayPage() {
                   Select a Forecast
                 </h3>
                 <p className="text-slate-400 text-sm max-w-md">
-                  Choose a forecast from the dropdown above to configure periods and view 
-                  unified calculation results with historical, forecast, and budget data.
+                  Choose a forecast from the dropdown above to configure periods and view
+                  calculation results with historical, forecast, and budget data.
                 </p>
               </div>
             </CardContent>

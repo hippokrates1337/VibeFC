@@ -55,6 +55,15 @@ class GraphConverter {
                 errors.push(`Node ${nodeId} (${node.type}) has ${inputCount} inputs but only OPERATOR nodes can accept multiple inputs`);
             }
         });
+        Array.from(inputCounts.entries()).forEach(([nodeId, inputCount]) => {
+            const node = nodes.find(n => n.id === nodeId);
+            if (node && node.type === 'OPERATOR') {
+                const op = node.data?.op;
+                if (op === 'offset' && inputCount !== 1) {
+                    errors.push(`Offset operator node ${nodeId} must have exactly one input (found ${inputCount})`);
+                }
+            }
+        });
         this.validateNodeConnections(nodes, edges, errors, warnings);
         this.validateSeedNodeConnections(nodes, edges, errors, warnings);
         this.validateMetricNodeConfiguration(nodes, edges, errors, warnings);

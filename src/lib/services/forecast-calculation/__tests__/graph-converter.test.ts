@@ -117,6 +117,46 @@ describe('GraphConverter', () => {
       expect(result.errors).toContain('Graph must contain at least one METRIC node');
     });
 
+    it('should require exactly one input for offset operator', () => {
+      const nodes: ForecastNodeClient[] = [
+        {
+          id: 'constant-1',
+          type: 'CONSTANT',
+          position: { x: 0, y: 0 },
+          data: { name: 'Constant 1', value: 100 }
+        },
+        {
+          id: 'constant-2',
+          type: 'CONSTANT',
+          position: { x: 0, y: 100 },
+          data: { name: 'Constant 2', value: 200 }
+        },
+        {
+          id: 'offset-op',
+          type: 'OPERATOR',
+          position: { x: 100, y: 50 },
+          data: { op: 'offset', offsetMonths: 1, inputOrder: ['constant-1', 'constant-2'] }
+        },
+        {
+          id: 'metric-1',
+          type: 'METRIC',
+          position: { x: 200, y: 50 },
+          data: { label: 'Total', budgetVariableId: '', historicalVariableId: '', useCalculated: false }
+        }
+      ];
+
+      const edges: ForecastEdgeClient[] = [
+        { id: 'edge-1', source: 'constant-1', target: 'offset-op' },
+        { id: 'edge-2', source: 'constant-2', target: 'offset-op' },
+        { id: 'edge-3', source: 'offset-op', target: 'metric-1' }
+      ];
+
+      const result = graphConverter.validateGraph(nodes, edges);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some((e) => e.includes('Offset operator node offset-op'))).toBe(true);
+    });
+
     it('should validate multiple inputs only for operator nodes', () => {
       const nodes: ForecastNodeClient[] = [
         {

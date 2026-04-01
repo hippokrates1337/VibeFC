@@ -2,7 +2,13 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import ForecastToolbar from '../forecast-toolbar';
-import { useForecastGraph, useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
+import {
+  useForecastGraph,
+  useForecastGraphActions,
+  useSelectedNode,
+  useCalculations,
+  useCalculationActions
+} from '@/lib/store/forecast-graph-store/hooks';
 import { calculateSmartNodePosition } from '@/lib/store/forecast-graph-store/utils';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -10,6 +16,9 @@ import { useToast } from '@/components/ui/use-toast';
 jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
   useForecastGraph: jest.fn(),
   useForecastGraphActions: jest.fn(),
+  useSelectedNode: jest.fn(),
+  useCalculations: jest.fn(),
+  useCalculationActions: jest.fn()
 }));
 jest.mock('@/lib/store/forecast-graph-store/utils', () => ({
   calculateSmartNodePosition: jest.fn(),
@@ -56,13 +65,11 @@ describe('ForecastToolbar', () => {
   const mockSetSelectedNodeId = jest.fn();
   const mockSetConfigPanelOpen = jest.fn();
   const mockDuplicateNodeWithEdges = jest.fn().mockReturnValue('duplicated-node-id');
-  const mockSetValidatingGraph = jest.fn();
   const mockSetGraphValidation = jest.fn();
   const mockCalculateUnified = jest.fn().mockResolvedValue(undefined); // Updated for Phase 7
   const mockToast = jest.fn();
   const mockOnSave = jest.fn().mockResolvedValue(undefined);
   const mockOnBack = jest.fn();
-  const mockUseLastEditedNodePosition = useLastEditedNodePosition as jest.Mock;
   const mockCalculateSmartNodePosition = calculateSmartNodePosition as jest.Mock;
 
   // Track current state for the mock
@@ -86,6 +93,7 @@ describe('ForecastToolbar', () => {
     isCalculating: false,
     calculationError: null,
     lastCalculatedAt: null,
+    lastEditedNodePosition: null as { x: number; y: number } | null
   };
 
   beforeEach(() => {
@@ -112,6 +120,7 @@ describe('ForecastToolbar', () => {
       isCalculating: false,
       calculationError: null,
       lastCalculatedAt: null,
+      lastEditedNodePosition: null
     };
     
     // Mock setForecastMetadata to update the current state
@@ -123,59 +132,61 @@ describe('ForecastToolbar', () => {
     
     // Default mock implementation for the store - Updated for Phase 7
     (useForecastGraph as unknown as jest.Mock).mockImplementation(() => ({
-      // Create a mock state object with current values
-      forecastId: 'test-forecast-id',
-      forecastName: 'Test Forecast',
-      forecastStartDate: '2024-01-01',
-      forecastEndDate: '2024-12-31',
-      organizationId: 'test-org-id',
-      nodes: [],
-      edges: [],
-      isDirty: false,
-      selectedNodeId: null,
-      configPanelOpen: false,
-      isLoading: false,
-      error: null,
-      lastEditedNodePosition: null,
+      forecastId: currentState.forecastId,
+      forecastName: currentState.forecastName,
+      forecastStartDate: currentState.forecastStartDate,
+      forecastEndDate: currentState.forecastEndDate,
+      organizationId: currentState.organizationId,
+      organizationForecasts: currentState.organizationForecasts,
+      nodes: currentState.nodes,
+      edges: currentState.edges,
+      isDirty: currentState.isDirty,
+      selectedNodeId: currentState.selectedNodeId,
+      configPanelOpen: currentState.configPanelOpen,
+      isLoading: currentState.isLoading,
+      error: currentState.error,
+      lastEditedNodePosition: currentState.lastEditedNodePosition
     }));
-    
+
     (useForecastGraphActions as unknown as jest.Mock).mockImplementation(() => ({
-      addNode: jest.fn(),
-      setForecastMetadata: jest.fn(),
-      resetStore: jest.fn(),
-      setSelectedNodeId: jest.fn(),
-      setConfigPanelOpen: jest.fn(),
-      duplicateNodeWithEdges: jest.fn(),
-      calculateUnified: jest.fn(),
-      setGraphValidation: jest.fn(),
-      setValidatingGraph: jest.fn(),
+      addNode: mockAddNode,
+      setForecastMetadata: mockSetForecastMetadata,
+      resetStore: mockResetStore,
+      setSelectedNodeId: mockSetSelectedNodeId,
+      setConfigPanelOpen: mockSetConfigPanelOpen,
+      duplicateNodeWithEdges: mockDuplicateNodeWithEdges
     }));
-    
-    // Mock the old store structure for backward compatibility
-    const state = {
-        ...currentState,
-        addNode: mockAddNode,
-        setForecastMetadata: mockSetForecastMetadata,
-        resetStore: mockResetStore,
-        setSelectedNodeId: mockSetSelectedNodeId,
-        setConfigPanelOpen: mockSetConfigPanelOpen,
-        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
-        setValidatingGraph: mockSetValidatingGraph,
-        setGraphValidation: mockSetGraphValidation,
-        calculateUnified: mockCalculateUnified, // Updated for Phase 7
-      };
-      
-      // Call the selector with our mock state
-      return selector(state);
-    });
-    
+
+    (useSelectedNode as unknown as jest.Mock).mockImplementation(() => null);
+
+    (useCalculations as unknown as jest.Mock).mockImplementation(() => ({
+      calculationResults: currentState.calculationResults,
+      isCalculating: currentState.isCalculating,
+      calculationError: currentState.calculationError,
+      lastCalculatedAt: currentState.lastCalculatedAt,
+      forecastPeriods: null,
+      graphValidation: currentState.graphValidation,
+      isValidatingGraph: currentState.isValidatingGraph
+    }));
+
+    (useCalculationActions as unknown as jest.Mock).mockImplementation(() => ({
+      calculateUnified: mockCalculateUnified,
+      setGraphValidation: mockSetGraphValidation,
+      loadUnifiedCalculationResults: jest.fn(),
+      setUnifiedCalculationResults: jest.fn(),
+      clearCalculationResults: jest.fn(),
+      updateForecastPeriods: jest.fn(),
+      setForecastPeriods: jest.fn(),
+      validateGraph: jest.fn(),
+      clearGraphValidation: jest.fn(),
+      getUnifiedNodeValueForMonth: jest.fn(),
+      getUnifiedMergedTimeSeriesData: jest.fn()
+    }));
+
     // Mock useToast
     (useToast as unknown as jest.Mock).mockReturnValue({
       toast: mockToast,
     });
-    
-    // Mock the new hooks
-    mockUseLastEditedNodePosition.mockReturnValue(null); // Default to no last position
     mockCalculateSmartNodePosition.mockImplementation((lastPosition, nodes) => {
       // Return a smart position or fallback to random
       if (lastPosition) {
@@ -262,30 +273,28 @@ describe('ForecastToolbar', () => {
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     
     const mockFailedCalculation = jest.fn().mockRejectedValue(new Error('Calculation failed'));
-    
-    // Set up a state where calculation is possible but will fail
-    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
-      const state = {
-        ...currentState,
-        isDirty: false,
-        nodes: [{ id: 'metric-1', type: 'METRIC', data: {} }],
-        addNode: mockAddNode,
-        setForecastMetadata: mockSetForecastMetadata,
-        resetStore: mockResetStore,
-        setSelectedNodeId: mockSetSelectedNodeId,
-        setConfigPanelOpen: mockSetConfigPanelOpen,
-        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
-        setValidatingGraph: mockSetValidatingGraph,
-        setGraphValidation: mockSetGraphValidation,
-        calculateUnified: mockFailedCalculation, // Updated for Phase 7
-      };
-      return selector(state);
-    });
+
+    currentState.isDirty = false;
+    currentState.nodes = [{ id: 'metric-1', type: 'METRIC', data: {} }];
+
+    (useCalculationActions as unknown as jest.Mock).mockImplementation(() => ({
+      calculateUnified: mockFailedCalculation,
+      setGraphValidation: mockSetGraphValidation,
+      loadUnifiedCalculationResults: jest.fn(),
+      setUnifiedCalculationResults: jest.fn(),
+      clearCalculationResults: jest.fn(),
+      updateForecastPeriods: jest.fn(),
+      setForecastPeriods: jest.fn(),
+      validateGraph: jest.fn(),
+      clearGraphValidation: jest.fn(),
+      getUnifiedNodeValueForMonth: jest.fn(),
+      getUnifiedMergedTimeSeriesData: jest.fn()
+    }));
 
     render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Click the calculate button - Updated text for Phase 7
-    const calculateButton = screen.getByText('Calculate All (Forecast, Historical, Budget)');
+    const calculateButton = screen.getByText('Calculate');
     await user.click(calculateButton);
     
     // Wait for the error handling
@@ -296,10 +305,7 @@ describe('ForecastToolbar', () => {
         variant: 'destructive',
       }));
     });
-    
-    // Ensure validation state is reset
-    expect(mockSetValidatingGraph).toHaveBeenCalledWith(false);
-    
+
     // Verify that console.error was called (but we suppressed the output)
     expect(consoleErrorSpy).toHaveBeenCalledWith('[ForecastToolbar] Unified calculation failed:', expect.any(Error));
     
@@ -312,8 +318,8 @@ describe('ForecastToolbar', () => {
   test('uses smart positioning when adding nodes', async () => {
     // Set up a last edited position
     const lastPosition = { x: 200, y: 150 };
-    mockUseLastEditedNodePosition.mockReturnValue(lastPosition);
-    
+    currentState.lastEditedNodePosition = lastPosition;
+
     render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Click the DATA node button
@@ -332,9 +338,8 @@ describe('ForecastToolbar', () => {
   });
 
   test('falls back to default positioning when no last edited position exists', async () => {
-    // Ensure no last edited position
-    mockUseLastEditedNodePosition.mockReturnValue(null);
-    
+    currentState.lastEditedNodePosition = null;
+
     render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Click the DATA node button
@@ -367,23 +372,7 @@ describe('ForecastToolbar', () => {
   });
 
   test('calls onBack when back button is clicked', async () => {
-    // Set up a clean state (not dirty) so onBack is called immediately
-    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
-      const state = {
-        ...currentState,
-        isDirty: false, // Important: not dirty so checkUnsavedChanges calls onBack immediately
-        addNode: mockAddNode,
-        setForecastMetadata: mockSetForecastMetadata,
-        resetStore: mockResetStore,
-        setSelectedNodeId: mockSetSelectedNodeId,
-        setConfigPanelOpen: mockSetConfigPanelOpen,
-        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
-        setValidatingGraph: mockSetValidatingGraph,
-        setGraphValidation: mockSetGraphValidation,
-        calculateUnified: mockCalculateUnified,
-      };
-      return selector(state);
-    });
+    currentState.isDirty = false;
 
     render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
@@ -396,27 +385,12 @@ describe('ForecastToolbar', () => {
   });
 
   test('shows validation error when saving without required fields', async () => {
-    // Override store mock to return empty values
-    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
-      const state = {
-        ...currentState,
-        forecastName: '',
-        forecastStartDate: null,
-        forecastEndDate: null,
-        isDirty: true,
-        selectedNodeId: null,
-        addNode: mockAddNode,
-        setForecastMetadata: mockSetForecastMetadata,
-        resetStore: mockResetStore,
-        setSelectedNodeId: mockSetSelectedNodeId,
-        duplicateNodeWithEdges: mockDuplicateNodeWithEdges,
-        setValidatingGraph: mockSetValidatingGraph,
-        setGraphValidation: mockSetGraphValidation,
-        calculateUnified: mockCalculateUnified,
-      };
-      return selector(state);
-    });
-    
+    currentState.forecastName = '';
+    currentState.forecastStartDate = null as unknown as string;
+    currentState.forecastEndDate = null as unknown as string;
+    currentState.isDirty = true;
+    currentState.selectedNodeId = null;
+
     render(<ForecastToolbar onSave={mockOnSave} onBack={mockOnBack} />);
     
     // Click the save button

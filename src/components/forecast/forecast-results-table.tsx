@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Download, Filter, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -21,25 +21,27 @@ import { cn } from '@/lib/utils';
 import { 
   useForecastGraph,
   useCalculations,
-  useCalculationActions
+  useCalculationActions,
+  useForecastGraphActions
 } from '@/lib/store/forecast-graph-store/hooks';
+import { type ForecastNodeClient, type MetricNodeAttributes } from '@/lib/store/forecast-graph-store/types';
+import { forecastApi } from '@/lib/api/forecast';
 import {
-  type ForecastNodeClient,
-  type ForecastEdgeClient,
-  type MetricNodeAttributes,
-  type DataNodeAttributes,
-  type OperatorNodeAttributes,
-  type SeedNodeAttributes
-} from '@/lib/store/forecast-graph-store/types';
-import { 
+  calendarYearsFromMonths,
+  fyForecastAndBudget
+} from '@/lib/utils/fiscal-year-metric-totals';
+import type { ForecastResultsExcelColumn } from '@/lib/utils/export-forecast-results-excel';
+import {
   buildHierarchicalStructure,
-  flattenHierarchy,
   defaultNodeComparator,
+  flattenHierarchyDeep,
   getNodeDisplayName,
   type HierarchicalNode as UtilHierarchicalNode
 } from '@/lib/utils/forecast-hierarchy';
 import { compareMmYyyyAsc } from '@/lib/store/forecast-graph-store/utils/date-utils';
 import { formatForecastTableNumber } from '@/lib/utils/format-forecast-table-number';
+import { rawNumericForPeriodCell } from '@/lib/utils/forecast-period-cell-value';
+import type { MergedTimeSeriesValue } from '@/types/forecast';
 
 interface ForecastResultsTableProps {
   className?: string;
@@ -53,6 +55,13 @@ interface MonthColumn {
   displayName: string;
 }
 
+interface ResultPeriodColumn {
+  month: string;
+  displayName: string;
+  isActualPeriod: boolean;
+  segment: 'historical' | 'forecast' | 'budget';
+}
+
 type NodeFilter = 'all' | 'metric' | 'data' | 'operator' | 'seed';
 
 // Helper to convert MM-YYYY to display format
@@ -63,9 +72,35 @@ const formatMMYYYY = (mmyyyy: string): string => {
   return format(date, 'MMM yyyy');
 };
 
+function formatPeriodCellValue(
+  monthData: MergedTimeSeriesValue | undefined,
+  segment: ResultPeriodColumn['segment'],
+  nodeType: string
+): string {
+  const raw = rawNumericForPeriodCell(monthData, segment, nodeType);
+  if (raw === null) return '-';
+  return formatForecastTableNumber(raw);
+}
+
+function formatFyCellValue(n: number | null): string {
+  if (n === null) return '-';
+  return formatForecastTableNumber(n);
+}
+
+function metricSeriesKindFromNode(node: ForecastNodeClient): 'stock' | 'flow' | undefined {
+  if (node.type !== 'METRIC') return undefined;
+  return (node.data as MetricNodeAttributes).metricSeriesKind ?? 'flow';
+}
+
+function seriesLabelForExport(node: ForecastNodeClient): string {
+  if (node.type !== 'METRIC') return '—';
+  return metricSeriesKindFromNode(node) === 'stock' ? 'Stock' : 'Flow';
+}
+
 export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
-  // Store hooks - using unified data access
-  const { nodes, edges } = useForecastGraph();
+  // Store hooks
+  const { nodes, edges, forecastId } = useForecastGraph();
+  const { updateNodeData } = useForecastGraphActions();
   const { forecastPeriods, calculationResults } = useCalculations();
   const { getUnifiedMergedTimeSeriesData } = useCalculationActions();
 
@@ -106,7 +141,7 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
     return result;
   }, [hierarchicalNodes]);
 
-  // Generate month columns from unified data
+  // Generate month columns from calculation results
   const monthColumns = useMemo((): MonthColumn[] => {
     if (!forecastPeriods || !calculationResults) return [];
 
@@ -138,6 +173,79 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
     }));
   }, [forecastPeriods, calculationResults]);
 
+  /** Two columns per month: actual/historical + budget, or forecast + budget. */
+  const resultPeriodColumns = useMemo((): ResultPeriodColumn[] => {
+    const out: ResultPeriodColumn[] = [];
+    for (const m of monthColumns) {
+      if (m.isActualPeriod) {
+        out.push({
+          month: m.month,
+          displayName: m.displayName,
+          isActualPeriod: true,
+          segment: 'historical'
+        });
+        out.push({
+          month: m.month,
+          displayName: m.displayName,
+          isActualPeriod: true,
+          segment: 'budget'
+        });
+      } else {
+        out.push({
+          month: m.month,
+          displayName: m.displayName,
+          isActualPeriod: false,
+          segment: 'forecast'
+        });
+        out.push({
+          month: m.month,
+          displayName: m.displayName,
+          isActualPeriod: false,
+          segment: 'budget'
+        });
+      }
+    }
+    return out;
+  }, [monthColumns]);
+
+  const fyYears = useMemo(
+    () => calendarYearsFromMonths(monthColumns.map((m) => m.month)),
+    [monthColumns]
+  );
+
+  const excelColumnMeta = useMemo((): ForecastResultsExcelColumn[] => {
+    const monthCols: ForecastResultsExcelColumn[] = resultPeriodColumns.map((c) => ({
+      kind: 'month',
+      month: c.month,
+      displayName: c.displayName,
+      isActualPeriod: c.isActualPeriod,
+      segment: c.segment
+    }));
+    const fyCols: ForecastResultsExcelColumn[] = fyYears.flatMap((y) => [
+      { kind: 'fy', year: y, segment: 'forecast' },
+      { kind: 'fy', year: y, segment: 'budget' }
+    ]);
+    return [...monthCols, ...fyCols];
+  }, [resultPeriodColumns, fyYears]);
+
+  const allExpandedKeys = useMemo(
+    () => new Set(filteredNodes.map((n) => n.id)),
+    [filteredNodes]
+  );
+
+  const hierarchicalNodesForExport = useMemo(() => {
+    return buildHierarchicalStructure(filteredNodes, edges, {
+      expandedNodes: allExpandedKeys,
+      sortComparator: defaultNodeComparator,
+      edgeDirection: 'targetIsParent' as const
+    });
+  }, [filteredNodes, edges, allExpandedKeys]);
+
+  const flattenedNodesForExport = useMemo(
+    () => flattenHierarchyDeep(hierarchicalNodesForExport),
+    [hierarchicalNodesForExport]
+  );
+
   // Handle node expansion
   const toggleNodeExpansion = (nodeId: string) => {
     setExpandedNodes(prev => {
@@ -151,44 +259,74 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
     });
   };
 
+  const handleMetricSeriesChange = useCallback(
+    async (nodeId: string, value: 'stock' | 'flow') => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node || node.type !== 'METRIC' || !forecastId) return;
+      const prev = node.data as MetricNodeAttributes;
+      updateNodeData(nodeId, { metricSeriesKind: value });
+      try {
+        const res = await forecastApi.updateNode(forecastId, nodeId, {
+          attributes: { ...prev, metricSeriesKind: value }
+        });
+        if (res.error) {
+          console.error('[ForecastResultsTable] Failed to persist metricSeriesKind:', res.error);
+          updateNodeData(nodeId, { metricSeriesKind: prev.metricSeriesKind ?? 'flow' });
+        }
+      } catch (e) {
+        console.error('[ForecastResultsTable] Failed to persist metricSeriesKind:', e);
+        updateNodeData(nodeId, { metricSeriesKind: prev.metricSeriesKind ?? 'flow' });
+      }
+    },
+    [nodes, forecastId, updateNodeData]
+  );
+
   // Use utility function for display name
   const getDisplayName = getNodeDisplayName;
 
-  // Export data functionality - updated for unified data
-  const handleExport = () => {
-    const csvData = [
-      ['Node', 'Type', 'Level', ...monthColumns.map(col => col.displayName)],
-      ...flattenedNodes.map(hierarchicalNode => {
+  const handleExport = async () => {
+    try {
+      const { buildForecastResultsExcelBlob } = await import('@/lib/utils/export-forecast-results-excel');
+      const monthGroups = monthColumns.map((m) => ({
+        month: m.month,
+        displayName: m.displayName,
+        isActualPeriod: m.isActualPeriod
+      }));
+      const dataRows = flattenedNodesForExport.map((hierarchicalNode) => {
         const mergedData = getUnifiedMergedTimeSeriesData(hierarchicalNode.node.id);
-        return [
-          getDisplayName(hierarchicalNode.node),
-          hierarchicalNode.node.type,
-          hierarchicalNode.level.toString(),
-          ...monthColumns.map(col => {
-            const monthData = mergedData?.values.find((v: any) => v.month === col.month);
-            if (!monthData) return '-';
-            
-            if (col.isActualPeriod) {
-              return formatForecastTableNumber(monthData.historical);
-            } else {
-              return hierarchicalNode.node.type === 'METRIC' 
-                ? `${formatForecastTableNumber(monthData.forecast)} / ${formatForecastTableNumber(monthData.budget)}`
-                : formatForecastTableNumber(monthData.forecast);
-            }
-          })
-        ];
-      })
-    ];
-
-    const csvContent = csvData.map(row => 
-      row.map(cell => `"${cell}"`).join(',')
-    ).join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'forecast-results.csv';
-    link.click();
+        const values = mergedData?.values ?? [];
+        const monthCells = resultPeriodColumns.map((col) => {
+          const monthData = mergedData?.values.find((v) => v.month === col.month);
+          return rawNumericForPeriodCell(monthData, col.segment, hierarchicalNode.node.type);
+        });
+        const kind = metricSeriesKindFromNode(hierarchicalNode.node);
+        const fyCells = fyYears.flatMap((y) => {
+          const fy = fyForecastAndBudget(
+            values,
+            y,
+            hierarchicalNode.node.type,
+            kind
+          );
+          return [fy.forecast, fy.budget];
+        });
+        return {
+          nodeLabel: getDisplayName(hierarchicalNode.node),
+          nodeType: hierarchicalNode.node.type,
+          seriesLabel: seriesLabelForExport(hierarchicalNode.node),
+          level: hierarchicalNode.level,
+          cells: [...monthCells, ...fyCells]
+        };
+      });
+      const blob = await buildForecastResultsExcelBlob(monthGroups, fyYears, excelColumnMeta, dataRows);
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = 'forecast-results.xlsx';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[ForecastResultsTable] Excel export failed:', e);
+    }
   };
 
   if (!nodes.length) {
@@ -211,7 +349,7 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
         <CardContent className="p-6">
           <Alert>
             <AlertDescription>
-              No calculation results available. Please configure periods and trigger calculation first.
+              No calculation results available. Please configure periods and run calculation first.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -226,7 +364,7 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
           <div>
             <CardTitle className="flex items-center gap-2 text-slate-200">
               <Calendar className="h-5 w-5" />
-              Unified Forecast Results
+              Forecast results
             </CardTitle>
             <CardDescription className="text-slate-400">
               {forecastPeriods?.actualStartMonth && forecastPeriods?.actualEndMonth
@@ -270,57 +408,98 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
             <Table>
               <TableHeader className="sticky top-0 bg-slate-800 z-10">
                 <TableRow className="border-slate-700 hover:bg-slate-800">
-                  <TableHead className="text-slate-300 font-medium sticky left-0 bg-slate-800 z-20 min-w-[200px]">
+                  <TableHead
+                    rowSpan={2}
+                    className="text-slate-300 font-medium sticky left-0 bg-slate-800 z-20 min-w-[200px] align-middle"
+                  >
                     Node
                   </TableHead>
-                  <TableHead className="text-slate-300 font-medium w-20">
+                  <TableHead rowSpan={2} className="text-slate-300 font-medium w-20 align-middle">
                     Type
                   </TableHead>
-                  {monthColumns.map((col, index) => (
-                    <TableHead 
-                      key={index} 
+                  <TableHead rowSpan={2} className="text-slate-300 font-medium w-[120px] align-middle">
+                    Series
+                  </TableHead>
+                  {monthColumns.map((col) =>
+                    col.isActualPeriod ? (
+                      <TableHead
+                        key={`${col.month}-group`}
+                        colSpan={2}
+                        className={cn(
+                          'text-center text-slate-300 font-medium min-w-[200px]',
+                          'bg-amber-900/20 border-amber-600/50'
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span>{col.displayName}</span>
+                          <span className="text-xs text-slate-400">Historical</span>
+                        </div>
+                      </TableHead>
+                    ) : (
+                      <TableHead
+                        key={`${col.month}-group`}
+                        colSpan={2}
+                        className={cn(
+                          'text-center text-slate-300 font-medium min-w-[200px]',
+                          'bg-blue-900/20 border-blue-600/50'
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span>{col.displayName}</span>
+                          <span className="text-xs text-slate-400">Forecast</span>
+                        </div>
+                      </TableHead>
+                    )
+                  )}
+                  {fyYears.map((y) => (
+                    <TableHead
+                      key={`fy-${y}-group`}
+                      colSpan={2}
                       className={cn(
-                        "text-center text-slate-300 font-medium min-w-[120px]",
-                        col.isActualPeriod 
-                          ? "bg-amber-900/20 border-amber-600/50" 
-                          : "bg-blue-900/20 border-blue-600/50"
+                        'text-center text-slate-300 font-medium min-w-[200px]',
+                        'bg-emerald-900/25 border-emerald-600/50'
                       )}
                     >
                       <div className="flex flex-col">
-                        <span>{col.displayName}</span>
-                        <span className="text-xs text-slate-400">
-                          {col.isActualPeriod ? 'Historical' : 'Forecast'}
-                        </span>
+                        <span>FY {y}</span>
+                        <span className="text-xs text-slate-400">Calendar</span>
                       </div>
                     </TableHead>
                   ))}
                 </TableRow>
 
-                {/* Sub-header for forecast months */}
                 <TableRow className="border-slate-700 hover:bg-slate-800">
-                  <TableHead className="sticky left-0 bg-slate-800 z-20"></TableHead>
-                  <TableHead></TableHead>
-                  {monthColumns.map((col, index) => (
-                    <TableHead 
-                      key={index} 
+                  {resultPeriodColumns.map((pc, idx) => (
+                    <TableHead
+                      key={`${pc.month}-${pc.segment}-${idx}`}
                       className={cn(
-                        "text-center text-xs text-slate-400 p-2 border-l border-slate-600",
-                        col.isActualPeriod 
-                          ? "bg-amber-900/10" 
-                          : "bg-blue-900/10"
+                        'text-center text-xs text-slate-400 p-2 border-l border-slate-600 min-w-[80px]',
+                        pc.isActualPeriod ? 'bg-amber-900/10' : 'bg-blue-900/10'
                       )}
                     >
-                      {col.isActualPeriod ? (
+                      {pc.segment === 'historical' ? (
                         <span>Actual</span>
+                      ) : pc.segment === 'forecast' ? (
+                        <span>Forecast</span>
                       ) : (
-                        <div className="flex justify-between">
-                          <span>Forecast</span>
-                          <span className="mx-1">|</span>
-                          <span>Budget</span>
-                        </div>
+                        <span>Budget</span>
                       )}
                     </TableHead>
                   ))}
+                  {fyYears.flatMap((y) => [
+                    <TableHead
+                      key={`fy-${y}-f`}
+                      className="text-center text-xs text-slate-400 p-2 border-l border-slate-600 min-w-[80px] bg-emerald-900/10"
+                    >
+                      Forecast
+                    </TableHead>,
+                    <TableHead
+                      key={`fy-${y}-b`}
+                      className="text-center text-xs text-slate-400 p-2 border-l border-slate-600 min-w-[80px] bg-emerald-900/10"
+                    >
+                      Budget
+                    </TableHead>
+                  ])}
                 </TableRow>
               </TableHeader>
 
@@ -370,45 +549,103 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
                           {hierarchicalNode.node.type}
                         </span>
                       </TableCell>
+
+                      <TableCell className="text-slate-300 text-sm border-r border-slate-600">
+                        {hierarchicalNode.node.type === 'METRIC' ? (
+                          <Select
+                            value={metricSeriesKindFromNode(hierarchicalNode.node) ?? 'flow'}
+                            onValueChange={(v) =>
+                              handleMetricSeriesChange(hierarchicalNode.node.id, v as 'stock' | 'flow')
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[100px] bg-slate-700 border-slate-600 text-slate-200 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-800 border-slate-600">
+                              <SelectItem value="flow" className="text-slate-200">
+                                Flow
+                              </SelectItem>
+                              <SelectItem value="stock" className="text-slate-200">
+                                Stock
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
+                      </TableCell>
                       
-                      {monthColumns.map((col, colIndex) => {
-                        const monthData = mergedData?.values.find((v: any) => v.month === col.month);
-                        
+                      {resultPeriodColumns.map((pc, colIndex) => {
+                        const monthData = mergedData?.values.find((v) => v.month === pc.month);
+                        const text = formatPeriodCellValue(monthData, pc.segment, hierarchicalNode.node.type);
+                        const isDash = text === '-';
+
                         return (
-                          <TableCell 
-                            key={colIndex} 
+                          <TableCell
+                            key={`${pc.month}-${pc.segment}-${colIndex}`}
                             className={cn(
-                              "text-center text-sm font-mono border-l border-slate-600",
-                              col.isActualPeriod 
-                                ? "bg-amber-900/5" 
-                                : "bg-blue-900/5"
+                              'text-center text-sm font-mono border-l border-slate-600',
+                              pc.isActualPeriod ? 'bg-amber-900/5' : 'bg-blue-900/5'
                             )}
                           >
-                            {monthData ? (
-                              col.isActualPeriod ? (
-                                <span className="text-amber-300">
-                                  {formatForecastTableNumber(monthData.historical)}
-                                </span>
-                              ) : (
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-blue-300">
-                                    {formatForecastTableNumber(monthData.forecast)}
-                                  </span>
-                                  {hierarchicalNode.node.type === 'METRIC' && (
-                                    <>
-                                      <span className="text-slate-500">|</span>
-                                      <span className="text-green-300">
-                                        {formatForecastTableNumber(monthData.budget)}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                              )
-                            ) : (
-                              <span className="text-slate-500">-</span>
-                            )}
+                            <span
+                              className={cn(
+                                isDash && 'text-slate-500',
+                                !isDash && pc.segment === 'historical' && 'text-amber-300',
+                                !isDash && pc.segment === 'forecast' && 'text-blue-300',
+                                !isDash && pc.segment === 'budget' && 'text-green-300'
+                              )}
+                            >
+                              {text}
+                            </span>
                           </TableCell>
                         );
+                      })}
+                      {fyYears.flatMap((y) => {
+                        const fy = fyForecastAndBudget(
+                          mergedData?.values ?? [],
+                          y,
+                          hierarchicalNode.node.type,
+                          metricSeriesKindFromNode(hierarchicalNode.node)
+                        );
+                        const fText = formatFyCellValue(fy.forecast);
+                        const bText = formatFyCellValue(fy.budget);
+                        const fDash = fText === '-';
+                        const bDash = bText === '-';
+                        return [
+                          <TableCell
+                            key={`fy-${y}-f`}
+                            className={cn(
+                              'text-center text-sm font-mono border-l border-slate-600',
+                              'bg-emerald-950/20'
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                fDash && 'text-slate-500',
+                                !fDash && 'text-blue-300'
+                              )}
+                            >
+                              {fText}
+                            </span>
+                          </TableCell>,
+                          <TableCell
+                            key={`fy-${y}-b`}
+                            className={cn(
+                              'text-center text-sm font-mono border-l border-slate-600',
+                              'bg-emerald-950/20'
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                bDash && 'text-slate-500',
+                                !bDash && 'text-green-300'
+                              )}
+                            >
+                              {bText}
+                            </span>
+                          </TableCell>
+                        ];
                       })}
                     </TableRow>
                   );

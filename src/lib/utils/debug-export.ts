@@ -1,11 +1,7 @@
-import type { 
-  DebugCalculationResult, 
-  DebugCalculationStep, 
-  DebugCalculationTree,
-  PerformanceMetrics 
-} from '@/types/debug';
+import type { DebugCalculationResult } from '@/lib/api/debug-calculation';
+import { buildDebugExportExcelBlob } from '@/lib/utils/debug-export-excel';
 
-export type ExportFormat = 'json' | 'csv' | 'xlsx';
+export type ExportFormat = 'json' | 'xlsx';
 
 export interface ExportOptions {
   format: ExportFormat;
@@ -16,7 +12,7 @@ export interface ExportOptions {
 }
 
 /**
- * Export debug calculation data in various formats
+ * Export debug calculation data in JSON or Excel format.
  */
 export class DebugDataExporter {
   private data: DebugCalculationResult;
@@ -25,18 +21,12 @@ export class DebugDataExporter {
     this.data = data;
   }
 
-  /**
-   * Export data based on options
-   */
   async export(options: ExportOptions): Promise<void> {
     const filename = options.filename || this.generateFilename(options.format);
 
     switch (options.format) {
       case 'json':
         await this.exportAsJSON(options, filename);
-        break;
-      case 'csv':
-        await this.exportAsCSV(options, filename);
         break;
       case 'xlsx':
         await this.exportAsExcel(options, filename);
@@ -46,11 +36,8 @@ export class DebugDataExporter {
     }
   }
 
-  /**
-   * Export as JSON
-   */
   private async exportAsJSON(options: ExportOptions, filename: string): Promise<void> {
-    const exportData: any = {
+    const exportData: Record<string, unknown> = {
       exportedAt: new Date().toISOString(),
       forecastId: this.data.forecastId,
       calculatedAt: this.data.calculatedAt,
@@ -72,77 +59,29 @@ export class DebugDataExporter {
       exportData.warnings = this.data.debugInfo.warnings;
     }
 
-    // Add summary statistics
     exportData.summary = this.generateSummary();
 
     const jsonString = JSON.stringify(exportData, null, 2);
     this.downloadFile(jsonString, filename, 'application/json');
   }
 
-  /**
-   * Export as CSV (steps data)
-   */
-  private async exportAsCSV(options: ExportOptions, filename: string): Promise<void> {
-    if (!options.includeSteps) {
-      throw new Error('CSV export requires steps data to be included');
-    }
-
-    const steps = this.data.debugInfo.calculationSteps;
-    const headers = [
-      'Step Number',
-      'Node ID',
-      'Node Type',
-      'Month',
-      'Calculation Type',
-      'Output',
-      'Execution Time (ms)',
-      'Dependencies Count',
-      'Has Error',
-      'Error Message',
-      'Timestamp'
-    ];
-
-    const csvData = [
-      headers.join(','),
-      ...steps.map(step => [
-        step.stepNumber,
-        `"${step.nodeId}"`,
-        step.nodeType,
-        step.month,
-        step.calculationType,
-        step.output ?? 'null',
-        step.executionTimeMs,
-        step.dependencies.length,
-        !!step.errorMessage,
-        `"${step.errorMessage || ''}"`,
-        step.timestamp
-      ].join(','))
-    ].join('\n');
-
-    this.downloadFile(csvData, filename, 'text/csv');
-  }
-
-  /**
-   * Export as Excel (placeholder - would require additional library)
-   */
   private async exportAsExcel(options: ExportOptions, filename: string): Promise<void> {
-    // For now, export as CSV with .xlsx extension
-    // In a real implementation, you'd use a library like 'xlsx' or 'exceljs'
-    console.warn('Excel export not fully implemented, falling back to CSV');
-    await this.exportAsCSV(options, filename.replace('.xlsx', '.csv'));
+    const blob = await buildDebugExportExcelBlob(this.data, {
+      includeSteps: options.includeSteps,
+      includeTree: options.includeTree,
+      includeMetrics: options.includeMetrics
+    });
+    this.downloadBlob(blob, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
   }
 
-  /**
-   * Generate summary statistics
-   */
   private generateSummary() {
     const steps = this.data.debugInfo.calculationSteps;
     const metrics = this.data.debugInfo.performanceMetrics;
-    
-    const nodeTypes = [...new Set(steps.map(s => s.nodeType))];
-    const calculationTypes = [...new Set(steps.map(s => s.calculationType))];
-    const errorSteps = steps.filter(s => s.errorMessage);
-    const successSteps = steps.filter(s => !s.errorMessage);
+
+    const nodeTypes = [...new Set(steps.map((s) => s.nodeType))];
+    const calculationTypes = [...new Set(steps.map((s) => s.calculationType))];
+    const errorSteps = steps.filter((s) => s.errorMessage);
+    const successSteps = steps.filter((s) => !s.errorMessage);
 
     return {
       totalSteps: steps.length,
@@ -154,50 +93,42 @@ export class DebugDataExporter {
       successCount: successSteps.length,
       successRate: steps.length > 0 ? (successSteps.length / steps.length) * 100 : 0,
       totalExecutionTime: metrics.totalExecutionTimeMs,
-      averageStepTime: steps.length > 0 
-        ? steps.reduce((sum, s) => sum + s.executionTimeMs, 0) / steps.length 
-        : 0,
+      averageStepTime:
+        steps.length > 0
+          ? steps.reduce((sum, s) => sum + s.executionTimeMs, 0) / steps.length
+          : 0,
       cacheHitRate: metrics.cacheHitRate,
-      memoryUsage: metrics.memoryUsageMb,
+      memoryUsage: metrics.memoryUsageMB,
       executionOrder: this.data.debugInfo.calculationTree.executionOrder
     };
   }
 
-  /**
-   * Generate filename based on format and current data
-   */
   private generateFilename(format: ExportFormat): string {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const forecastId = this.data.forecastId.substring(0, 8);
     return `debug-calc-${forecastId}-${timestamp}.${format}`;
   }
 
-  /**
-   * Download file to user's device
-   */
   private downloadFile(content: string, filename: string, mimeType: string): void {
     const blob = new Blob([content], { type: mimeType });
+    this.downloadBlob(blob, filename);
+  }
+
+  private downloadBlob(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
-    
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
     link.style.display = 'none';
-    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    // Clean up the URL object
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }
 
-/**
- * Utility function for quick export
- */
 export const exportDebugData = async (
-  data: DebugCalculationResult, 
+  data: DebugCalculationResult,
   options: Partial<ExportOptions> = {}
 ): Promise<void> => {
   const defaultOptions: ExportOptions = {
@@ -212,26 +143,6 @@ export const exportDebugData = async (
   await exporter.export(defaultOptions);
 };
 
-/**
- * Export only calculation steps as CSV
- */
-export const exportStepsAsCSV = async (
-  data: DebugCalculationResult,
-  filename?: string
-): Promise<void> => {
-  const exporter = new DebugDataExporter(data);
-  await exporter.export({
-    format: 'csv',
-    includeSteps: true,
-    includeTree: false,
-    includeMetrics: false,
-    filename
-  });
-};
-
-/**
- * Export performance metrics as JSON
- */
 export const exportMetricsAsJSON = async (
   data: DebugCalculationResult,
   filename?: string
