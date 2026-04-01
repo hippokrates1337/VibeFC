@@ -326,6 +326,48 @@ export class DataIntakeService {
     }
   }
 
+  /**
+   * Helper method to convert date to first of month in YYYY-MM-DD format
+   * This ensures consistency with MM-YYYY period calculations
+   */
+  private normalizeToFirstOfMonth(dateInput: string): string {
+    try {
+      const date = new Date(dateInput);
+      if (isNaN(date.getTime())) {
+        return new Date().toISOString().slice(0, 7) + '-01'; // Current month, first day
+      }
+      
+      // Set to first day of the month
+      date.setDate(1);
+      date.setHours(0, 0, 0, 0);
+      
+      return date.toISOString().slice(0, 10); // YYYY-MM-DD format
+    } catch (error) {
+      this.logger.warn(`Error normalizing date ${dateInput}, using current month first day`);
+      return new Date().toISOString().slice(0, 7) + '-01';
+    }
+  }
+
+  /**
+   * Convert YYYY-MM-DD date to MM-YYYY format for period comparisons
+   */
+  private dateToMMYYYY(dateString: string): string {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return new Date().toISOString().slice(5, 7) + '-' + new Date().getFullYear();
+      }
+      
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${month}-${year}`;
+    } catch (error) {
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      return `${month}-${now.getFullYear()}`;
+    }
+  }
+
   private normalizeTimeSeriesValues(values: TimeSeriesPoint[], variableName: string): TimeSeriesPoint[] {
     if (!values || !Array.isArray(values)) {
       this.logger.warn(`Invalid values array for variable ${variableName}. Using empty array.`);
@@ -348,17 +390,15 @@ export class DataIntakeService {
         return true;
       })
       .map(value => {
-        // Normalize the value structure
+        // Normalize the value structure with consistent first-of-month dates
         const normalizedValue: TimeSeriesPoint = {
-          date: value.date,
+          date: this.normalizeToFirstOfMonth(value.date), // Ensure first of month
           value: typeof value.value === 'number' ? value.value : 0,
         };
         
-        // Validate date format
-        const dateObj = new Date(value.date);
-        if (isNaN(dateObj.getTime())) {
-          this.logger.warn(`Invalid date format for variable ${variableName}: ${value.date}. Using current date.`);
-          normalizedValue.date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
+        // Log the normalization for debugging MM-YYYY period consistency
+        if (value.date !== normalizedValue.date) {
+          this.logger.debug(`Date normalized for variable ${variableName}: ${value.date} -> ${normalizedValue.date} (MM-YYYY: ${this.dateToMMYYYY(normalizedValue.date)})`);
         }
         
         return normalizedValue;

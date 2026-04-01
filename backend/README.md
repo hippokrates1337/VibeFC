@@ -41,12 +41,18 @@ Enables the creation and management of forecasting models using a graph-based ap
 - **Graph-based Calculation:** Converts forecast graphs to calculation trees for monthly evaluation
 - **Node Types:** DATA, CONSTANT, OPERATOR, METRIC, SEED with specific evaluation logic
 - **Time-series Dependencies:** SEED nodes reference previous calculations and historical data
+- **Extended Node Tracking:** All node calculations are tracked and stored for visualization
+  - Individual node value tracking for all node types
+  - Support for forecast, budget, historical, and calculated values
+  - Monthly time-series data for each node
 - **Error Handling:** Comprehensive validation with detailed error messages
   - Historical data availability checks
   - Variable configuration validation
   - Graph structure integrity verification
 - **Caching:** Monthly calculation caching for performance optimization
 - **Result Storage:** Persistent calculation results with full history tracking
+  - Standard metric results for backward compatibility
+  - Extended results include all node calculations for visualization features
 
 ## Getting Started
 

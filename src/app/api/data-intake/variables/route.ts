@@ -24,15 +24,22 @@ export async function POST(request: Request) {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     const body = await request.json();
     
+    // Forward Authorization header if present
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const forwardHeaders: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (authHeader) {
+      forwardHeaders['Authorization'] = authHeader;
+    }
+    
     console.log('POST /api/data-intake/variables received:', JSON.stringify(body));
     
     // Forward to backend
     try {
       const response = await fetch(`${backendUrl}/data-intake/variables`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: forwardHeaders,
         body: JSON.stringify(body),
       });
       
@@ -81,6 +88,15 @@ export async function PUT(request: Request) {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     const body = await request.json();
     
+    // Forward Authorization header if present
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const forwardHeaders: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (authHeader) {
+      forwardHeaders['Authorization'] = authHeader;
+    }
+    
     console.log('PUT /api/data-intake/variables received:', JSON.stringify(body));
     
     if (!body.variables || !Array.isArray(body.variables) || body.variables.length === 0) {
@@ -98,9 +114,7 @@ export async function PUT(request: Request) {
       
       const response = await fetch(`${backendUrl}/data-intake/variables`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: forwardHeaders,
         body: JSON.stringify(body),
       });
       
@@ -169,6 +183,15 @@ export async function DELETE(request: Request) {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     const body = await request.json();
     
+    // Forward Authorization header if present
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const forwardHeaders: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (authHeader) {
+      forwardHeaders['Authorization'] = authHeader;
+    }
+    
     console.log('DELETE /api/data-intake/variables received:', JSON.stringify(body));
     
     if (!body.ids || !Array.isArray(body.ids) || body.ids.length === 0) {
@@ -194,9 +217,7 @@ export async function DELETE(request: Request) {
       
       const response = await fetch(`${backendUrl}/data-intake/variables`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: forwardHeaders,
         body: JSON.stringify(body),
       });
       

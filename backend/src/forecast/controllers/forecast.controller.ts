@@ -3,7 +3,8 @@ import { Request as ExpressRequest } from 'express';
 import { ForecastService } from '../services/forecast.service';
 import { ForecastNodeService } from '../services/forecast-node.service';
 import { ForecastEdgeService } from '../services/forecast-edge.service';
-import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../dto/forecast.dto';
+import { ForecastCalculationService } from '../services/forecast-calculation.service';
+import { CreateForecastDto, UpdateForecastDto, ForecastDto, UpdateForecastPeriodsDto } from '../dto/forecast.dto';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto } from '../dto/forecast-node.dto';
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../dto/forecast-edge.dto';
 import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
@@ -26,6 +27,7 @@ export class ForecastController {
     private readonly forecastService: ForecastService,
     private readonly nodeService: ForecastNodeService,
     private readonly edgeService: ForecastEdgeService,
+    private readonly forecastCalculationService: ForecastCalculationService,
   ) {}
 
   // Forecast endpoints
@@ -70,6 +72,14 @@ export class ForecastController {
     return this.forecastService.update(id, userId, updateForecastDto, req);
   }
 
+  @Patch(':id/periods')
+  @HttpCode(204)
+  async updatePeriods(@Request() req: RequestWithUser, @Param('id') id: string, @Body() updatePeriodsDto: UpdateForecastPeriodsDto): Promise<void> {
+    const userId = req.user.userId;
+    this.logger.log(`Updating forecast periods for ${id} by user ${userId}`);
+    return this.forecastService.updatePeriods(id, userId, updatePeriodsDto, req);
+  }
+
   @Delete(':id')
   @HttpCode(204)
   async remove(@Request() req: RequestWithUser, @Param('id') id: string): Promise<void> {
@@ -87,6 +97,8 @@ export class ForecastController {
     this.logger.log(`Bulk save graph request for forecast ${forecastId} by user ${userId}`);
     return this.forecastService.bulkSaveGraph(forecastId, userId, bulkSaveDto, req);
   }
+
+  // Phase 8: Deprecated calculateHistorical endpoint removed - use POST /:forecastId/calculate-unified instead
 
   // Node endpoints
   @Post(':forecastId/nodes')

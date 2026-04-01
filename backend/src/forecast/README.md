@@ -1,34 +1,6 @@
-# Forecast Calculation System ⚡ **OPTIMIZED**
+# Forecast Calculation System
 
-This directory contains the comprehensive forecast calculation system for VibeFC, including graph-based calculations, error handling, and result storage.
-
-## 🚀 Performance Optimization Status
-
-**✅ COMPLETED OPTIMIZATIONS:**
-- **Database Layer**: Migrated to `SupabaseOptimizedService` with connection pooling
-- **Service Layer**: All forecast services (ForecastService, ForecastNodeService, ForecastEdgeService) optimized  
-- **Controller Layer**: Updated to pass request objects for user context isolation
-- **Bulk Operations**: High-performance bulk save reduces API calls by 98.7%
-
-**Performance Gains:**
-- **Bulk Save**: 10-30 seconds → <1 second (95%+ improvement)
-- **Individual Operations**: 50-200ms → 10-50ms (75%+ improvement)  
-- **Connection Overhead**: Eliminated via connection pooling
-- **Memory Usage**: Reduced via client caching
-
-**Architecture Changes:**
-```typescript
-// Before: Request-scoped service injection
-constructor(private supabaseService: SupabaseService) {}
-
-// After: Singleton service with request-scoped clients  
-constructor(private supabaseService: SupabaseOptimizedService) {}
-
-async someMethod(data: any, request: Request) {
-  const client = this.supabaseService.getClientForRequest(request);
-  // ... use client instead of this.supabaseService.client
-}
-```
+This directory contains the comprehensive forecast calculation system for VibeFC, providing graph-based financial forecasting with multi-period support.
 
 ## Overview
 
@@ -44,193 +16,197 @@ The forecast calculation system processes user-defined forecast graphs to produc
    - Integrates with calculation engine and provides error handling
 
 2. **CalculationEngine** (`services/calculation-engine/calculation-engine.ts`)
-   - Core calculation logic for processing forecast graphs
-   - Converts graphs to calculation trees for efficient evaluation
-   - Implements monthly iteration with caching for performance
+   - Main interface to the calculation system
+   - Routes requests to appropriate implementation (legacy/new)
+   - Maintains backward compatibility
 
-3. **VariableDataService** (`services/calculation-engine/variable-data-service.ts`)
+3. **CalculationEngineCore** (`services/calculation-engine/calculation-engine-core.ts`)
+   - New refactored calculation engine implementation
+   - Single unified calculation method replacing legacy complexity
+   - Uses strategy pattern for node evaluation
+
+4. **VariableDataService** (`services/calculation-engine/variable-data-service.ts`)
    - Handles variable data retrieval and time-series operations
    - Provides data access layer for calculation engine
+   - Manages UTC date normalization for consistency
+
+## Node Types & Evaluation Rules
+
+### DATA Nodes
+- **Purpose**: Reference variables for time-series data
+- **Attributes**: 
+  - `variableId`: UUID of the variable to reference
+  - `offsetMonths`: Number of months to offset (can be negative)
+  - `name`: User-defined label for identification
+- **Evaluation Rules**:
+  - **Historical**: Only uses ACTUAL or UNKNOWN variable types
+  - **Forecast**: Only uses INPUT or UNKNOWN variable types
+  - **Budget**: Only uses BUDGET variable types
+- **Date Handling**: Target date calculated as `baseDate + offsetMonths`
+- **Caching**: Results cached by (nodeId, month, calculationType)
+
+### CONSTANT Nodes
+- **Purpose**: Provide fixed numeric values
+- **Attributes**:
+  - `value`: Numeric constant value
+  - `name`: User-defined label for identification
+- **Evaluation Rules**:
+  - Returns same value regardless of month or calculation type
+  - Must be finite number (not NaN or Infinity)
+- **Validation**: Value must be a valid finite number
+
+### OPERATOR Nodes
+- **Purpose**: Perform mathematical operations on child values
+- **Attributes**:
+  - `op`: Operator type ('+', '-', '*', '/', '^')
+  - `inputOrder`: Array defining order of child evaluation
+- **Evaluation Rules**:
+  - **Addition (+)**: Sum of all child values
+  - **Subtraction (-)**: First value minus subsequent values (unary minus if single child)
+  - **Multiplication (*)**: Product of all child values
+  - **Division (/)**: Sequential division (reciprocal if single child)
+  - **Power (^)**: Requires exactly 2 operands, first raised to power of second
+  - **Null Propagation**: If any child returns null, result is null
+  - **Division by Zero**: Returns null for division by zero
+- **Child Order**: Uses `inputOrder` if specified, otherwise natural order
+
+### METRIC Nodes
+- **Purpose**: Root nodes that define calculation outputs
+- **Attributes**:
+  - `label`: Descriptive name for the metric
+  - `useCalculated`: Boolean controlling value source for historical and budget calculations only
+  - `budgetVariableId`: Variable for budget calculations (when useCalculated=false)
+  - `historicalVariableId`: Variable for historical calculations (when useCalculated=false)
+- **Evaluation Rules**:
+  - **Forecast**: ALWAYS calculated from child nodes (ignores useCalculated flag and variable IDs)
+  - **Historical**: 
+    - If `useCalculated=true`: Uses calculated value from child nodes
+    - If `useCalculated=false`: Uses `historicalVariableId` variable only
+  - **Budget**:
+    - If `useCalculated=true`: Uses calculated value from child nodes
+    - If `useCalculated=false`: Uses `budgetVariableId` variable only
+- **Enhanced Debugging**: Detailed logging for forecast calculation paths and child node evaluation
+- **Requirements**: Must have exactly one child node for calculations
+- **Graceful Degradation**: Missing variables result in null values (not errors)
+
+### SEED Nodes
+- **Purpose**: Provide time-series dependencies between calculations
+- **Attributes**:
+  - `sourceMetricId`: ID of the metric to reference
+- **Evaluation Rules**:
+  - **First Month Behavior**: Uses historical data from source metric's historical variable (t-1)
+    - Looks up previous month's value from the `historicalVariableId` of the source metric
+    - Only uses historical data, no fallback to forecast or budget values
+    - Falls back to calculated historical value if direct variable access fails
+  - **Subsequent Months**: Uses previous month's calculated result from source metric
+    - Accesses `context.nodeResults` to find the source metric's previous month value
+    - Gets value based on current calculation type (historical, forecast, or budget)
+    - Source metric must be calculated before SEED nodes due to dependency ordering
+  - **Dependency Ordering**: SEED nodes require source metrics to be calculated first
+    - Tree processor ensures proper dependency ordering in calculation sequence
+    - Previous month's values are available through the extended caching system
+- **Temporal Logic**: Enables complex month-over-month relationships with historical anchoring
+- **Result Storage**: Node attributes (including `sourceMetricId`) are preserved in calculation results for debugging and analysis
 
 ## Calculation Flow
 
-### 1. Graph Processing
+### 1. Request Processing
 ```
-User Graph → Data Validation → Tree Conversion → Monthly Calculation → Result Storage
+API Request → Validation → Data Fetching → Graph Conversion → Calculation → Result Storage
 ```
 
-### 2. Node Types & Evaluation
+### 2. Period Management
+- **MM-YYYY Format**: All periods use MM-YYYY string format (e.g., "03-2025")
+- **Forecast Period**: User-defined start/end months for forecasting
+- **Actual Period**: Historical data period for comparison
+- **Month Generation**: Automatic generation of month arrays for iteration
 
-#### DATA Nodes
-- Reference variables for time-series data with user-defined labels
-- Support offset months for historical lookups
-- Automatically handle different data types (forecast/budget/historical)
-- Include a `name` field for better identification in complex graphs
+### 3. Tree Processing
+- **Dependency Ordering**: Trees processed in dependency order to resolve SEED references
+- **Node Calculation**: Each node calculated for all months and calculation types
+- **Caching Strategy**: Results cached at node level to prevent recalculation
 
-#### CONSTANT Nodes
-- Provide fixed numeric values with user-defined labels
-- Remain constant across all calculation types and months
-- Include a `name` field for better identification in complex graphs
+### 4. Monthly Iteration
+- Processes each month sequentially within periods
+- Maintains calculation context across months for SEED dependencies
+- Stores results for each combination of (node, month, calculationType)
 
-#### OPERATOR Nodes
-- Perform mathematical operations (+, -, *, /, ^)
-- Process children in specified input order
-- Support complex nested calculations
+## Variable Data Rules
 
-#### METRIC Nodes
-- Root nodes that define calculation outputs
-- Control whether to use calculated values or direct variable references
-- Manage historical, budget, and forecast value sources
-- **Graceful Handling**: Budget and historical variables are optional - missing or empty variables result in null values instead of calculation errors
-- Support partial forecasts when only some variables are configured
+### Variable Types & Usage
+- **ACTUAL**: Historical/actual financial data, only used in historical calculations
+- **BUDGET**: Budget/planned financial data, only used in budget calculations
+- **INPUT**: User-provided values for forecasting, only used in forecast calculations
+- **UNKNOWN**: Legacy type, used in both historical and forecast calculations
 
-#### SEED Nodes
-- Provide time-series dependencies between calculations
-- **First Month Behavior:** Uses historical data from connected metric (t-1)
-- **Subsequent Months:** Uses previous month's calculated result from the metric
-- Enable complex temporal relationships in forecasts
+### Data Filtering
+- **Date Normalization**: All dates normalized to first of month in UTC
+- **Exact Matching**: Variables matched by exact year/month comparison
+- **Offset Handling**: Month offsets calculated before variable lookup
+- **Missing Data**: Returns null for missing variable values (graceful degradation)
 
-### 3. Monthly Iteration
-- Processes each month sequentially from forecast start to end date
-- Maintains calculation cache for performance optimization
-- Stores monthly results for each metric node
+## Calculation Types
 
-### 4. Graceful Error Handling for Missing Variables
+### Historical Calculations
+- **Period**: Uses actual period months
+- **Data Sources**: Only ACTUAL/UNKNOWN variables
+- **Purpose**: Calculate metrics using historical data
 
-#### METRIC Node Behavior
-When budget or historical variables are not configured for a METRIC node:
-- **Budget Calculation**: Returns `null` when `budgetVariableId` is empty
-- **Historical Calculation**: Returns `null` when `historicalVariableId` is empty
-- **Forecast Calculation**: Falls back to budget variable if available, otherwise returns `null`
-- **Warning Logs**: Missing variables generate warnings but do not halt calculation
+### Forecast Calculations  
+- **Period**: Uses forecast period months
+- **Data Sources**: Only INPUT/UNKNOWN variables
+- **Purpose**: Project future values based on forecast models
 
-#### SEED Node Behavior
-When the connected metric has no historical variable:
-- **First Month**: Returns `null` for historical lookup instead of throwing error
-- **Subsequent Months**: Uses previous month's calculated results normally
-- **Graceful Degradation**: Allows forecasts to continue with partial data
-
-#### Validation Changes
-- Graph validation now generates **warnings** instead of **errors** for missing variables
-- Calculations proceed even with incomplete variable configuration
-- Users receive informative warnings about missing data in calculation results
+### Budget Calculations
+- **Period**: Uses forecast period months  
+- **Data Sources**: Only BUDGET variables
+- **Purpose**: Compare against planned/budgeted values
 
 ## Error Handling
 
-### Comprehensive Validation System
+### Validation System
+- **Request Validation**: Validates calculation requests before processing
+- **Graph Validation**: Ensures valid graph structure and node connectivity
+- **Node Validation**: Validates individual node attributes and requirements
+- **Data Integrity**: Checks for orphaned references and missing data
 
-#### Historical Data Validation
-- Checks availability of required historical data points
-- Reports expected dates vs. available dates
-- Provides actionable guidance for missing data scenarios
+### Error Categories
+- **Validation Errors**: Invalid graph structure or node configuration
+- **Calculation Errors**: Runtime errors during computation (division by zero, etc.)
+- **Data Errors**: Missing variables or data points
+- **System Errors**: Database or service failures
 
-```typescript
-// Example error message
-"Historical data for 2025-03-01 not found in variable 'AG_REV_Recurring_All'. 
-Available dates: 2024-01-01, 2024-02-01, ..., 2025-01-01. 
-Please ensure historical data exists for the month prior to the forecast start date, 
-or adjust your forecast start date to begin after the latest available historical data."
-```
+### Graceful Degradation
+- **Missing Variables**: Generate warnings but continue calculation
+- **Null Values**: Propagate null values through calculations without failure
+- **Partial Results**: Return partial results when some nodes succeed
 
-#### Variable Configuration Validation
-- Validates variable references in nodes
-- Checks for missing or misconfigured variables
-- Ensures proper variable types for intended usage
+## Performance Features
 
-#### Graph Structure Validation
-- Detects circular dependencies
-- Validates edge connections
-- Ensures graph integrity before calculation
+### Caching Strategy
+- **Node-Level Caching**: Cache results by (nodeId, month, calculationType)
+- **Context Persistence**: Maintain results across tree processing
+- **Cache Clearing**: Automatic cache clearing between calculations
 
-### Error Response Flow
-```
-CalculationEngine → ForecastCalculationService → Frontend API → Store → UI Toast
-```
-
-### Frontend Error Handling
-- Categorized error titles based on error patterns
-- Extended display duration (8 seconds) for complex errors
-- Clean error messages without backend prefixes
-- Actionable guidance for users
+### Optimization Techniques
+- **Dependency Ordering**: Process trees in dependency order to minimize recalculation
+- **Lazy Evaluation**: Only calculate required months and types
+- **Connection Pooling**: Optimized database connections via SupabaseOptimizedService
+- **Bulk Operations**: Efficient bulk save operations for large graphs
 
 ## API Endpoints
 
 ### Calculation Operations
-- `POST /forecasts/:id/calculate` - Trigger forecast calculation
+- `POST /forecasts/:id/calculate` - Trigger forecast calculation (legacy)
+- `POST /forecasts/:id/calculate-with-periods` - Unified calculation with period support
 - `GET /forecasts/:id/calculation-results` - Get latest calculation results
 - `GET /forecasts/:id/calculation-results/history` - Get calculation history
-- `GET /forecasts/calculation/health` - Health check endpoint
 
-### Performance Optimized Operations
-- `POST /forecasts/:id/bulk-save` - ⚡ **NEW**: High-performance bulk save operation for forecast graphs
-  - Replaces N+1 individual API calls with single atomic operation
-  - Utilizes PostgreSQL stored procedure for optimal database performance
-  - Reduces save times from 10-30 seconds to under 1 second
+### Period Management
+- `PATCH /forecasts/:id/periods` - Update forecast period fields (MM-YYYY format)
 
-### Request/Response Examples
-
-#### Calculate Forecast
-```http
-POST /forecasts/123e4567-e89b-12d3-a456-426614174000/calculate
-Authorization: Bearer <token>
-
-Response (200 OK):
-{
-  "id": "calc-result-id",
-  "forecastId": "123e4567-e89b-12d3-a456-426614174000",
-  "calculatedAt": "2025-01-27T10:30:00Z",
-  "metrics": [
-    {
-      "metricNodeId": "node-id",
-      "values": [
-        {
-          "date": "2025-02-01T00:00:00Z",
-          "forecast": 1500000,
-          "budget": 1400000,
-          "historical": null
-        }
-      ]
-    }
-  ]
-}
-```
-
-#### Bulk Save Request
-```http
-POST /forecasts/123e4567-e89b-12d3-a456-426614174000/bulk-save
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "forecast": {
-    "name": "Updated Forecast Name",
-    "forecastStartDate": "2025-02-01",
-    "forecastEndDate": "2025-12-31"
-  },
-  "nodes": [
-    {
-      "clientId": "client-node-1",
-      "kind": "METRIC",
-      "attributes": { "name": "Revenue" },
-      "position": { "x": 100, "y": 100 }
-    }
-  ],
-  "edges": [
-    {
-      "sourceClientId": "client-node-1",
-      "targetClientId": "client-node-2"
-    }
-  ]
-}
-```
-
-#### Error Response (400 Bad Request)
-```json
-{
-  "message": "Historical data for 2025-03-01 not found in variable 'AG_REV_Recurring_All' (791b4e1d-352e-4ea0-9455-3bca9384c3aa). Available dates: 2024-01-01, 2024-02-01, 2025-01-01, 2025-02-01. Please ensure historical data exists for the month prior to the forecast start date (2025-03-01), or adjust your forecast start date to begin after the latest available historical data.",
-  "statusCode": 400
-}
-```
+### Performance Operations
+- `POST /forecasts/:id/bulk-save` - High-performance bulk save for forecast graphs
 
 ## Database Schema
 
@@ -241,7 +217,7 @@ CREATE TABLE forecast_calculation_results (
   forecast_id UUID NOT NULL REFERENCES forecasts(id) ON DELETE CASCADE,
   organization_id UUID NOT NULL,
   calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  results JSONB NOT NULL, -- Stores MetricCalculationResult[]
+  results JSONB NOT NULL, -- Stores complete calculation results
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
@@ -251,38 +227,19 @@ CREATE TABLE forecast_calculation_results (
 - `forecast_edges`: Stores connections between nodes
 - Supports proper referential integrity and cascading deletes
 
-## Performance Features
+## Testing
 
-### Caching Strategy
-- Node-level calculation caching with composite keys
-- Monthly result caching for cross-node dependencies
-- Efficient memory usage for large calculation graphs
+### Unit Tests
+- Individual node strategy testing
+- Error handling scenario validation
+- Cache behavior verification
+- Date manipulation utilities
 
-### Data Optimization
-- Lazy loading of variable data
-- Efficient date range filtering
-- Minimal data transformation overhead
-
-## Node Configuration Features
-
-### Enhanced Node Attributes
-
-All node types now support enhanced configuration options for better user experience:
-
-#### Variable Selection with Grouping
-- Variable dropdowns automatically group variables by type (ACTUAL, BUDGET, INPUT, UNKNOWN)
-- Provides better organization and easier selection in large variable datasets
-- Maintains alphabetical ordering within each group
-
-#### Node Labeling
-- **DATA Nodes**: Custom names for better identification (`name` field)
-- **CONSTANT Nodes**: Custom names alongside values (`name` field) 
-- **METRIC Nodes**: Descriptive labels for calculation outputs (`label` field)
-
-#### Persistence
-- All node attributes are persisted in the JSONB `attributes` field
-- Frontend Zustand store maintains real-time state
-- Changes are saved to the database via the forecast graph API
+### Integration Tests
+- End-to-end calculation flows
+- Database persistence testing
+- Error propagation verification
+- Multi-metric calculation validation
 
 ## Usage Examples
 
@@ -293,70 +250,45 @@ constructor(
   private readonly forecastCalculationService: ForecastCalculationService
 ) {}
 
-// Trigger calculation
-const result = await this.forecastCalculationService.calculateForecast(
-  forecastId,
-  userId
-);
+// Trigger unified calculation
+const calculationRequest = {
+  calculationTypes: ['forecast', 'budget'],
+  includeIntermediateNodes: true
+};
 
-// Get latest results
-const latestResult = await this.forecastCalculationService.getLatestCalculationResults(
+const result = await this.forecastCalculationService.calculateForecastWithPeriods(
   forecastId,
-  userId
+  userId,
+  request,
+  calculationRequest
 );
 ```
 
 ### Graph Structure Example
 ```
-SEED (references metric) → OPERATOR (+) ← CONSTANT (100000)
-         ↓
-    METRIC (result)
+DATA (Variable A) → OPERATOR (+) ← CONSTANT (100000)
+                         ↓
+SEED (Previous Month) → OPERATOR (*) ← CONSTANT (1.05)
+                         ↓
+                    METRIC (Revenue Growth)
 ```
 
 This creates a calculation where:
-1. SEED provides base value from another metric's historical/calculated data
-2. CONSTANT adds 100,000 monthly
-3. OPERATOR sums the inputs
-4. METRIC stores the final result
+1. DATA node fetches variable value
+2. CONSTANT adds 100,000 base amount
+3. SEED provides previous month's result
+4. Second OPERATOR applies 5% growth rate
+5. METRIC stores the final revenue projection
 
-## Testing
-
-### Unit Tests
-- Individual node type evaluation
-- Error handling scenarios
-- Cache behavior validation
-- Date manipulation utilities
-
-### Integration Tests
-- End-to-end calculation flows
-- Database persistence
-- Error propagation
-- Multi-metric calculations
-
-## Monitoring & Debugging
+## Monitoring & Health Checks
 
 ### Logging
-- Detailed calculation step logging
-- Error context preservation
+- Detailed calculation step logging with context
+- Error context preservation for debugging
 - Performance metrics tracking
-- User action correlation
+- Cache hit/miss statistics
 
-### Health Checks
-- Calculation service availability
-- Database connectivity
-- Variable data accessibility
-- Graph validation status
-
-## Future Enhancements
-
-### Planned Features
-- Batch calculation processing
-- Calculation result comparison
-- Advanced caching strategies
-- Real-time calculation updates
-
-### Performance Improvements
-- Parallel node evaluation
-- Optimized data structures
-- Advanced memory management
-- Calculation result streaming 
+### Health Endpoints
+- Calculation service availability checks
+- Database connectivity validation
+- Variable data accessibility verification

@@ -9,16 +9,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CalculationHealthDto = exports.ForecastCalculationResultDto = exports.MetricCalculationResultDto = exports.MonthlyForecastValueDto = exports.CalculateForecastDto = void 0;
+exports.UnifiedCalculationResultDto = exports.PeriodInfoDto = exports.UnifiedNodeResultDto = exports.UnifiedMonthlyValueDto = exports.UnifiedCalculationRequestDto = exports.CalculationTypeDto = exports.CalculationHealthDto = exports.ForecastCalculationResultDto = exports.MetricCalculationResultDto = exports.NodeCalculationResultDto = exports.MonthlyNodeValueDto = exports.MonthlyForecastValueDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
-class CalculateForecastDto {
-}
-exports.CalculateForecastDto = CalculateForecastDto;
-__decorate([
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
-], CalculateForecastDto.prototype, "forecastId", void 0);
 class MonthlyForecastValueDto {
 }
 exports.MonthlyForecastValueDto = MonthlyForecastValueDto;
@@ -41,6 +34,30 @@ __decorate([
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Object)
 ], MonthlyForecastValueDto.prototype, "historical", void 0);
+class MonthlyNodeValueDto extends MonthlyForecastValueDto {
+}
+exports.MonthlyNodeValueDto = MonthlyNodeValueDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Object)
+], MonthlyNodeValueDto.prototype, "calculated", void 0);
+class NodeCalculationResultDto {
+}
+exports.NodeCalculationResultDto = NodeCalculationResultDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], NodeCalculationResultDto.prototype, "nodeId", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], NodeCalculationResultDto.prototype, "nodeType", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Type)(() => MonthlyNodeValueDto),
+    __metadata("design:type", Array)
+], NodeCalculationResultDto.prototype, "values", void 0);
 class MetricCalculationResultDto {
 }
 exports.MetricCalculationResultDto = MetricCalculationResultDto;
@@ -73,6 +90,12 @@ __decorate([
     (0, class_transformer_1.Type)(() => MetricCalculationResultDto),
     __metadata("design:type", Array)
 ], ForecastCalculationResultDto.prototype, "metrics", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Type)(() => NodeCalculationResultDto),
+    __metadata("design:type", Array)
+], ForecastCalculationResultDto.prototype, "allNodes", void 0);
 class CalculationHealthDto {
 }
 exports.CalculationHealthDto = CalculationHealthDto;
@@ -84,4 +107,120 @@ __decorate([
     (0, class_validator_1.IsDateString)(),
     __metadata("design:type", String)
 ], CalculationHealthDto.prototype, "timestamp", void 0);
+var CalculationTypeDto;
+(function (CalculationTypeDto) {
+    CalculationTypeDto["HISTORICAL"] = "historical";
+    CalculationTypeDto["FORECAST"] = "forecast";
+    CalculationTypeDto["BUDGET"] = "budget";
+})(CalculationTypeDto || (exports.CalculationTypeDto = CalculationTypeDto = {}));
+class UnifiedCalculationRequestDto {
+}
+exports.UnifiedCalculationRequestDto = UnifiedCalculationRequestDto;
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsEnum)(CalculationTypeDto, { each: true }),
+    __metadata("design:type", Array)
+], UnifiedCalculationRequestDto.prototype, "calculationTypes", void 0);
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UnifiedCalculationRequestDto.prototype, "includeIntermediateNodes", void 0);
+class UnifiedMonthlyValueDto {
+}
+exports.UnifiedMonthlyValueDto = UnifiedMonthlyValueDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UnifiedMonthlyValueDto.prototype, "month", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Object)
+], UnifiedMonthlyValueDto.prototype, "historical", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Object)
+], UnifiedMonthlyValueDto.prototype, "forecast", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Object)
+], UnifiedMonthlyValueDto.prototype, "budget", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Object)
+], UnifiedMonthlyValueDto.prototype, "calculated", void 0);
+class UnifiedNodeResultDto {
+}
+exports.UnifiedNodeResultDto = UnifiedNodeResultDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UnifiedNodeResultDto.prototype, "nodeId", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UnifiedNodeResultDto.prototype, "nodeType", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Type)(() => UnifiedMonthlyValueDto),
+    __metadata("design:type", Array)
+], UnifiedNodeResultDto.prototype, "values", void 0);
+class PeriodInfoDto {
+}
+exports.PeriodInfoDto = PeriodInfoDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], PeriodInfoDto.prototype, "forecastStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], PeriodInfoDto.prototype, "forecastEndMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], PeriodInfoDto.prototype, "actualStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], PeriodInfoDto.prototype, "actualEndMonth", void 0);
+class UnifiedCalculationResultDto {
+}
+exports.UnifiedCalculationResultDto = UnifiedCalculationResultDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UnifiedCalculationResultDto.prototype, "id", void 0);
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UnifiedCalculationResultDto.prototype, "forecastId", void 0);
+__decorate([
+    (0, class_validator_1.IsDateString)(),
+    __metadata("design:type", String)
+], UnifiedCalculationResultDto.prototype, "calculatedAt", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsEnum)(CalculationTypeDto, { each: true }),
+    __metadata("design:type", Array)
+], UnifiedCalculationResultDto.prototype, "calculationTypes", void 0);
+__decorate([
+    (0, class_validator_1.IsObject)(),
+    (0, class_transformer_1.Type)(() => PeriodInfoDto),
+    __metadata("design:type", PeriodInfoDto)
+], UnifiedCalculationResultDto.prototype, "periodInfo", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Type)(() => UnifiedNodeResultDto),
+    __metadata("design:type", Array)
+], UnifiedCalculationResultDto.prototype, "metrics", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Type)(() => UnifiedNodeResultDto),
+    __metadata("design:type", Array)
+], UnifiedCalculationResultDto.prototype, "allNodes", void 0);
 //# sourceMappingURL=calculation.dto.js.map

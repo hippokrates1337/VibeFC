@@ -1,6 +1,9 @@
-import { IsNotEmpty, IsString, IsUUID, IsOptional, IsDateString, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, IsOptional, IsDateString, ValidateNested, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ValidateDateRange } from '../../validators/date-range.validator';
+
+// Regex pattern for MM-YYYY format validation
+const MM_YYYY_PATTERN = /^(0[1-9]|1[0-2])-\d{4}$/;
 
 export class CreateForecastDto {
   @IsNotEmpty()
@@ -19,6 +22,27 @@ export class CreateForecastDto {
   @IsNotEmpty()
   @IsUUID()
   organizationId: string;
+
+  // New MM-YYYY period fields - optional in create
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' })
+  forecastStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' })
+  forecastEndMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' })
+  actualStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' })
+  actualEndMonth?: string;
 }
 
 export class UpdateForecastDto {
@@ -34,6 +58,50 @@ export class UpdateForecastDto {
   @IsOptional()
   @IsDateString()
   forecastEndDate?: string;
+
+  // New MM-YYYY period fields for updates
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' })
+  forecastStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' })
+  forecastEndMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' })
+  actualStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' })
+  actualEndMonth?: string;
+}
+
+// New DTO specifically for updating periods
+export class UpdateForecastPeriodsDto {
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' })
+  forecastStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' })
+  forecastEndMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' })
+  actualStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' })
+  actualEndMonth?: string;
 }
 
 export class ForecastDto {
@@ -57,4 +125,21 @@ export class ForecastDto {
 
   createdAt: Date;
   updatedAt: Date;
+
+  // New MM-YYYY period fields
+  @IsOptional()
+  @IsString()
+  forecastStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  forecastEndMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  actualStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  actualEndMonth?: string;
 } 

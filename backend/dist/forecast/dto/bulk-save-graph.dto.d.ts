@@ -2,6 +2,10 @@ export declare class ForecastMetadataDto {
     name: string;
     forecastStartDate: string;
     forecastEndDate: string;
+    forecastStartMonth?: string;
+    forecastEndMonth?: string;
+    actualStartMonth?: string;
+    actualEndMonth?: string;
 }
 export declare class BulkNodeDto {
     clientId: string;

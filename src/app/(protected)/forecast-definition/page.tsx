@@ -9,8 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
 import { Loader2, BarChart3, Calendar, Clock } from 'lucide-react';
 import { useOrganizationStore } from '@/lib/store/organization';
-import { useOrganizationForecasts, useIsForecastLoading, useForecastError } from '@/lib/store/forecast-graph-store';
-import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
+import { useForecastGraph, useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
 
 // Helper function to safely format dates
 const formatDateSafe = (dateString: string | null | undefined, formatPattern: string): string => {
@@ -222,14 +221,8 @@ export default function ForecastDefinitionPage() {
   const [isCreating, setIsCreating] = useState(false);
   const currentOrganizationFromStore = useOrganizationStore((state) => state.currentOrganization);
 
-  const forecasts = useOrganizationForecasts();
-  const isForecastListLoading = useIsForecastLoading();
-  const forecastError = useForecastError();
-  
-  // Get the action to load forecasts into the store
-  const loadOrganizationForecasts = useForecastGraphStore((state) => state.loadOrganizationForecasts);
-  const setForecastLoading = useForecastGraphStore((state) => state.setLoading);
-  const setForecastError = useForecastGraphStore((state) => state.setError);
+  const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
+  const { loadOrganizationForecasts, setLoading: setForecastLoading, setError: setForecastError } = useForecastGraphActions();
 
   // Load forecasts when organization changes
   useEffect(() => {

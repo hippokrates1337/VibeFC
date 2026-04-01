@@ -1,4 +1,8 @@
 import { ForecastNodeClient, ForecastEdgeClient } from '@/lib/store/forecast-graph-store';
+import { formatToMmYyyy } from '@/lib/store/forecast-graph-store/utils/date-utils';
+
+/** YYYY-MM-DD (date-only), matches backend expectations for bulk-save metadata */
+const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 // Use NEXT_PUBLIC_BACKEND_URL to point to the separate backend service
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -13,6 +17,31 @@ export interface Forecast {
   forecastEndDate: string | null;
   createdAt: string;
   updatedAt: string;
+  // NEW: MM-YYYY period fields for unified system
+  forecastStartMonth?: string;
+  forecastEndMonth?: string;
+  actualStartMonth?: string;
+  actualEndMonth?: string;
+}
+
+/**
+ * Maps a Supabase `forecasts` row (snake_case columns) to the client {@link Forecast} shape.
+ */
+export function mapSupabaseForecastRowToClient(row: Record<string, unknown>): Forecast {
+  return {
+    id: String(row.id ?? ''),
+    organizationId: String(row.organization_id ?? ''),
+    userId: String(row.user_id ?? ''),
+    name: String(row.name ?? ''),
+    forecastStartDate: row.forecast_start_date != null ? String(row.forecast_start_date) : null,
+    forecastEndDate: row.forecast_end_date != null ? String(row.forecast_end_date) : null,
+    createdAt: row.created_at != null ? String(row.created_at) : '',
+    updatedAt: row.updated_at != null ? String(row.updated_at) : '',
+    forecastStartMonth: row.forecast_start_month != null ? String(row.forecast_start_month) : undefined,
+    forecastEndMonth: row.forecast_end_month != null ? String(row.forecast_end_month) : undefined,
+    actualStartMonth: row.actual_start_month != null ? String(row.actual_start_month) : undefined,
+    actualEndMonth: row.actual_end_month != null ? String(row.actual_end_month) : undefined,
+  };
 }
 
 // New interface for forecast with graph summary statistics
@@ -255,7 +284,7 @@ export const forecastApi = {
         nodes: forecastNodes,
         edges: forecastEdges,
       };
-      
+
       return { data: combinedData };
 
     } catch (error: any) {
@@ -292,6 +321,22 @@ export const forecastApi = {
     }
   ): Promise<ApiResponse<Forecast>> => {
     return fetchWithAuth<Forecast>(`/forecasts/${forecastId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  // NEW: Update forecast periods (MM-YYYY format)
+  updateForecastPeriods: async (
+    forecastId: string,
+    updates: {
+      forecastStartMonth?: string;
+      forecastEndMonth?: string;
+      actualStartMonth?: string;
+      actualEndMonth?: string;
+    }
+  ): Promise<ApiResponse<void>> => {
+    return fetchWithAuth<void>(`/forecasts/${forecastId}/periods`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
@@ -504,7 +549,15 @@ export const forecastApi = {
       forecast: {
         name,
         forecastStartDate: startDate,
-        forecastEndDate: endDate
+        forecastEndDate: endDate,
+        // Must be sent on every save: bulk_save_forecast_graph keeps existing MM-YYYY columns
+        // when these keys are omitted (COALESCE), so they would stay out of sync with ISO dates.
+        ...(ISO_DATE_ONLY.test(startDate) && ISO_DATE_ONLY.test(endDate)
+          ? {
+              forecastStartMonth: formatToMmYyyy(startDate),
+              forecastEndMonth: formatToMmYyyy(endDate),
+            }
+          : {}),
       },
       nodes: nodes.map(node => ({
         clientId: node.id,

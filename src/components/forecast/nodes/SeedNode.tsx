@@ -1,13 +1,22 @@
 import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { Flame } from 'lucide-react';
-import { useForecastGraphStore, MetricNodeAttributes } from '@/lib/store/forecast-graph-store';
+import {
+  useForecastGraph,
+  useNodeVisualizationValue,
+  useVisualization,
+} from '@/lib/store/forecast-graph-store/hooks';
+import { MetricNodeAttributes } from '@/lib/store/forecast-graph-store/types';
+import NodeValueOverlay from '../node-value-overlay';
 
 /**
  * SeedNode displays the sourceMetricId and resolves it to the metric node's label.
  */
-const SeedNode: React.FC<NodeProps> = ({ data, selected }) => {
-  const nodes = useForecastGraphStore(state => state.nodes);
+const SeedNode: React.FC<NodeProps> = ({ data, selected, id }) => {
+  const { nodes } = useForecastGraph();
+  
+  const { showVisualizationSlider: showSlider } = useVisualization();
+  const nodeValue = useNodeVisualizationValue(id);
   
   // Find the connected metric node and display its label
   const getDisplayName = () => {
@@ -59,6 +68,17 @@ const SeedNode: React.FC<NodeProps> = ({ data, selected }) => {
         className="!w-3 !h-3 !border-2 !border-slate-800 !bg-pink-500 hover:!bg-pink-600 transition-colors"
         style={{ bottom: -8 }}
       />
+      
+      {/* Visualization overlay */}
+      {showSlider && nodeValue && (
+        <NodeValueOverlay 
+          nodeId={id || ''}
+          value={nodeValue}
+          nodeType="SEED"
+          position="bottom-right"
+          compact={true}
+        />
+      )}
     </div>
   );
 };

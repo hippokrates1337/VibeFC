@@ -27,5 +27,7 @@ export declare class DataIntakeService {
         count: number;
         deletedIds: string[];
     }>;
+    private normalizeToFirstOfMonth;
+    private dateToMMYYYY;
     private normalizeTimeSeriesValues;
 }

@@ -14,7 +14,12 @@ interface OrganizationState {
   loadMembers: (organizationId: string, token: string) => Promise<void>;
   switchOrganization: (organizationId: string, userId: string, token: string) => Promise<void>;
   clearOrganizationData: () => void;
-  createOrganization: (name: string, userId: string, token: string) => Promise<Organization | null>;
+  createOrganization: (
+    name: string,
+    userId: string,
+    accessToken: string,
+    refreshToken?: string | null
+  ) => Promise<Organization | null>;
   updateOrganization: (id: string, name: string, token: string) => Promise<Organization | null>;
   deleteOrganization: (id: string, token: string) => Promise<boolean>;
   inviteMember: (email: string, role: string, currentOrgId: string, token: string) => Promise<boolean>;
@@ -174,52 +179,63 @@ export const useOrganizationStore = create<OrganizationState>()(
         });
       },
       
-      createOrganization: async (name: string, userId: string, token: string) => {
+      createOrganization: async (
+        name: string,
+        userId: string,
+        accessToken: string,
+        refreshToken?: string | null
+      ) => {
         logger.log(`[OrganizationStore] Creating new organization: ${name}`);
-        set({ isLoading: true, error: null });
-        
+        // Do not set global isLoading: the protected layout treats it as "block entire
+        // UI" and unmounts the create-org modal, losing form state and error messages.
+        set({ error: null });
+
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
-          
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken ?? '',
+          });
+
           const { data: newOrg, error: createError } = await supabase
             .from('organizations')
             .insert({ name, owner_id: userId })
             .select()
             .single();
-            
+
           if (createError) throw createError;
           if (!newOrg) throw new Error('Failed to create organization.');
-          
+
           const { error: memberError } = await supabase
             .from('organization_members')
-            .upsert({
-              organization_id: newOrg.id,
-              user_id: userId,
-              role: 'admin'
-            }, {
-              onConflict: 'organization_id,user_id',
-              ignoreDuplicates: true
-            });
+            .upsert(
+              {
+                organization_id: newOrg.id,
+                user_id: userId,
+                role: 'admin',
+              },
+              {
+                onConflict: 'organization_id,user_id',
+                ignoreDuplicates: true,
+              }
+            );
 
           if (memberError) throw memberError;
 
           const currentOrgs = get().organizations;
-          set({ 
+          set({
             organizations: [...currentOrgs, newOrg],
             currentOrganization: newOrg,
-            userRole: 'admin'
+            userRole: 'admin',
           });
-          
-          await get().loadMembers(newOrg.id, token);
-          
+
+          await get().loadMembers(newOrg.id, accessToken);
+
           logger.log(`[OrganizationStore] Created organization: ${newOrg.name} (ID: ${newOrg.id})`);
           return newOrg;
         } catch (err: any) {
           logger.error('[OrganizationStore] Error creating organization:', err);
           set({ error: err.message || 'Failed to create organization.' });
           return null;
-        } finally {
-          set({ isLoading: false });
         }
       },
       

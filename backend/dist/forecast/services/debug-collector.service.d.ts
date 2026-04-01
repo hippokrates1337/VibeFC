@@ -1,0 +1,40 @@
+import { DebugCollector, DebugConfiguration, DebugCalculationStep, DebugInfo, NodeExecutionInfo, DebugTreeNode } from '../types/debug-types';
+import { NodeType, CalculationTreeNode } from './calculation-engine/types/calculation-types';
+export declare class DebugCollectorService implements DebugCollector {
+    private config?;
+    private steps;
+    private nodeExecutionTimes;
+    private stepCounter;
+    private startTime;
+    private phaseStartTimes;
+    private cacheStats;
+    private warnings;
+    private errors;
+    private trees;
+    private executionOrder;
+    private dependencyGraph;
+    private metricOrder;
+    private currentTreeProcessing;
+    isDebugSessionActive(): boolean;
+    startCalculation(config: DebugConfiguration): void;
+    endCalculation(): void;
+    startTree(treeId: string): void;
+    endTree(treeId: string): void;
+    startNode(nodeId: string, nodeType: NodeType): void;
+    endNode(nodeId: string, result: NodeExecutionInfo): void;
+    recordStep(step: DebugCalculationStep): void;
+    recordCacheHit(nodeId: string): void;
+    recordCacheMiss(nodeId: string): void;
+    recordError(nodeId: string, error: string): void;
+    recordWarning(message: string): void;
+    setCalculationTree(trees: DebugTreeNode[], dependencyGraph: Record<string, string[]>): void;
+    recordPhaseStart(phase: string): void;
+    recordPhaseEnd(phase: string): void;
+    getDebugInfo(): DebugInfo;
+    reset(): void;
+    convertTreeNodeToDebug(node: CalculationTreeNode, position?: {
+        x: number;
+        y: number;
+    }): DebugTreeNode;
+    private extractNodeLabel;
+}

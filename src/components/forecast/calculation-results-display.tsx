@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, Eye, EyeOff, TrendingUp } from 'lucide-react';
-import { useCalculationResults, useForecastId, useForecastOrganizationId } from '@/lib/store/forecast-graph-store';
+import { useCalculations, useForecastGraph } from '@/lib/store/forecast-graph-store/hooks';
 
 interface CalculationResultsDisplayProps {
   metricNodeId?: string; // If specified, show only this metric
@@ -22,10 +22,8 @@ export function CalculationResultsDisplay({
 }: CalculationResultsDisplayProps) {
   const [isExpanded, setIsExpanded] = useState(!compact);
 
-  const forecastId = useForecastId();
-  const organizationId = useForecastOrganizationId();
-  
-  const calculationResults = useCalculationResults();
+  const { forecastId, organizationId } = useForecastGraph();
+  const { calculationResults } = useCalculations();
 
   if (!calculationResults) {
     return (
@@ -44,17 +42,17 @@ export function CalculationResultsDisplay({
     );
   }
 
-  const metricsToShow = metricNodeId 
-    ? calculationResults.metrics.filter(m => m.metricNodeId === metricNodeId)
+  const metricsToShow = metricNodeId
+    ? calculationResults.metrics.filter((m: any) => m.nodeId === metricNodeId)
     : calculationResults.metrics;
 
   const handleExportResults = () => {
     // Create CSV content
-    const headers = ['Metric', 'Date', 'Forecast', 'Budget', 'Historical'];
-    const rows = metricsToShow.flatMap(metric => 
-      metric.values.map(value => [
-        metric.metricNodeId,
-        value.date.toISOString().split('T')[0], // Format as YYYY-MM-DD
+    const headers = ['Metric', 'Month', 'Forecast', 'Budget', 'Historical'];
+    const rows = metricsToShow.flatMap((metric: any) => 
+      metric.values.map((value: any) => [
+        metric.nodeId,
+        value.month, // Already in MM-YYYY format
         value.forecast?.toString() ?? 'null',
         value.budget?.toString() ?? 'null',
         value.historical?.toString() ?? 'null'
@@ -139,11 +137,11 @@ export function CalculationResultsDisplay({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {metricsToShow.map(metric => (
-            <div key={metric.metricNodeId} className="border border-slate-600 rounded p-4">
+          {metricsToShow.map((metric: any) => (
+            <div key={metric.nodeId} className="border border-slate-600 rounded p-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-slate-200">
-                  Metric: {metric.metricNodeId}
+                  Metric: {metric.nodeId}
                 </h4>
                 <span className="text-xs px-2 py-1 rounded border bg-slate-700 text-slate-300 border-slate-600">
                   {metric.values.length} months
@@ -152,15 +150,15 @@ export function CalculationResultsDisplay({
               
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 <div className="grid grid-cols-4 gap-4 text-xs font-medium text-slate-300 border-b border-slate-600 pb-2">
-                  <div>Date</div>
+                  <div>Month</div>
                   <div>Forecast</div>
                   <div>Budget</div>
                   <div>Historical</div>
                 </div>
-                {metric.values.map((value, index) => (
+                {metric.values.map((value: any, index: number) => (
                   <div key={index} className="grid grid-cols-4 gap-4 text-sm">
                     <div className="text-slate-400">
-                      {new Date(value.date).toLocaleDateString()}
+                      {value.month}
                     </div>
                     <div className="text-blue-400">
                       {value.forecast !== null ? value.forecast.toFixed(2) : 'N/A'}

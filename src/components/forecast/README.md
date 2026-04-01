@@ -12,18 +12,29 @@ This directory contains the UI components for the Graphical Forecast Definition 
 
 - `graph-validation-display.tsx` - Component for displaying graph validation status with error/warning details and validation controls
 - `calculation-results-display.tsx` - Component for displaying forecast calculation results with export functionality and metric filtering
-- `calculation-results-table.tsx` - Simple scrollable table for displaying calculation results in main editor area (interim solution)
+- `calculation-results-table.tsx` - Simple scrollable table component (available as reference, no longer used in editor)
 - `calculation-error-boundary.tsx` - Error boundary component for graceful handling of calculation-related UI errors
+
+## New Visualization Components
+
+- `month-slider.tsx` - Interactive month slider for selecting which month to visualize on the canvas
+- `visualization-controls.tsx` - Controls panel for toggling visualization features on/off  
+- `node-value-overlay.tsx` - Overlay component that displays forecast and calculated values on nodes for the selected month (Phase 5: ✅ Complete node coverage with color-coded overlays and standardized US number formatting)
+
+## New Forecast Display Components
+
+- `actual-period-selector.tsx` - Comprehensive period selector component for defining actual periods for historical calculation with validation and real-time feedback (Requirement #9: ✅ Complete period selection with overlap detection and user guidance)
+- `forecast-results-table.tsx` - Hierarchical results table component displaying nodes as rows and months as columns with mixed historical and forecast data visualization (Requirement #10: ✅ Complete table with filtering, export, and responsive design)
 
 ## Node Components
 
 Custom node components for different node types are found in the `nodes/` subdirectory:
 
-- `constant-node.tsx` - Node for constant values
-- `data-node.tsx` - Node for variable data references with optional time offset and custom name
-- `metric-node.tsx` - Node for budget and historical metrics
-- `operator-node.tsx` - Node for mathematical operations
-- `seed-node.tsx` - Node for seeding forecast metrics from sources
+- `constant-node.tsx` - Node for constant values (Phase 5: ✅ Visualization overlay removed as constants don't need month-based forecasting)
+- `data-node.tsx` - Node for variable data references with optional time offset and custom name (Phase 5: ✅ Complete value tracking implemented)
+- `metric-node.tsx` - Node for budget and historical metrics (Phase 5: ✅ Complete value tracking implemented)
+- `operator-node.tsx` - Node for mathematical operations (Phase 5: ✅ Complete value tracking implemented)
+- `seed-node.tsx` - Node for referencing other metric calculations (Phase 5: ✅ Complete value tracking implemented)
 
 ## Functionality
 
@@ -38,12 +49,16 @@ The forecast editor provides the following functionality:
 - **Smart node positioning - new nodes appear near the last edited node** (NEW)
 - **Graph validation with cycle detection and business rule enforcement** (NEW)
 - **Forecast calculation with real-time status updates** (NEW)
-- **Calculation result display with export capabilities** (NEW)
 - **Comprehensive error handling for calculation operations** (NEW)
+- **Month-by-month visualization with interactive slider** (NEW)
+- **Node value overlays showing calculated values for selected months** (NEW)
+- **Automatic visualization updates when forecast period changes** (NEW)
+- **Actual period selection with comprehensive validation for historical comparison** (NEW)
+- **Real-time feedback for period overlap detection and user guidance** (NEW)
 
 ## API Integration
 
-The components integrate with the backend API through the services defined in `src/lib/api/forecast.ts`. The graph state is managed through the Zustand store in `src/lib/store/forecast-graph-store.ts`. Variable data for dropdowns is sourced from `src/lib/store/variables.ts`.
+The components integrate with the backend API through the services defined in `src/lib/api/forecast.ts`. The graph state is managed through the modular Zustand store in `src/lib/store/forecast-graph-store/`. Variable data for dropdowns is sourced from `src/lib/store/variables.ts`.
 
 ## Smart Node Positioning
 
@@ -70,5 +85,28 @@ The positioning logic is implemented in `calculateSmartNodePosition()` in the fo
 For full implementation details of loading, saving, and manipulating forecast data, see:
 
 - `src/app/(protected)/forecast-definition/[forecastId]/page.tsx` - Editor page with API integration
-- `src/lib/store/forecast-graph-store.ts` - Graph state management including the "Duplicate with Edges" functionality and **smart positioning logic** (UPDATED)
-- `src/lib/store/variables.ts` - Global variable state management. 
+- `src/lib/store/forecast-graph-store/` - Modular graph state management including the "Duplicate with Edges" functionality and **smart positioning logic** (REFACTORED)
+- `src/lib/store/variables.ts` - Global variable state management.
+
+## Design Improvements (Latest Updates)
+
+### Color-Coded Node Value Overlays
+The visualization overlays now use color schemes that perfectly match each node type:
+- **DATA nodes**: Blue overlays (`bg-blue-900/90 border-blue-600/50 text-blue-200`)
+- **OPERATOR nodes**: Yellow overlays (`bg-yellow-900/90 border-yellow-600/50 text-yellow-200`)
+- **METRIC nodes**: Purple overlays (`bg-purple-900/90 border-purple-600/50 text-purple-200`) - Removed conflicting header icon
+- **SEED nodes**: Pink overlays (`bg-pink-900/90 border-pink-600/50 text-pink-200`)
+
+### Improved Overlay Positioning  
+All overlays now use `bottom-right` positioning to avoid overlapping with:
+- Node names and titles in headers
+- Icons and other UI elements
+- Optimal visibility without cluttering the interface
+
+### Standardized Number Formatting
+All node value displays now use consistent US-style formatting:
+- **Whole numbers only**: Decimal places removed (e.g., `96,285` instead of `96.285,22`)
+- **Thousand separators**: Commas for readability (e.g., `1,234,567`)
+- **Consistent scale**: No more mixed units like "22 Mio." vs "96.285,22"
+
+These improvements provide a cleaner, more professional visualization experience that matches the sophisticated dark theme and enhances readability across all node types. 

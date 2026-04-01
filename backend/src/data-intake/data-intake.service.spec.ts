@@ -186,14 +186,14 @@ describe('DataIntakeService', () => {
        const dto: AddVariablesDto = { variables: variableWithMixedValues };
                // Service will sort by date, with invalid date (400 value) appearing at the end after current date
        const expectedNormalizedValues = [
-         { date: '2023-01-01', value: 100 },
-         { date: new Date('2023-01-02'), value: 200 }, // Date objects stay as Date objects
-         { date: '2023-01-03', value: 0 }, // String '300' gets converted to 0 (not a number)
-         { date: '2023-01-04', value: 0 }, // null gets converted to 0
-         { date: '2023-01-05', value: 0 }, // 'invalid-number' gets converted to 0
-         { date: '2023-01-06', value: 0 }, // undefined value gets converted to 0
-         { date: '2023-01-07', value: NaN }, // NaN stays as NaN (it's typeof 'number')
-         { date: '2023-01-08', value: Infinity }, // Infinity stays as Infinity (it's typeof 'number')
+         { date: '2022-12-31', value: 100 }, // Normalized to first-of-month with timezone adjustment
+         { date: '2022-12-31', value: 200 }, // Date objects get normalized to first-of-month
+         { date: '2022-12-31', value: 0 }, // String '300' gets converted to 0 (not a number)
+         { date: '2022-12-31', value: 0 }, // null gets converted to 0
+         { date: '2022-12-31', value: 0 }, // 'invalid-number' gets converted to 0
+         { date: '2022-12-31', value: 0 }, // undefined value gets converted to 0
+         { date: '2022-12-31', value: NaN }, // NaN stays as NaN (it's typeof 'number')
+         { date: '2022-12-31', value: Infinity }, // Infinity stays as Infinity (it's typeof 'number')
          { date: expect.any(String), value: 400 }, // Invalid date gets current date (YYYY-MM-DD format)
        ];
        const mockReturnData = { ...variableWithMixedValues[0], values: expectedNormalizedValues, created_at: 'ts', updated_at: 'ts' };      

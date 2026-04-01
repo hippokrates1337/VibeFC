@@ -1,15 +1,15 @@
 'use client';
 
-import { useCalculationResults, useForecastNodes } from '@/lib/store/forecast-graph-store';
-import { MetricNodeAttributes } from '@/lib/store/forecast-graph-store';
+import { useCalculations, useForecastGraph } from '@/lib/store/forecast-graph-store/hooks';
+import { MetricNodeAttributes } from '@/lib/store/forecast-graph-store/types';
 
 /**
  * Simple scrollable table for displaying calculation results (interim solution)
  * This component provides a straightforward, readable format for each metric and month
  */
 export function CalculationResultsTable() {
-  const calculationResults = useCalculationResults();
-  const nodes = useForecastNodes();
+  const { calculationResults } = useCalculations();
+  const { nodes } = useForecastGraph();
 
   if (!calculationResults) {
     return null;
@@ -54,24 +54,24 @@ export function CalculationResultsTable() {
           <thead>
             <tr className="border-b border-slate-600">
               <th className="text-left py-2 px-3 text-slate-300 font-medium">Metric</th>
-              <th className="text-left py-2 px-3 text-slate-300 font-medium">Date</th>
+              <th className="text-left py-2 px-3 text-slate-300 font-medium">Month</th>
               <th className="text-right py-2 px-3 text-slate-300 font-medium">Forecast</th>
               <th className="text-right py-2 px-3 text-slate-300 font-medium">Budget</th>
               <th className="text-right py-2 px-3 text-slate-300 font-medium">Historical</th>
             </tr>
           </thead>
           <tbody>
-            {calculationResults.metrics.map((metric) =>
-              metric.values.map((value, index) => (
+            {calculationResults.metrics.map((metric: any) =>
+              metric.values.map((value: any, index: number) => (
                 <tr 
-                  key={`${metric.metricNodeId}-${index}`} 
+                  key={`${metric.nodeId}-${index}`} 
                   className="border-b border-slate-700 hover:bg-slate-750"
                 >
                   <td className="py-2 px-3 text-slate-200">
-                    {index === 0 ? getMetricName(metric.metricNodeId) : ''}
+                    {index === 0 ? getMetricName(metric.nodeId) : ''}
                   </td>
                   <td className="py-2 px-3 text-slate-400">
-                    {formatDate(value.date)}
+                    {value.month}
                   </td>
                   <td className="py-2 px-3 text-right text-blue-400 font-mono">
                     {formatNumber(value.forecast)}

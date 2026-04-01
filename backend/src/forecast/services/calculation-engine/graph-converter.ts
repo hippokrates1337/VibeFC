@@ -6,10 +6,13 @@ import type {
   OperatorNodeAttributes,
   MetricNodeAttributes,
   SeedNodeAttributes,
-  CalculationTree, 
-  CalculationTreeNode, 
   GraphValidationResult 
 } from './types';
+
+import type {
+  CalculationTree, 
+  CalculationTreeNode
+} from './types/calculation-types';
 
 /**
  * Service for converting forecast graphs into calculation trees
@@ -47,6 +50,17 @@ export class GraphConverter implements GraphConverterService {
 
   /**
    * Converts forecast graph into calculation trees - ONLY for top-level metric nodes
+   * Alias for new calculation engine compatibility
+   */
+  convertToCalculationTrees(
+    nodes: readonly ForecastNodeClient[], 
+    edges: readonly ForecastEdgeClient[]
+  ): CalculationTree[] {
+    return this.convertToTrees(nodes, edges);
+  }
+
+  /**
+   * Converts forecast graph into calculation trees - ONLY for top-level metric nodes
    */
   convertToTrees(
     nodes: readonly ForecastNodeClient[], 
@@ -66,12 +80,12 @@ export class GraphConverter implements GraphConverterService {
         this.logger.warn('[GraphConverter] Validation warnings:', validation.warnings);
       }
 
-      // Find only top-level metric nodes (not inputs to other metric nodes)
-      const topLevelMetricNodes = this.findTopLevelMetricNodes(nodes, edges);
-      this.logger.log(`[GraphConverter] Found ${topLevelMetricNodes.length} top-level metric nodes for tree roots`);
+      // Find all metric nodes to create calculation trees
+      const allMetricNodes = this.findMetricNodes(nodes);
+      this.logger.log(`[GraphConverter] Found ${allMetricNodes.length} metric nodes for tree roots`);
       
-      const trees = topLevelMetricNodes.map(metricNode => {
-        this.logger.log(`[GraphConverter] Building tree for top-level metric node: ${metricNode.id}`);
+      const trees = allMetricNodes.map(metricNode => {
+        this.logger.log(`[GraphConverter] Building tree for metric node: ${metricNode.id}`);
         return {
           rootMetricNodeId: metricNode.id,
           tree: this.buildTreeFromMetric(metricNode.id, nodes, edges)
@@ -123,11 +137,8 @@ export class GraphConverter implements GraphConverterService {
     this.validateSeedNodeConnections(nodes, edges, errors, warnings);
     this.validateMetricNodeConfiguration(nodes, edges, errors, warnings);
 
-    // Validate that we have at least one top-level metric node
-    const topLevelMetricNodes = this.findTopLevelMetricNodes(nodes, edges);
-    if (topLevelMetricNodes.length === 0 && metricNodes.length > 0) {
-      errors.push('All METRIC nodes are connected as inputs to other METRIC nodes - at least one METRIC node must be at the top level');
-    }
+    // Note: All METRIC nodes are now allowed to be calculated regardless of whether they have incoming edges
+    // This allows for overlapping calculation trees and complex dependency structures
 
     const isValid = errors.length === 0;
     this.logger.log(`[GraphConverter] Validation complete - ${isValid ? 'VALID' : 'INVALID'}`);
@@ -167,6 +178,16 @@ export class GraphConverter implements GraphConverterService {
   ): void {
     // Check that all edge endpoints exist
     edges.forEach(edge => {
+      // Check for undefined/null source and target
+      if (!edge.source) {
+        errors.push(`Edge ${edge.id} has invalid source node: ${edge.source}`);
+        return;
+      }
+      if (!edge.target) {
+        errors.push(`Edge ${edge.id} has invalid target node: ${edge.target}`);
+        return;
+      }
+      
       const sourceExists = nodes.some(n => n.id === edge.source);
       const targetExists = nodes.some(n => n.id === edge.target);
       
@@ -260,21 +281,45 @@ export class GraphConverter implements GraphConverterService {
     nodes: readonly ForecastNodeClient[], 
     edges: readonly ForecastEdgeClient[]
   ): CalculationTreeNode {
-    this.logger.log(`[GraphConverter] Building tree from metric node: ${metricNodeId}`);
+    return this.buildTreeFromNode(metricNodeId, nodes, edges, new Set());
+  }
+
+  private buildTreeFromNode(
+    nodeId: string,
+    nodes: readonly ForecastNodeClient[], 
+    edges: readonly ForecastEdgeClient[],
+    visitedInThisTree: Set<string>
+  ): CalculationTreeNode {
+    this.logger.log(`[GraphConverter] Building tree from node: ${nodeId}`);
     
-    const node = nodes.find(n => n.id === metricNodeId);
+    const node = nodes.find(n => n.id === nodeId);
     if (!node) {
-      throw new Error(`Metric node ${metricNodeId} not found`);
+      throw new Error(`Node ${nodeId} not found`);
     }
 
-    const children = this.getNodeChildren(metricNodeId, nodes, edges);
-    this.logger.log(`[GraphConverter] Node ${metricNodeId} has ${children.length} children`);
+    // If we've already visited this node in this tree, create a reference instead of duplicating
+    if (visitedInThisTree.has(nodeId)) {
+      this.logger.warn(`[GraphConverter] Node ${nodeId} already visited in this tree - creating reference node`);
+      return {
+        nodeId: nodeId,
+        nodeType: node.type,
+        nodeData: node.data,
+        children: [], // Don't include children for references to avoid duplication
+        inputOrder: node.type === 'OPERATOR' ? (node.data as OperatorNodeAttributes)?.inputOrder : undefined,
+        isReference: true // Flag to indicate this is a reference, not the full node
+      };
+    }
+
+    visitedInThisTree.add(nodeId);
+
+    const children = this.getNodeChildren(nodeId, nodes, edges);
+    this.logger.log(`[GraphConverter] Node ${nodeId} has ${children.length} children`);
 
     return {
-      nodeId: metricNodeId,
+      nodeId: nodeId,
       nodeType: node.type,
       nodeData: node.data,
-      children: children.map(child => this.buildTreeFromMetric(child.id, nodes, edges)),
+      children: children.map(child => this.buildTreeFromNode(child.id, nodes, edges, visitedInThisTree)),
       inputOrder: node.type === 'OPERATOR' ? (node.data as OperatorNodeAttributes)?.inputOrder : undefined
     };
   }
@@ -340,7 +385,7 @@ export class GraphConverter implements GraphConverterService {
   }
 
   /**
-   * Find top-level metric nodes - those that are NOT inputs to other metric nodes
+   * Find top-level metric nodes - those that are NOT targets of edges (no incoming edges)
    */
   private findTopLevelMetricNodes(
     nodes: readonly ForecastNodeClient[],
@@ -348,25 +393,21 @@ export class GraphConverter implements GraphConverterService {
   ): ForecastNodeClient[] {
     const metricNodes = this.findMetricNodes(nodes);
     
-    // Find metric nodes that are targets of edges (inputs to other nodes)
-    const metricNodesAsInputs = new Set<string>();
+    // Find metric nodes that are targets of edges (have incoming edges)
+    const metricNodesWithIncomingEdges = new Set<string>();
     edges.forEach(edge => {
       const targetNode = nodes.find(n => n.id === edge.target);
       if (targetNode && targetNode.type === 'METRIC') {
-        // This metric node is an input to another metric node
-        const sourceNode = nodes.find(n => n.id === edge.source);
-        if (sourceNode && sourceNode.type === 'METRIC') {
-          metricNodesAsInputs.add(edge.source);
-        }
+        metricNodesWithIncomingEdges.add(edge.target);
       }
     });
 
-    // Return metric nodes that are NOT inputs to other metric nodes
-    const topLevelMetrics = metricNodes.filter(metric => !metricNodesAsInputs.has(metric.id));
+    // Return metric nodes that are NOT targets of edges (no incoming edges)
+    const topLevelMetrics = metricNodes.filter(metric => !metricNodesWithIncomingEdges.has(metric.id));
     
     this.logger.log(`[GraphConverter] Metric nodes analysis:`);
     this.logger.log(`[GraphConverter] - Total metric nodes: ${metricNodes.length}`);
-    this.logger.log(`[GraphConverter] - Metric nodes used as inputs: ${metricNodesAsInputs.size}`);
+    this.logger.log(`[GraphConverter] - Metric nodes with incoming edges: ${metricNodesWithIncomingEdges.size}`);
     this.logger.log(`[GraphConverter] - Top-level metric nodes: ${topLevelMetrics.length}`);
     
     return topLevelMetrics;

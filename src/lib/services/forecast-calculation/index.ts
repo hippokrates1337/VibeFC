@@ -5,8 +5,5 @@ export { GraphConverter } from './graph-converter';
 export type {
   CalculationTree,
   CalculationTreeNode,
-  ForecastCalculationResult,
-  MetricCalculationResult,
-  MonthlyForecastValue,
   GraphValidationResult
 } from '@/types/forecast'; 

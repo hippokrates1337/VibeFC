@@ -27,7 +27,7 @@ This directory contains the TypeScript source code for the VibeFC NestJS backend
 - **Feature Modules**: Each subdirectory typically represents a feature module, encapsulating domain-specific logic. Key modules include:
     - **`organizations/`**: Manages organizations and their members, including CRUD operations and membership controls. **✅ OPTIMIZED** (See `organizations/README.md`)
     - **`data-intake/`**: Responsible for managing time-series variables, including CRUD operations and data validation. **✅ OPTIMIZED** (See `data-intake/README.md`)
-    - **`forecast/`**: Enables the creation, management, and execution of time-series forecasts using a dynamic node-based graph structure. **✅ OPTIMIZED** (See `forecast/README.md`)
+    - **`forecast/`**: Enables the creation, management, and execution of time-series forecasts using a dynamic node-based graph structure. **✅ OPTIMIZED** with complete node visualization tracking (Phase 5). (See `forecast/README.md`)
     - **`health/`**: Provides endpoints for monitoring the health and status of the backend application (e.g., `GET /health`). (See `health/README.md`)
     - **`test-auth/`**: Provides a test endpoint (`/test-auth`) for inspecting authenticated user details and headers, useful for debugging authentication setups. (See `test-auth/README.md`)
 

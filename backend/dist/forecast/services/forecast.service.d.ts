@@ -1,5 +1,5 @@
 import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
-import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../dto/forecast.dto';
+import { CreateForecastDto, UpdateForecastDto, ForecastDto, UpdateForecastPeriodsDto } from '../dto/forecast.dto';
 import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
 import { PerformanceService } from '../../common/services/performance.service';
 import { Request } from 'express';
@@ -8,10 +8,14 @@ export declare class ForecastService {
     private performanceService;
     private readonly logger;
     constructor(supabaseService: SupabaseOptimizedService, performanceService: PerformanceService);
+    private dateToMMYYYY;
+    private isoDateToMmYyyy;
+    private generateDefaultPeriods;
     create(userId: string, dto: CreateForecastDto, request: Request): Promise<ForecastDto>;
     findAll(userId: string, organizationId: string, request: Request): Promise<ForecastDto[]>;
     findOne(id: string, userId: string, request: Request): Promise<ForecastDto>;
     update(id: string, userId: string, dto: UpdateForecastDto, request: Request): Promise<void>;
+    updatePeriods(id: string, userId: string, dto: UpdateForecastPeriodsDto, request: Request): Promise<void>;
     remove(id: string, userId: string, request: Request): Promise<void>;
     bulkSaveGraph(forecastId: string, userId: string, dto: BulkSaveGraphDto, request: Request): Promise<FlattenedForecastWithDetailsDto>;
     private mapDbEntityToDto;

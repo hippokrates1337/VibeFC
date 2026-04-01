@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.FlattenedForecastWithDetailsDto = exports.BulkSaveGraphDto = exports.BulkEdgeDto = exports.BulkNodeDto = exports.ForecastMetadataDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
+const MM_YYYY_PATTERN = /^(0[1-9]|1[0-2])-\d{4}$/;
 class ForecastMetadataDto {
 }
 exports.ForecastMetadataDto = ForecastMetadataDto;
@@ -30,6 +31,30 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], ForecastMetadataDto.prototype, "forecastEndDate", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], ForecastMetadataDto.prototype, "forecastStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], ForecastMetadataDto.prototype, "forecastEndMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], ForecastMetadataDto.prototype, "actualStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], ForecastMetadataDto.prototype, "actualEndMonth", void 0);
 class BulkNodeDto {
 }
 exports.BulkNodeDto = BulkNodeDto;

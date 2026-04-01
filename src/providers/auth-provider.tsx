@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useOrganizationStore } from '@/lib/store/organization';
 import { useVariableStore } from '@/lib/store/variables';
-import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
+import { useForecastGraph, useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
+import { mapSupabaseForecastRowToClient } from '@/lib/api/forecast';
 
 interface AuthContextType {
   user: User | null;
@@ -37,10 +38,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearOrgData = useOrganizationStore.getState().clearOrganizationData;
   const fetchVars = useVariableStore.getState().fetchVariables;
   const clearVars = useVariableStore.getState().clearVariables;
-  const loadOrgForecasts = useForecastGraphStore.getState().loadOrganizationForecasts;
-  const clearForecasts = useForecastGraphStore.getState().resetStore;
-  const setForecastLoading = useForecastGraphStore.getState().setLoading;
-  const setForecastError = useForecastGraphStore.getState().setError;
+  
+  // Safe destructuring with fallbacks to prevent undefined function references
+  const forecastActions = useForecastGraphActions();
+  const loadOrgForecasts = forecastActions?.loadOrganizationForecasts || (() => {});
+  const clearForecasts = forecastActions?.resetStore || (() => {});
+  const setForecastLoading = forecastActions?.setLoading || (() => {});
+  const setForecastError = forecastActions?.setError || (() => {});
+  
+  const { organizationId: currentForecastOrgId, isDirty } = useForecastGraph();
+
+  // Create stable function references with empty dependency arrays since we ensure stable references above
+  const memoizedLoadOrgForecasts = useCallback(loadOrgForecasts, []);
+  const memoizedClearForecasts = useCallback(clearForecasts, []);
+  const memoizedSetForecastLoading = useCallback(setForecastLoading, []);
+  const memoizedSetForecastError = useCallback(setForecastError, []);
 
   const triggerInitialDataFetch = useCallback(async (session: Session | null) => {
     const userId = session?.user?.id;
@@ -71,7 +83,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!preserveUnsavedForecasts) {
       clearForecasts();
     } else {
-      const isDirty = useForecastGraphStore.getState().isDirty;
       if (isDirty) {
         console.log('[AuthProvider] Preserving unsaved forecast changes during data clear');
       } else {
@@ -150,10 +161,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Only trigger initial data fetch if we don't already have organization data
           // This prevents clearing unsaved changes when browser window is restored
           const currentOrgStore = useOrganizationStore.getState();
-          const currentForecastStore = useForecastGraphStore.getState();
           
           const hasOrgData = currentOrgStore.organizations.length > 0;
-          const hasUnsavedChanges = currentForecastStore.isDirty;
+          const hasUnsavedChanges = isDirty;
           const isAlreadyLoading = currentOrgStore.isLoading;
           
           if (!hasOrgData && !isAlreadyLoading) {
@@ -199,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // New useEffect to fetch forecasts when currentOrganization changes and session is valid
   // RE-ENABLED WITH DEBUGGING
   const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
+  const currentOrgId = currentOrganization?.id;
 
   useEffect(() => {
     console.log('🔮 [AuthProvider] Forecast useEffect triggered:', {
@@ -219,8 +230,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('🔮 [AuthProvider] Current organization set/changed, attempting to fetch forecasts for org ID:', orgId);
         
         // Check if we're switching to a different organization or if this is the same org
-        const currentForecastOrgId = useForecastGraphStore.getState().organizationId;
-        const isDirty = useForecastGraphStore.getState().isDirty;
         
         console.log('🔮 [AuthProvider] Forecast store state check:', {
           currentForecastOrgId,
@@ -233,17 +242,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If it's the same organization and we have unsaved changes, preserve them
         if (currentForecastOrgId && currentForecastOrgId !== orgId) {
           console.log('🔮 [AuthProvider] Switching to different organization, clearing forecast store');
-          clearForecasts();
+          memoizedClearForecasts();
         } else if (currentForecastOrgId === orgId && isDirty) {
           console.log('🔮 [AuthProvider] Same organization with unsaved changes, preserving forecast data');
           // Don't clear the store, just update the organization forecasts list
-          setForecastLoading(true);
-          setForecastError(null);
+          memoizedSetForecastLoading(true);
+          memoizedSetForecastError(null);
         } else {
           // New organization or no unsaved changes, safe to clear
           console.log('🔮 [AuthProvider] Setting forecast loading to TRUE');
-          setForecastLoading(true);
-          setForecastError(null);
+          memoizedSetForecastLoading(true);
+          memoizedSetForecastError(null);
         }
         
         try {
@@ -265,25 +274,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (fetchError) {
             console.error('🔮 [AuthProvider] Error fetching organization forecasts:', fetchError.message);
-            setForecastError(fetchError.message);
-            loadOrgForecasts([]); // Load empty to reset state and set isLoading false
+            memoizedSetForecastError(fetchError.message);
+            memoizedLoadOrgForecasts([]); // Load empty to reset state and set isLoading false
           } else if (forecastsData && forecastsData.length > 0) {
-            loadOrgForecasts(forecastsData as any); // Adjust 'as any' based on actual forecast type. This sets isLoading: false
+            const mappedForecasts = (forecastsData as Record<string, unknown>[]).map(
+              mapSupabaseForecastRowToClient
+            );
+            memoizedLoadOrgForecasts(mappedForecasts as any);
             console.log('🔮 [AuthProvider] Organization forecasts loaded for org ID:', orgId, 'Count:', forecastsData.length);
           } else { // No error, but no data or empty array
             console.log('🔮 [AuthProvider] No forecasts found or empty array for org ID:', orgId);
-            loadOrgForecasts([]); // This sets isLoading: false
+            memoizedLoadOrgForecasts([]); // This sets isLoading: false
           }
         } catch (e: any) {
           console.error('🔮 [AuthProvider] Exception fetching organization forecasts:', e.message);
-          setForecastError(e.message);
-          loadOrgForecasts([]); // Ensure store is reset and isLoading is false in case of unexpected error
+          memoizedSetForecastError(e.message);
+          memoizedLoadOrgForecasts([]); // Ensure store is reset and isLoading is false in case of unexpected error
         }
       } else if (!orgId && session) {
         // If there's a session but no current org, clear existing forecasts
         // This handles cases like org deletion or if initial org load fails but session is active
         console.log('🔮 [AuthProvider] No current organization, clearing forecasts.');
-        clearForecasts(); // This action also resets isLoading to false via initialState
+        memoizedClearForecasts(); // This action also resets isLoading to false via initialState
       } else {
         console.log('🔮 [AuthProvider] Prerequisites not met for forecast loading:', {
           hasUserId: !!userId,
@@ -298,7 +310,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       console.log('🔮 [AuthProvider] No session, skipping forecast fetch');
     }
-  }, [session?.user?.id, session?.access_token, currentOrganization?.id]); // Only depend on primitive values, not store functions
+  }, [session?.user?.id, session?.access_token, currentOrgId]); // Only depend on primitive values, not store functions
 
   const signIn = async (email: string, password: string) => {
     try {
