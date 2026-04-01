@@ -39,14 +39,17 @@ export default function RootPage() {
                 VibeFC
               </Link>
               <nav className="hidden md:flex gap-6">
-                <Link href="/data-intake" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
-                  Data Intake
-                </Link>
                 <Link href="/organizations" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                   Organizations
                 </Link>
+                <Link href="/data-intake" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
+                  Data Intake
+                </Link>
                 <Link href="/forecast-definition" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                   Forecast Definition
+                </Link>
+                <Link href="/forecast-display" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
+                  Forecast Display
                 </Link>
               </nav>
             </div>
@@ -84,7 +87,7 @@ export default function RootPage() {
               </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mt-16">
               <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 flex flex-col items-center text-center">
                 <div className="bg-blue-900/20 p-3 rounded-full mb-4">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
@@ -116,15 +119,38 @@ export default function RootPage() {
                     <path d="M22 20V8"></path>
                   </svg>
                 </div>
-                <h2 className="text-xl font-semibold mb-2 text-slate-100">Forecast Analysis</h2>
+                <h2 className="text-xl font-semibold mb-2 text-slate-100">Forecast Creation</h2>
                 <p className="text-slate-400 mb-4">
-                  Create visualizations and reports to analyze your forecasting data
+                  Create and edit forecasts using our graphical modeling interface
                 </p>
                 <Link 
                   href="/forecast-definition"
                   className="mt-auto bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 >
-                  View Forecasts
+                  Create Forecasts
+                </Link>
+              </div>
+              
+              <div className="rounded-lg border border-slate-700 bg-slate-800 p-6 flex flex-col items-center text-center">
+                <div className="bg-blue-900/20 p-3 rounded-full mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+                    <path d="M3 3v5h5"></path>
+                    <path d="m3 8 4.5-4.5 2.5 2.5 6-6"></path>
+                    <path d="M8 21h8"></path>
+                    <path d="M12 17v4"></path>
+                    <path d="M16 14h.01"></path>
+                    <path d="M8 14h.01"></path>
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold mb-2 text-slate-100">Forecast Display</h2>
+                <p className="text-slate-400 mb-4">
+                  View and analyze forecast results with historical comparison
+                </p>
+                <Link 
+                  href="/forecast-display"
+                  className="mt-auto bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  View Results
                 </Link>
               </div>
               

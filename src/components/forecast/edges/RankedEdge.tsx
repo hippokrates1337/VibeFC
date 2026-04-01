@@ -1,6 +1,6 @@
 import React from 'react';
 import { EdgeProps, getBezierPath, EdgeLabelRenderer } from 'reactflow';
-import { useForecastNodes } from '@/lib/store/forecast-graph-store';
+import { useForecastGraph } from '@/lib/store/forecast-graph-store/hooks';
 
 /**
  * Custom edge component that displays input rank for operator nodes
@@ -19,7 +19,7 @@ const RankedEdge: React.FC<EdgeProps> = ({
   target,
   selected,
 }) => {
-  const nodes = useForecastNodes();
+  const { nodes } = useForecastGraph();
   
   // Get the target node to check if it's an operator
   const targetNode = nodes.find(node => node.id === target);

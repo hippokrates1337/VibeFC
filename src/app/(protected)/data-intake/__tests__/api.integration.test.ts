@@ -5,6 +5,7 @@ const mockNewVariablesPayload: Omit<Variable, 'id'>[] = [
   {
     name: 'New Revenue',
     type: 'ACTUAL',
+    organizationId: 'test-org-1',
     timeSeries: [
       { date: new Date('2024-01-01T00:00:00.000Z'), value: 5000 },
       { date: new Date('2024-02-01T00:00:00.000Z'), value: 5500 },
@@ -13,6 +14,7 @@ const mockNewVariablesPayload: Omit<Variable, 'id'>[] = [
   {
     name: 'New Expenses',
     type: 'BUDGET',
+    organizationId: 'test-org-1',
     timeSeries: [
       { date: new Date('2024-01-01T00:00:00.000Z'), value: 2000 },
       { date: new Date('2024-02-01T00:00:00.000Z'), value: 2100 },
@@ -32,6 +34,7 @@ const mockVariableToAdd: Variable = {
   id: 'temp-id-1', // Use temporary frontend ID
   name: 'New Revenue',
   type: 'ACTUAL',
+  organizationId: 'test-org-1',
   timeSeries: [
     { date: new Date('2024-01-01T00:00:00.000Z'), value: 5000 },
     { date: new Date('2024-02-01T00:00:00.000Z'), value: 5500 },

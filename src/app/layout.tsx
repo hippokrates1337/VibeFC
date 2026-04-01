@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/providers/theme-provider'
 import { AuthProvider } from '@/providers/auth-provider'
+import { StoreHydrationProvider } from '@/providers/store-hydration-provider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -25,11 +26,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>
-            <main className="min-h-screen">
-              {children}
-            </main>
-          </AuthProvider>
+          <StoreHydrationProvider>
+            <AuthProvider>
+              <main className="min-h-screen">
+                {children}
+              </main>
+            </AuthProvider>
+          </StoreHydrationProvider>
         </ThemeProvider>
       </body>
     </html>

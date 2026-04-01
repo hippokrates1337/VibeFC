@@ -24,6 +24,7 @@ Handles forecast management operations including:
 ### `forecast-calculation.ts` 
 Handles forecast calculation operations including:
 - Triggering forecast calculations
+- Triggering historical calculations for actual periods
 - Retrieving calculation results
 - Accessing calculation history
 - Health checks for calculation services
@@ -33,6 +34,12 @@ Handles forecast calculation operations including:
 - Variable configuration validation with specific guidance
 - Graph structure validation with detailed problem descriptions
 - User-friendly error messages with actionable guidance
+
+**Historical Calculation Support:**
+- **Historical Period Calculations**: Calculate historical values for specific actual periods
+- **Period Validation**: Automatic validation to prevent overlap between actual and forecast periods
+- **Mixed Time Series**: Support for combined historical + forecast data display
+- **Date Range Validation**: Comprehensive validation of actual period dates
 
 ## Authentication
 
@@ -62,9 +69,20 @@ const { data, error } = await forecastApi.saveForecastGraph(
 ### Forecast Calculation Operations
 ```typescript
 import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
+import type { HistoricalCalculationRequest } from '@/types/forecast';
 
 // Trigger calculation
 const result = await forecastCalculationApi.calculateForecast('forecast-id');
+
+// Trigger historical calculation for actual period
+const historicalRequest: HistoricalCalculationRequest = {
+  actualStartDate: '2024-01-01',
+  actualEndDate: '2024-06-30'
+};
+const historicalResult = await forecastCalculationApi.calculateHistoricalValues(
+  'forecast-id',
+  historicalRequest
+);
 
 // Get latest results
 const results = await forecastCalculationApi.getCalculationResults('forecast-id');

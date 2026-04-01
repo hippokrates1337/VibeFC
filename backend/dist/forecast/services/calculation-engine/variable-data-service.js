@@ -9,7 +9,12 @@ class VariableDataService {
             if (!variable) {
                 return null;
             }
-            const timeSeriesEntry = variable.timeSeries.find(ts => this.normalizeToFirstOfMonth(ts.date).getTime() === normalizedDate.getTime());
+            const targetYear = normalizedDate.getUTCFullYear();
+            const targetMonth = normalizedDate.getUTCMonth();
+            const timeSeriesEntry = variable.timeSeries.find(ts => {
+                const tsDate = this.normalizeToFirstOfMonth(ts.date);
+                return tsDate.getUTCFullYear() === targetYear && tsDate.getUTCMonth() === targetMonth;
+            });
             return timeSeriesEntry?.value ?? null;
         }
         catch (error) {
@@ -26,12 +31,24 @@ class VariableDataService {
         }
     }
     normalizeToFirstOfMonth(date) {
-        return new Date(date.getFullYear(), date.getMonth(), 1);
+        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+    }
+    async getVariableValue(variableId, targetDate, variables, offsetMonths) {
+        if (offsetMonths !== undefined && offsetMonths !== 0) {
+            return this.getVariableValueWithOffset(variableId, targetDate, offsetMonths, variables);
+        }
+        else {
+            return this.getVariableValueForMonth(variableId, targetDate, variables);
+        }
     }
     addMonths(date, months) {
-        const result = new Date(date);
-        result.setMonth(result.getMonth() + months);
-        return result;
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth();
+        const day = date.getUTCDate();
+        const newMonthIndex = month + months;
+        const newYear = year + Math.floor(newMonthIndex / 12);
+        const modMonth = ((newMonthIndex % 12) + 12) % 12;
+        return new Date(Date.UTC(newYear, modMonth, day));
     }
 }
 exports.VariableDataService = VariableDataService;

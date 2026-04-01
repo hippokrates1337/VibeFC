@@ -36,15 +36,33 @@ export interface MonthlyForecastValue {
   readonly historical: number | null;
 }
 
+// Extended monthly value to include calculated values for all node types
+export interface MonthlyNodeValue extends MonthlyForecastValue {
+  readonly calculated: number | null; // For OPERATOR, SEED, and calculated METRIC nodes
+}
+
 export interface MetricCalculationResult {
   readonly metricNodeId: string;
   readonly values: MonthlyForecastValue[];
+}
+
+// New calculation result for all node types (extends existing pattern)
+export interface NodeCalculationResult {
+  readonly nodeId: string;
+  readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+  readonly nodeData?: unknown; // Preserve node attributes/configuration  
+  readonly values: MonthlyNodeValue[];
 }
 
 export interface ForecastCalculationResult {
   readonly forecastId: string;
   readonly calculatedAt: Date;
   readonly metrics: MetricCalculationResult[];
+}
+
+// Extend existing ForecastCalculationResult to include all nodes
+export interface ExtendedForecastCalculationResult extends ForecastCalculationResult {
+  readonly allNodes: NodeCalculationResult[]; // All node calculation results
 }
 
 // Tree structure for calculation
@@ -101,4 +119,60 @@ export type NodeAttributes =
   | ConstantNodeAttributes
   | OperatorNodeAttributes
   | MetricNodeAttributes
-  | SeedNodeAttributes; 
+  | SeedNodeAttributes;
+
+// ========================================
+// Phase 2: Unified Calculation Interfaces
+// ========================================
+
+// Calculation types enum for unified calculations
+export type CalculationType = 'historical' | 'forecast' | 'budget';
+
+// Unified calculation request (no periods - read from forecast metadata)
+export interface UnifiedCalculationRequest {
+  readonly calculationTypes: CalculationType[];
+  readonly includeIntermediateNodes: boolean;
+}
+
+// Unified monthly value with MM-YYYY identifier
+export interface UnifiedMonthlyValue {
+  readonly month: string; // MM-YYYY format
+  readonly historical: number | null;
+  readonly forecast: number | null;
+  readonly budget: number | null;
+  readonly calculated: number | null; // For intermediate nodes
+}
+
+// Unified node result
+export interface UnifiedNodeResult {
+  readonly nodeId: string;
+  readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+  readonly nodeData?: unknown; // Preserve node attributes/configuration
+  readonly values: UnifiedMonthlyValue[];
+}
+
+// Unified calculation result
+export interface UnifiedCalculationResult {
+  readonly forecastId: string;
+  readonly calculatedAt: Date;
+  readonly calculationTypes: CalculationType[];
+  readonly periodInfo: {
+    readonly forecastStartMonth: string; // MM-YYYY
+    readonly forecastEndMonth: string; // MM-YYYY
+    readonly actualStartMonth: string; // MM-YYYY
+    readonly actualEndMonth: string; // MM-YYYY
+  };
+  readonly metrics: UnifiedNodeResult[]; // Only metric nodes
+  readonly allNodes: UnifiedNodeResult[]; // All nodes when includeIntermediateNodes = true
+}
+
+// MM-YYYY utility functions interface
+export interface MMYYYYUtils {
+  addMonths(month: string, monthsToAdd: number): string;
+  subtractMonths(month: string, monthsToSubtract: number): string;
+  compareMonths(month1: string, month2: string): number; // -1, 0, 1
+  isValidMMYYYY(month: string): boolean;
+  getMonthsBetween(startMonth: string, endMonth: string): string[];
+  dateToMMYYYY(date: Date): string;
+  mmyyyyToFirstOfMonth(month: string): Date;
+} 

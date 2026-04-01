@@ -18,13 +18,20 @@ export async function GET(
     
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     
+    // Extract Authorization header from the incoming request (if present) and forward it
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const forwardHeaders: HeadersInit = {
+      'Accept': 'application/json',
+    };
+    if (authHeader) {
+      forwardHeaders['Authorization'] = authHeader;
+    }
+    
     // Forward to backend
     try {
       const response = await fetch(`${backendUrl}/data-intake/variables/${userId}`, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: forwardHeaders,
         cache: 'no-store' // Ensure we don't cache the response
       });
       

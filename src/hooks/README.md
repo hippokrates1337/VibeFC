@@ -20,7 +20,7 @@ toast({ title: "Success!", description: "Action completed." });
 ### Store Hooks
 **Location**: `@/lib/store/`
 
-#### Forecast Store (`forecast-graph-store.ts`)
+#### Forecast Store (`forecast-graph-store/`)
 Complete forecast graph state management with 30+ specialized hooks:
 - **Data Access**: `useForecastNodes`, `useForecastEdges`, `useForecastMetadata`
 - **State**: `useIsForecastDirty`, `useIsForecastLoading`, `useSelectedNode`

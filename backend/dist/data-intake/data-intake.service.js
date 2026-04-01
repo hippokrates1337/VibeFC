@@ -260,6 +260,37 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
             throw new Error(`Error deleting variables: ${error.message}`);
         }
     }
+    normalizeToFirstOfMonth(dateInput) {
+        try {
+            const date = new Date(dateInput);
+            if (isNaN(date.getTime())) {
+                return new Date().toISOString().slice(0, 7) + '-01';
+            }
+            date.setDate(1);
+            date.setHours(0, 0, 0, 0);
+            return date.toISOString().slice(0, 10);
+        }
+        catch (error) {
+            this.logger.warn(`Error normalizing date ${dateInput}, using current month first day`);
+            return new Date().toISOString().slice(0, 7) + '-01';
+        }
+    }
+    dateToMMYYYY(dateString) {
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                return new Date().toISOString().slice(5, 7) + '-' + new Date().getFullYear();
+            }
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${month}-${year}`;
+        }
+        catch (error) {
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            return `${month}-${now.getFullYear()}`;
+        }
+    }
     normalizeTimeSeriesValues(values, variableName) {
         if (!values || !Array.isArray(values)) {
             this.logger.warn(`Invalid values array for variable ${variableName}. Using empty array.`);
@@ -279,13 +310,11 @@ let DataIntakeService = DataIntakeService_1 = class DataIntakeService {
         })
             .map(value => {
             const normalizedValue = {
-                date: value.date,
+                date: this.normalizeToFirstOfMonth(value.date),
                 value: typeof value.value === 'number' ? value.value : 0,
             };
-            const dateObj = new Date(value.date);
-            if (isNaN(dateObj.getTime())) {
-                this.logger.warn(`Invalid date format for variable ${variableName}: ${value.date}. Using current date.`);
-                normalizedValue.date = new Date().toISOString().slice(0, 10);
+            if (value.date !== normalizedValue.date) {
+                this.logger.debug(`Date normalized for variable ${variableName}: ${value.date} -> ${normalizedValue.date} (MM-YYYY: ${this.dateToMMYYYY(normalizedValue.date)})`);
             }
             return normalizedValue;
         })

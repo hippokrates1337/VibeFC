@@ -38,15 +38,27 @@ if (!supabaseUrl && typeof window !== 'undefined') {
   // Note: You'll need to get the anon key from your Supabase dashboard
 }
 
-console.log('🔍 SUPABASE INIT:', {
-  hasUrl: !!supabaseUrl,
-  hasKey: !!supabaseAnonKey,
-  url: supabaseUrl,
-  keyPrefix: supabaseAnonKey?.substring(0, 10) + '...'
-});
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔍 SUPABASE INIT:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    url: supabaseUrl,
+    keyPrefix: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 10)}...` : 'undefined...'
+  });
+}
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(`Missing Supabase environment variables: URL=${!!supabaseUrl}, KEY=${!!supabaseAnonKey}`);
+  const missing: string[] = [];
+  if (!supabaseUrl) {
+    missing.push('NEXT_PUBLIC_SUPABASE_URL');
+  }
+  if (!supabaseAnonKey) {
+    missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  }
+  throw new Error(
+    `Missing Supabase environment variable(s): ${missing.join(', ')}. ` +
+      'Add them to .env.local at the project root. Copy the Project URL and anon public key from Supabase Dashboard → Project Settings → API.'
+  );
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

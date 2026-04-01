@@ -13,8 +13,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  useForecastGraphStore, 
+import {
+  useForecastGraph,
+  useForecastGraphActions,
+  useSelectedNode
+} from '@/lib/store/forecast-graph-store/hooks';
+import {
   ForecastNodeKind, 
   DataNodeAttributes,
   ConstantNodeAttributes,
@@ -22,7 +26,7 @@ import {
   MetricNodeAttributes,
   SeedNodeAttributes,
   ForecastNodeClient
-} from '@/lib/store/forecast-graph-store';
+} from '@/lib/store/forecast-graph-store/types';
 import { useVariableStore, Variable } from '@/lib/store/variables';
 import { X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -157,17 +161,9 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   open,
   onOpenChange
 }) => {
-  const selectedNodeId = useForecastGraphStore(state => state.selectedNodeId);
-  const nodes = useForecastGraphStore(state => state.nodes);
-  const updateNodeData = useForecastGraphStore(state => state.updateNodeData);
-  const deleteNode = useForecastGraphStore(state => state.deleteNode);
-  const setSelectedGraphNodeId = useForecastGraphStore(state => state.setSelectedNodeId);
-  
-  // Memoize selected node to prevent unnecessary re-renders
-  const selectedNode = useMemo(() => 
-    nodes.find(node => node.id === selectedNodeId), 
-    [nodes, selectedNodeId]
-  );
+  const { selectedNodeId, nodes } = useForecastGraph();
+  const { updateNodeData, deleteNode, setSelectedNodeId: setSelectedGraphNodeId } = useForecastGraphActions();
+  const selectedNode = useSelectedNode();
   
   // Get variables and selectedOrgId from the variable store
   const allVariables = useVariableStore(state => state.variables);

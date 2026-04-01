@@ -18,16 +18,18 @@ const common_1 = require("@nestjs/common");
 const forecast_service_1 = require("../services/forecast.service");
 const forecast_node_service_1 = require("../services/forecast-node.service");
 const forecast_edge_service_1 = require("../services/forecast-edge.service");
+const forecast_calculation_service_1 = require("../services/forecast-calculation.service");
 const forecast_dto_1 = require("../dto/forecast.dto");
 const forecast_node_dto_1 = require("../dto/forecast-node.dto");
 const forecast_edge_dto_1 = require("../dto/forecast-edge.dto");
 const bulk_save_graph_dto_1 = require("../dto/bulk-save-graph.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 let ForecastController = ForecastController_1 = class ForecastController {
-    constructor(forecastService, nodeService, edgeService) {
+    constructor(forecastService, nodeService, edgeService, forecastCalculationService) {
         this.forecastService = forecastService;
         this.nodeService = nodeService;
         this.edgeService = edgeService;
+        this.forecastCalculationService = forecastCalculationService;
         this.logger = new common_1.Logger(ForecastController_1.name);
     }
     async create(req, createForecastDto) {
@@ -60,6 +62,11 @@ let ForecastController = ForecastController_1 = class ForecastController {
     async update(req, id, updateForecastDto) {
         const userId = req.user.userId;
         return this.forecastService.update(id, userId, updateForecastDto, req);
+    }
+    async updatePeriods(req, id, updatePeriodsDto) {
+        const userId = req.user.userId;
+        this.logger.log(`Updating forecast periods for ${id} by user ${userId}`);
+        return this.forecastService.updatePeriods(id, userId, updatePeriodsDto, req);
     }
     async remove(req, id) {
         const userId = req.user.userId;
@@ -153,6 +160,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, forecast_dto_1.UpdateForecastDto]),
     __metadata("design:returntype", Promise)
 ], ForecastController.prototype, "update", null);
+__decorate([
+    (0, common_1.Patch)(':id/periods'),
+    (0, common_1.HttpCode)(204),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, forecast_dto_1.UpdateForecastPeriodsDto]),
+    __metadata("design:returntype", Promise)
+], ForecastController.prototype, "updatePeriods", null);
 __decorate([
     (0, common_1.Delete)(':id'),
     (0, common_1.HttpCode)(204),
@@ -259,6 +276,7 @@ exports.ForecastController = ForecastController = ForecastController_1 = __decor
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __metadata("design:paramtypes", [forecast_service_1.ForecastService,
         forecast_node_service_1.ForecastNodeService,
-        forecast_edge_service_1.ForecastEdgeService])
+        forecast_edge_service_1.ForecastEdgeService,
+        forecast_calculation_service_1.ForecastCalculationService])
 ], ForecastController);
 //# sourceMappingURL=forecast.controller.js.map

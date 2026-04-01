@@ -35,8 +35,16 @@ export function CreateOrganizationModal({ open, onOpenChange }: CreateOrganizati
     setError(null);
     
     try {
-      const result = await createOrganizationAction(name, user.id, session.access_token);
-      if (!result) throw new Error('Failed to create organization');
+      const result = await createOrganizationAction(
+        name,
+        user.id,
+        session.access_token,
+        session.refresh_token
+      );
+      if (!result) {
+        const storeError = useOrganizationStore.getState().error;
+        throw new Error(storeError || 'Failed to create organization');
+      }
       onOpenChange(false);
     } catch (err: any) {
       setError(err.message || 'Failed to create organization');

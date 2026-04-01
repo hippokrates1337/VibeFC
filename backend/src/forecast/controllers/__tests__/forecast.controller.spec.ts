@@ -3,6 +3,7 @@ import { ForecastController } from '../forecast.controller';
 import { ForecastService } from '../../services/forecast.service';
 import { ForecastNodeService } from '../../services/forecast-node.service';
 import { ForecastEdgeService } from '../../services/forecast-edge.service';
+import { ForecastCalculationService } from '../../services/forecast-calculation.service';
 import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../../dto/forecast.dto';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto, ForecastNodeKind } from '../../dto/forecast-node.dto';
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../../dto/forecast-edge.dto';
@@ -85,6 +86,11 @@ describe('ForecastController', () => {
     remove: jest.fn(),
   };
 
+  const mockCalculationService = {
+    calculateForecast: jest.fn(),
+    getLatestCalculationResults: jest.fn(),
+  };
+
   beforeEach(async () => {
     // Reset all mocks before each test
     jest.resetAllMocks();
@@ -95,6 +101,7 @@ describe('ForecastController', () => {
         { provide: ForecastService, useValue: mockForecastService },
         { provide: ForecastNodeService, useValue: mockNodeService },
         { provide: ForecastEdgeService, useValue: mockEdgeService },
+        { provide: ForecastCalculationService, useValue: mockCalculationService },
       ],
     })
     .overrideGuard(JwtAuthGuard)

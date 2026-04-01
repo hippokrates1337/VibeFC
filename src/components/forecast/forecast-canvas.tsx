@@ -17,13 +17,9 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
-  useForecastGraphStore,
-  useDeleteNode,
-  useDeleteEdge,
-  useForecastNodes,
-  useForecastEdges,
-  useOpenConfigPanelForNode
-} from '@/lib/store/forecast-graph-store';
+  useForecastGraph,
+  useForecastGraphActions
+} from '@/lib/store/forecast-graph-store/hooks';
 import { nodeTypes, edgeTypes, defaultEdgeOptions, connectionLineStyle } from './node-types';
 
 // Component to handle React Flow store error suppression
@@ -52,23 +48,12 @@ const ReactFlowErrorSuppressor: React.FC = () => {
  * This is critical for React Flow v11+ to prevent warnings about creating new objects.
  */
 const ForecastCanvas: React.FC = () => {
-  const nodes = useForecastNodes();
-  const edges = useForecastEdges();
-  
-  // Store actions for deletion - using custom hooks to ensure stability
-  const deleteNode = useDeleteNode();
-  const deleteEdge = useDeleteEdge();
-  const openConfigPanelForNode = useOpenConfigPanelForNode();
+  const { nodes, edges } = useForecastGraph();
+  const { deleteNode, deleteEdge, openConfigPanelForNode, onNodesChange: onNodesChangeFromStore, onEdgesChange: onEdgesChangeFromStore, addEdge: addEdgeStore, setSelectedNodeId } = useForecastGraphActions();
   
   // Use refs to track selected elements to avoid triggering useEffect on selection changes
   const selectedNodesRef = useRef<Node[]>([]);
   const selectedEdgesRef = useRef<Edge[]>([]);
-  
-  // Original handlers and selectors from the store - kept for easy restoration
-  const onNodesChangeFromStore = useForecastGraphStore((state) => state.onNodesChange);
-  const onEdgesChangeFromStore = useForecastGraphStore((state) => state.onEdgesChange);
-  const addEdgeStore = useForecastGraphStore((state) => state.addEdge);
-  const setSelectedNodeId = useForecastGraphStore((state) => state.setSelectedNodeId);
 
   // Custom keyboard handling for delete functionality
   const deletePressed = useKeyPress(['Delete', 'Backspace']);
@@ -178,6 +163,7 @@ const ForecastCanvas: React.FC = () => {
       <style jsx>{`
         .forecast-canvas .react-flow__node {
           cursor: pointer;
+          overflow: visible;
         }
         
         .forecast-canvas .react-flow__node.selected {
