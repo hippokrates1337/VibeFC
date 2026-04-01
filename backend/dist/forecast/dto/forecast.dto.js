@@ -9,9 +9,10 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ForecastDto = exports.UpdateForecastDto = exports.CreateForecastDto = void 0;
+exports.ForecastDto = exports.UpdateForecastPeriodsDto = exports.UpdateForecastDto = exports.CreateForecastDto = void 0;
 const class_validator_1 = require("class-validator");
 const date_range_validator_1 = require("../../validators/date-range.validator");
+const MM_YYYY_PATTERN = /^(0[1-9]|1[0-2])-\d{4}$/;
 class CreateForecastDto {
 }
 exports.CreateForecastDto = CreateForecastDto;
@@ -36,6 +37,30 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], CreateForecastDto.prototype, "organizationId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], CreateForecastDto.prototype, "forecastStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], CreateForecastDto.prototype, "forecastEndMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], CreateForecastDto.prototype, "actualStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], CreateForecastDto.prototype, "actualEndMonth", void 0);
 class UpdateForecastDto {
 }
 exports.UpdateForecastDto = UpdateForecastDto;
@@ -55,6 +80,57 @@ __decorate([
     (0, class_validator_1.IsDateString)(),
     __metadata("design:type", String)
 ], UpdateForecastDto.prototype, "forecastEndDate", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastDto.prototype, "forecastStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastDto.prototype, "forecastEndMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastDto.prototype, "actualStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastDto.prototype, "actualEndMonth", void 0);
+class UpdateForecastPeriodsDto {
+}
+exports.UpdateForecastPeriodsDto = UpdateForecastPeriodsDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastPeriodsDto.prototype, "forecastStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastPeriodsDto.prototype, "forecastEndMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastPeriodsDto.prototype, "actualStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' }),
+    __metadata("design:type", String)
+], UpdateForecastPeriodsDto.prototype, "actualEndMonth", void 0);
 class ForecastDto {
 }
 exports.ForecastDto = ForecastDto;
@@ -82,4 +158,24 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], ForecastDto.prototype, "userId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], ForecastDto.prototype, "forecastStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], ForecastDto.prototype, "forecastEndMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], ForecastDto.prototype, "actualStartMonth", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], ForecastDto.prototype, "actualEndMonth", void 0);
 //# sourceMappingURL=forecast.dto.js.map

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger, ForbiddenException } from '@nestjs/common';
 import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
-import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../dto/forecast.dto';
+import { CreateForecastDto, UpdateForecastDto, ForecastDto, UpdateForecastPeriodsDto } from '../dto/forecast.dto';
 import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
 import { PerformanceService } from '../../common/services/performance.service';
 import { Request } from 'express';
@@ -14,6 +14,50 @@ export class ForecastService {
     private performanceService: PerformanceService,
   ) {}
 
+  /**
+   * Helper method to convert date to MM-YYYY format
+   */
+  private dateToMMYYYY(date: Date): string {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${month}-${year}`;
+  }
+
+  /**
+   * MM-YYYY from an ISO date string (YYYY-MM-DD or ISO datetime) using **calendar** fields only.
+   * Avoids timezone drift from `new Date(iso)` vs stored DATE in Postgres / `to_char(..., 'MM-YYYY')`.
+   */
+  private isoDateToMmYyyy(isoDate: string): string {
+    const dateOnly = isoDate.split('T')[0];
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
+    if (!m) {
+      throw new InternalServerErrorException(`Invalid forecast date for MM-YYYY: ${isoDate}`);
+    }
+    const [, year, month] = m;
+    return `${month}-${year}`;
+  }
+
+  /**
+   * Helper method to generate default MM-YYYY periods from date ranges
+   */
+  private generateDefaultPeriods(forecastStartDate: string, forecastEndDate: string) {
+    const startDate = new Date(forecastStartDate);
+    const endDate = new Date(forecastEndDate);
+    
+    // Default actual period: 6 months before forecast start to 1 month before
+    const actualStartDate = new Date(startDate);
+    actualStartDate.setMonth(actualStartDate.getMonth() - 6);
+    const actualEndDate = new Date(startDate);
+    actualEndDate.setMonth(actualEndDate.getMonth() - 1);
+
+    return {
+      forecastStartMonth: this.dateToMMYYYY(startDate),
+      forecastEndMonth: this.dateToMMYYYY(endDate),
+      actualStartMonth: this.dateToMMYYYY(actualStartDate),
+      actualEndMonth: this.dateToMMYYYY(actualEndDate)
+    };
+  }
+
   async create(userId: string, dto: CreateForecastDto, request: Request): Promise<ForecastDto> {
     this.logger.debug(`ForecastService.create called by userId: ${userId}`);
     this.logger.debug(`CreateForecastDto: ${JSON.stringify(dto)}`);
@@ -25,6 +69,12 @@ export class ForecastService {
 
     try {
       this.logger.debug('Attempting to insert forecast into Supabase...');
+      
+      // Generate default periods if not provided
+      const defaultPeriods = this.generateDefaultPeriods(dto.forecastStartDate, dto.forecastEndDate);
+      const forecastStartMonth = this.isoDateToMmYyyy(dto.forecastStartDate);
+      const forecastEndMonth = this.isoDateToMmYyyy(dto.forecastEndDate);
+
       const client = this.supabaseService.getClientForRequest(request);
       const { data: insertedForecast, error: insertError } = await client
         .from('forecasts')
@@ -34,6 +84,11 @@ export class ForecastService {
           forecast_end_date: dto.forecastEndDate,
           organization_id: dto.organizationId,
           user_id: userId,
+          // Forecast MM-YYYY always follows ISO dates (client cannot drift from calculation UI)
+          forecast_start_month: forecastStartMonth,
+          forecast_end_month: forecastEndMonth,
+          actual_start_month: dto.actualStartMonth || defaultPeriods.actualStartMonth,
+          actual_end_month: dto.actualEndMonth || defaultPeriods.actualEndMonth,
         })
         .select('*')
         .single();
@@ -138,14 +193,13 @@ export class ForecastService {
   }
 
   async update(id: string, userId: string, dto: UpdateForecastDto, request: Request): Promise<void> {
-    // First check if the forecast belongs to this user
-    await this.findOne(id, userId, request);
-    
+    const forecast = await this.findOne(id, userId, request);
+
     // Check if there's anything to update before proceeding
     if (Object.keys(dto).length === 0) {
       return; // Nothing to update
     }
-    
+
     const updateData: Record<string, any> = {};
 
     if (dto.name !== undefined) {
@@ -158,6 +212,29 @@ export class ForecastService {
 
     if (dto.forecastEndDate !== undefined) {
       updateData.forecast_end_date = dto.forecastEndDate;
+    }
+
+    if (dto.forecastStartDate !== undefined || dto.forecastEndDate !== undefined) {
+      const mergedStart = dto.forecastStartDate ?? forecast.forecastStartDate;
+      const mergedEnd = dto.forecastEndDate ?? forecast.forecastEndDate;
+      updateData.forecast_start_month = this.isoDateToMmYyyy(mergedStart);
+      updateData.forecast_end_month = this.isoDateToMmYyyy(mergedEnd);
+    } else {
+      if (dto.forecastStartMonth !== undefined) {
+        updateData.forecast_start_month = dto.forecastStartMonth;
+      }
+
+      if (dto.forecastEndMonth !== undefined) {
+        updateData.forecast_end_month = dto.forecastEndMonth;
+      }
+    }
+
+    if (dto.actualStartMonth !== undefined) {
+      updateData.actual_start_month = dto.actualStartMonth;
+    }
+
+    if (dto.actualEndMonth !== undefined) {
+      updateData.actual_end_month = dto.actualEndMonth;
     }
 
     // Add updated_at timestamp
@@ -188,6 +265,67 @@ export class ForecastService {
     }
 
     this.logger.log(`Forecast updated: ${id} by user: ${userId}`);
+  }
+
+  /**
+   * Update only the MM-YYYY period fields for a forecast
+   */
+  async updatePeriods(id: string, userId: string, dto: UpdateForecastPeriodsDto, request: Request): Promise<void> {
+    // First check if the forecast belongs to this user
+    await this.findOne(id, userId, request);
+    
+    // Check if there's anything to update before proceeding
+    if (Object.keys(dto).length === 0) {
+      return; // Nothing to update
+    }
+    
+    const updateData: Record<string, any> = {};
+
+    // Handle MM-YYYY period fields
+    if (dto.forecastStartMonth !== undefined) {
+      updateData.forecast_start_month = dto.forecastStartMonth;
+    }
+
+    if (dto.forecastEndMonth !== undefined) {
+      updateData.forecast_end_month = dto.forecastEndMonth;
+    }
+
+    if (dto.actualStartMonth !== undefined) {
+      updateData.actual_start_month = dto.actualStartMonth;
+    }
+
+    if (dto.actualEndMonth !== undefined) {
+      updateData.actual_end_month = dto.actualEndMonth;
+    }
+
+    // Add updated_at timestamp
+    updateData.updated_at = new Date().toISOString();
+
+    if (Object.keys(updateData).length === 1 && updateData.updated_at) {
+      // Only the timestamp was added, nothing else to update
+      return;
+    }
+
+    // Use match for combined filtering of id and user_id
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client
+      .from('forecasts')
+      .update(updateData)
+      .match({ id, user_id: userId })
+      .select('id')
+      .single();
+
+    if (error) {
+      this.logger.error(`Failed to update forecast periods ${id}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Failed to update forecast periods ${id}: ${error.message}`);
+    }
+
+    if (!data) {
+      this.logger.warn(`Attempted to update periods for non-existent forecast: ${id}`);
+      throw new NotFoundException(`Forecast with ID ${id} not found.`);
+    }
+
+    this.logger.log(`Forecast periods updated: ${id} by user: ${userId}`);
   }
 
   async remove(id: string, userId: string, request: Request): Promise<void> {
@@ -255,6 +393,7 @@ export class ForecastService {
           }
 
           this.logger.log(`Forecast ${forecastId} bulk saved successfully`);
+
           return data as FlattenedForecastWithDetailsDto;
         } catch (error) {
           if (error instanceof InternalServerErrorException || error instanceof NotFoundException) {
@@ -283,6 +422,11 @@ export class ForecastService {
       userId: entity.user_id,
       createdAt: new Date(entity.created_at),
       updatedAt: new Date(entity.updated_at),
+      // Add MM-YYYY period fields
+      forecastStartMonth: entity.forecast_start_month,
+      forecastEndMonth: entity.forecast_end_month,
+      actualStartMonth: entity.actual_start_month,
+      actualEndMonth: entity.actual_end_month,
     };
   }
 } 

@@ -2,7 +2,7 @@ import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { useVariableStore } from '@/lib/store/variables';
 import { BarChart3, Calculator, Database } from 'lucide-react';
-import { useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } from '@/lib/store/forecast-graph-store';
+import { useNodeVisualizationValue, useVisualization } from '@/lib/store/forecast-graph-store/hooks';
 import NodeValueOverlay from '../node-value-overlay';
 
 /**
@@ -17,16 +17,8 @@ const MetricNode: React.FC<NodeProps> = ({ data, selected, id }) => {
   const historicalDisplayName = historicalVariable?.name || data?.historicalVariableId || '-';
   const isCalculated = data?.useCalculated ?? false;
 
-  // Visualization state
-  const selectedMonth = useSelectedVisualizationMonth();
-  const showSlider = useShowVisualizationSlider();
-  const getNodeValueForMonth = useGetNodeValueForMonth();
-
-  // Get node value for visualization
-  const nodeValue = React.useMemo(() => {
-    if (!selectedMonth || !showSlider || !id) return null;
-    return getNodeValueForMonth(id, selectedMonth);
-  }, [selectedMonth, showSlider, id, getNodeValueForMonth]);
+  const { showVisualizationSlider: showSlider } = useVisualization();
+  const nodeValue = useNodeVisualizationValue(id);
 
   return (
     <div className={`relative bg-slate-800 border-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 w-52 ${

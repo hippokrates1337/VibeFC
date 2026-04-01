@@ -1,6 +1,3 @@
-export declare class CalculateForecastDto {
-    readonly forecastId: string;
-}
 export declare class MonthlyForecastValueDto {
     readonly date: string;
     readonly forecast: number | null;
@@ -29,4 +26,40 @@ export declare class ForecastCalculationResultDto {
 export declare class CalculationHealthDto {
     readonly status: string;
     readonly timestamp: string;
+}
+export declare enum CalculationTypeDto {
+    HISTORICAL = "historical",
+    FORECAST = "forecast",
+    BUDGET = "budget"
+}
+export declare class UnifiedCalculationRequestDto {
+    readonly calculationTypes: CalculationTypeDto[];
+    readonly includeIntermediateNodes: boolean;
+}
+export declare class UnifiedMonthlyValueDto {
+    readonly month: string;
+    readonly historical: number | null;
+    readonly forecast: number | null;
+    readonly budget: number | null;
+    readonly calculated: number | null;
+}
+export declare class UnifiedNodeResultDto {
+    readonly nodeId: string;
+    readonly nodeType: string;
+    readonly values: UnifiedMonthlyValueDto[];
+}
+export declare class PeriodInfoDto {
+    readonly forecastStartMonth: string;
+    readonly forecastEndMonth: string;
+    readonly actualStartMonth: string;
+    readonly actualEndMonth: string;
+}
+export declare class UnifiedCalculationResultDto {
+    readonly id: string;
+    readonly forecastId: string;
+    readonly calculatedAt: string;
+    readonly calculationTypes: CalculationTypeDto[];
+    readonly periodInfo: PeriodInfoDto;
+    readonly metrics: UnifiedNodeResultDto[];
+    readonly allNodes?: UnifiedNodeResultDto[];
 }

@@ -5,6 +5,9 @@ class GraphConverter {
     constructor() {
         this.logger = console;
     }
+    convertToCalculationTrees(nodes, edges) {
+        return this.convertToTrees(nodes, edges);
+    }
     convertToTrees(nodes, edges) {
         try {
             this.logger.log('[GraphConverter] Starting graph-to-tree conversion');
@@ -17,10 +20,10 @@ class GraphConverter {
             if (validation.warnings.length > 0) {
                 this.logger.warn('[GraphConverter] Validation warnings:', validation.warnings);
             }
-            const topLevelMetricNodes = this.findTopLevelMetricNodes(nodes, edges);
-            this.logger.log(`[GraphConverter] Found ${topLevelMetricNodes.length} top-level metric nodes for tree roots`);
-            const trees = topLevelMetricNodes.map(metricNode => {
-                this.logger.log(`[GraphConverter] Building tree for top-level metric node: ${metricNode.id}`);
+            const allMetricNodes = this.findMetricNodes(nodes);
+            this.logger.log(`[GraphConverter] Found ${allMetricNodes.length} metric nodes for tree roots`);
+            const trees = allMetricNodes.map(metricNode => {
+                this.logger.log(`[GraphConverter] Building tree for metric node: ${metricNode.id}`);
                 return {
                     rootMetricNodeId: metricNode.id,
                     tree: this.buildTreeFromMetric(metricNode.id, nodes, edges)
@@ -55,10 +58,6 @@ class GraphConverter {
         this.validateNodeConnections(nodes, edges, errors, warnings);
         this.validateSeedNodeConnections(nodes, edges, errors, warnings);
         this.validateMetricNodeConfiguration(nodes, edges, errors, warnings);
-        const topLevelMetricNodes = this.findTopLevelMetricNodes(nodes, edges);
-        if (topLevelMetricNodes.length === 0 && metricNodes.length > 0) {
-            errors.push('All METRIC nodes are connected as inputs to other METRIC nodes - at least one METRIC node must be at the top level');
-        }
         const isValid = errors.length === 0;
         this.logger.log(`[GraphConverter] Validation complete - ${isValid ? 'VALID' : 'INVALID'}`);
         if (errors.length > 0) {
@@ -80,6 +79,14 @@ class GraphConverter {
     }
     validateNodeConnections(nodes, edges, errors, warnings) {
         edges.forEach(edge => {
+            if (!edge.source) {
+                errors.push(`Edge ${edge.id} has invalid source node: ${edge.source}`);
+                return;
+            }
+            if (!edge.target) {
+                errors.push(`Edge ${edge.id} has invalid target node: ${edge.target}`);
+                return;
+            }
             const sourceExists = nodes.some(n => n.id === edge.source);
             const targetExists = nodes.some(n => n.id === edge.target);
             if (!sourceExists) {
@@ -144,18 +151,33 @@ class GraphConverter {
         });
     }
     buildTreeFromMetric(metricNodeId, nodes, edges) {
-        this.logger.log(`[GraphConverter] Building tree from metric node: ${metricNodeId}`);
-        const node = nodes.find(n => n.id === metricNodeId);
+        return this.buildTreeFromNode(metricNodeId, nodes, edges, new Set());
+    }
+    buildTreeFromNode(nodeId, nodes, edges, visitedInThisTree) {
+        this.logger.log(`[GraphConverter] Building tree from node: ${nodeId}`);
+        const node = nodes.find(n => n.id === nodeId);
         if (!node) {
-            throw new Error(`Metric node ${metricNodeId} not found`);
+            throw new Error(`Node ${nodeId} not found`);
         }
-        const children = this.getNodeChildren(metricNodeId, nodes, edges);
-        this.logger.log(`[GraphConverter] Node ${metricNodeId} has ${children.length} children`);
+        if (visitedInThisTree.has(nodeId)) {
+            this.logger.warn(`[GraphConverter] Node ${nodeId} already visited in this tree - creating reference node`);
+            return {
+                nodeId: nodeId,
+                nodeType: node.type,
+                nodeData: node.data,
+                children: [],
+                inputOrder: node.type === 'OPERATOR' ? node.data?.inputOrder : undefined,
+                isReference: true
+            };
+        }
+        visitedInThisTree.add(nodeId);
+        const children = this.getNodeChildren(nodeId, nodes, edges);
+        this.logger.log(`[GraphConverter] Node ${nodeId} has ${children.length} children`);
         return {
-            nodeId: metricNodeId,
+            nodeId: nodeId,
             nodeType: node.type,
             nodeData: node.data,
-            children: children.map(child => this.buildTreeFromMetric(child.id, nodes, edges)),
+            children: children.map(child => this.buildTreeFromNode(child.id, nodes, edges, visitedInThisTree)),
             inputOrder: node.type === 'OPERATOR' ? node.data?.inputOrder : undefined
         };
     }
@@ -202,20 +224,17 @@ class GraphConverter {
     }
     findTopLevelMetricNodes(nodes, edges) {
         const metricNodes = this.findMetricNodes(nodes);
-        const metricNodesAsInputs = new Set();
+        const metricNodesWithIncomingEdges = new Set();
         edges.forEach(edge => {
             const targetNode = nodes.find(n => n.id === edge.target);
             if (targetNode && targetNode.type === 'METRIC') {
-                const sourceNode = nodes.find(n => n.id === edge.source);
-                if (sourceNode && sourceNode.type === 'METRIC') {
-                    metricNodesAsInputs.add(edge.source);
-                }
+                metricNodesWithIncomingEdges.add(edge.target);
             }
         });
-        const topLevelMetrics = metricNodes.filter(metric => !metricNodesAsInputs.has(metric.id));
+        const topLevelMetrics = metricNodes.filter(metric => !metricNodesWithIncomingEdges.has(metric.id));
         this.logger.log(`[GraphConverter] Metric nodes analysis:`);
         this.logger.log(`[GraphConverter] - Total metric nodes: ${metricNodes.length}`);
-        this.logger.log(`[GraphConverter] - Metric nodes used as inputs: ${metricNodesAsInputs.size}`);
+        this.logger.log(`[GraphConverter] - Metric nodes with incoming edges: ${metricNodesWithIncomingEdges.size}`);
         this.logger.log(`[GraphConverter] - Top-level metric nodes: ${topLevelMetrics.length}`);
         return topLevelMetrics;
     }

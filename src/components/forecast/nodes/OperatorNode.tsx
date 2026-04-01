@@ -1,7 +1,7 @@
 import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
 import { Calculator } from 'lucide-react';
-import { useSelectedVisualizationMonth, useShowVisualizationSlider, useGetNodeValueForMonth } from '@/lib/store/forecast-graph-store';
+import { useNodeVisualizationValue, useVisualization } from '@/lib/store/forecast-graph-store/hooks';
 import NodeValueOverlay from '../node-value-overlay';
 
 /**
@@ -10,16 +10,8 @@ import NodeValueOverlay from '../node-value-overlay';
 const OperatorNode: React.FC<NodeProps> = ({ data, selected, id }) => {
   const inputCount = Array.isArray(data?.inputOrder) ? data.inputOrder.length : 0;
   
-  // Visualization state
-  const selectedMonth = useSelectedVisualizationMonth();
-  const showSlider = useShowVisualizationSlider();
-  const getNodeValueForMonth = useGetNodeValueForMonth();
-
-  // Get node value for visualization
-  const nodeValue = React.useMemo(() => {
-    if (!selectedMonth || !showSlider || !id) return null;
-    return getNodeValueForMonth(id, selectedMonth);
-  }, [selectedMonth, showSlider, id, getNodeValueForMonth]);
+  const { showVisualizationSlider: showSlider } = useVisualization();
+  const nodeValue = useNodeVisualizationValue(id);
   
   return (
     <div className={`relative bg-slate-800 border-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 w-44 ${
@@ -77,4 +69,4 @@ const OperatorNode: React.FC<NodeProps> = ({ data, selected, id }) => {
   );
 };
 
-export default React.memo(OperatorNode); 
+export default OperatorNode;

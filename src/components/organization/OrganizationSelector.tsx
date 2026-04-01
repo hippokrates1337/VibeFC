@@ -53,9 +53,9 @@ export function OrganizationSelector() {
         >
           Create Organization
         </Button>
-        <CreateOrganizationModal 
-          open={isCreateModalOpen} 
-          onOpenChange={() => setIsCreateModalOpen(false)} 
+        <CreateOrganizationModal
+          open={isCreateModalOpen}
+          onOpenChange={setIsCreateModalOpen}
         />
       </div>
     );
@@ -84,9 +84,9 @@ export function OrganizationSelector() {
           </SelectItem>
         </SelectContent>
       </Select>
-      <CreateOrganizationModal 
-        open={isCreateModalOpen} 
-        onOpenChange={() => setIsCreateModalOpen(false)} 
+      <CreateOrganizationModal
+        open={isCreateModalOpen}
+        onOpenChange={setIsCreateModalOpen}
       />
     </div>
   );

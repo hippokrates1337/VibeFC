@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, XCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
-import { useGraphValidation, useIsValidatingGraph } from '@/lib/store/forecast-graph-store';
+import { useCalculations } from '@/lib/store/forecast-graph-store/hooks';
 
 interface GraphValidationDisplayProps {
   onValidate: () => Promise<void>;
@@ -14,8 +14,7 @@ interface GraphValidationDisplayProps {
  * Component for displaying graph validation status and providing validation controls
  */
 export function GraphValidationDisplay({ onValidate, compact = false }: GraphValidationDisplayProps) {
-  const graphValidation = useGraphValidation();
-  const isValidating = useIsValidatingGraph();
+  const { graphValidation, isValidatingGraph: isValidating } = useCalculations();
 
   const getValidationIcon = () => {
     if (isValidating) {
@@ -73,7 +72,7 @@ export function GraphValidationDisplay({ onValidate, compact = false }: GraphVal
             <div className="text-xs text-red-400">
               {graphValidation.errors.length} error(s) found:
             </div>
-            {graphValidation.errors.map((error, index) => (
+            {graphValidation.errors.map((error: string, index: number) => (
               <div key={index} className="text-xs text-red-300 bg-red-950/20 p-2 rounded border border-red-500/20">
                 {error}
               </div>
@@ -86,7 +85,7 @@ export function GraphValidationDisplay({ onValidate, compact = false }: GraphVal
             <div className="text-xs text-yellow-400">
               {graphValidation.warnings.length} warning(s) found:
             </div>
-            {graphValidation.warnings.map((warning, index) => (
+            {graphValidation.warnings.map((warning: string, index: number) => (
               <div key={index} className="text-xs text-yellow-300 bg-yellow-950/20 p-2 rounded border border-yellow-500/20">
                 {warning}
               </div>
@@ -140,7 +139,7 @@ export function GraphValidationDisplay({ onValidate, compact = false }: GraphVal
             {graphValidation.errors.length > 0 && (
               <div className="space-y-1">
                 <h4 className="text-xs font-medium text-red-400">Errors:</h4>
-                {graphValidation.errors.map((error, index) => (
+                {graphValidation.errors.map((error: string, index: number) => (
                   <div key={index} className="text-xs text-red-300 bg-red-950/20 p-2 rounded">
                     {error}
                   </div>
@@ -151,7 +150,7 @@ export function GraphValidationDisplay({ onValidate, compact = false }: GraphVal
             {graphValidation.warnings.length > 0 && (
               <div className="space-y-1">
                 <h4 className="text-xs font-medium text-yellow-400">Warnings:</h4>
-                {graphValidation.warnings.map((warning, index) => (
+                {graphValidation.warnings.map((warning: string, index: number) => (
                   <div key={index} className="text-xs text-yellow-300 bg-yellow-950/20 p-2 rounded">
                     {warning}
                   </div>

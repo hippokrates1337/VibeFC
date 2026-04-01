@@ -63,7 +63,7 @@ describe('MonthSlider Component', () => {
     test('should show no forecast message when months array is empty', () => {
       render(<MonthSlider {...defaultProps} months={[]} />);
       
-      const noForecastMessage = screen.getByText('No forecast period defined');
+      const noForecastMessage = screen.getByText('No forecast period defined or unified calculation required');
       expect(noForecastMessage).toBeTruthy();
     });
 
@@ -71,11 +71,11 @@ describe('MonthSlider Component', () => {
       const singleMonth = [new Date(2025, 1, 1)];
       render(<MonthSlider {...defaultProps} months={singleMonth} selectedMonth={singleMonth[0]} />);
       
-      const febLabel = screen.getByText('Feb 2025');
       const febFullLabel = screen.getByText('February 2025');
+      const singleMonthMessage = screen.getByText('Single month period');
       
-      expect(febLabel).toBeTruthy();
       expect(febFullLabel).toBeTruthy();
+      expect(singleMonthMessage).toBeTruthy();
     });
   });
 
@@ -124,14 +124,20 @@ describe('MonthSlider Component', () => {
       expect(isDisabled).toBe(true);
     });
 
-    test('should be disabled when only one month available', () => {
+    test('should show static display when only one month available', () => {
       const singleMonth = [new Date(2025, 1, 1)];
       render(<MonthSlider {...defaultProps} months={singleMonth} />);
       
-      const slider = screen.getByRole('slider');
-      const isDisabled = slider.hasAttribute('disabled') || slider.getAttribute('aria-disabled') === 'true';
+      // Should not render a slider for single month
+      const slider = screen.queryByRole('slider');
+      expect(slider).toBeNull();
       
-      expect(isDisabled).toBe(true);
+      // Should show static month display instead
+      const febFullLabel = screen.getByText('February 2025');
+      const singleMonthMessage = screen.getByText('Single month period');
+      
+      expect(febFullLabel).toBeTruthy();
+      expect(singleMonthMessage).toBeTruthy();
     });
   });
 
@@ -245,7 +251,7 @@ describe('MonthSlider Component', () => {
       render(<MonthSlider {...defaultProps} months={allInvalidMonths} />);
       
       // Should show no forecast message when all dates are invalid
-      const noForecastMessage = screen.getByText('No forecast period defined');
+      const noForecastMessage = screen.getByText('No forecast period defined or unified calculation required');
       expect(noForecastMessage).toBeTruthy();
     });
   });

@@ -12,7 +12,7 @@ This directory contains the UI components for the Graphical Forecast Definition 
 
 - `graph-validation-display.tsx` - Component for displaying graph validation status with error/warning details and validation controls
 - `calculation-results-display.tsx` - Component for displaying forecast calculation results with export functionality and metric filtering
-- `calculation-results-table.tsx` - Simple scrollable table for displaying calculation results in main editor area (interim solution)
+- `calculation-results-table.tsx` - Simple scrollable table component (available as reference, no longer used in editor)
 - `calculation-error-boundary.tsx` - Error boundary component for graceful handling of calculation-related UI errors
 
 ## New Visualization Components
@@ -20,6 +20,11 @@ This directory contains the UI components for the Graphical Forecast Definition 
 - `month-slider.tsx` - Interactive month slider for selecting which month to visualize on the canvas
 - `visualization-controls.tsx` - Controls panel for toggling visualization features on/off  
 - `node-value-overlay.tsx` - Overlay component that displays forecast and calculated values on nodes for the selected month (Phase 5: ✅ Complete node coverage with color-coded overlays and standardized US number formatting)
+
+## New Forecast Display Components
+
+- `actual-period-selector.tsx` - Comprehensive period selector component for defining actual periods for historical calculation with validation and real-time feedback (Requirement #9: ✅ Complete period selection with overlap detection and user guidance)
+- `forecast-results-table.tsx` - Hierarchical results table component displaying nodes as rows and months as columns with mixed historical and forecast data visualization (Requirement #10: ✅ Complete table with filtering, export, and responsive design)
 
 ## Node Components
 
@@ -44,15 +49,16 @@ The forecast editor provides the following functionality:
 - **Smart node positioning - new nodes appear near the last edited node** (NEW)
 - **Graph validation with cycle detection and business rule enforcement** (NEW)
 - **Forecast calculation with real-time status updates** (NEW)
-- **Calculation result display with export capabilities** (NEW)
 - **Comprehensive error handling for calculation operations** (NEW)
 - **Month-by-month visualization with interactive slider** (NEW)
 - **Node value overlays showing calculated values for selected months** (NEW)
 - **Automatic visualization updates when forecast period changes** (NEW)
+- **Actual period selection with comprehensive validation for historical comparison** (NEW)
+- **Real-time feedback for period overlap detection and user guidance** (NEW)
 
 ## API Integration
 
-The components integrate with the backend API through the services defined in `src/lib/api/forecast.ts`. The graph state is managed through the Zustand store in `src/lib/store/forecast-graph-store.ts`. Variable data for dropdowns is sourced from `src/lib/store/variables.ts`.
+The components integrate with the backend API through the services defined in `src/lib/api/forecast.ts`. The graph state is managed through the modular Zustand store in `src/lib/store/forecast-graph-store/`. Variable data for dropdowns is sourced from `src/lib/store/variables.ts`.
 
 ## Smart Node Positioning
 
@@ -79,7 +85,7 @@ The positioning logic is implemented in `calculateSmartNodePosition()` in the fo
 For full implementation details of loading, saving, and manipulating forecast data, see:
 
 - `src/app/(protected)/forecast-definition/[forecastId]/page.tsx` - Editor page with API integration
-- `src/lib/store/forecast-graph-store.ts` - Graph state management including the "Duplicate with Edges" functionality and **smart positioning logic** (UPDATED)
+- `src/lib/store/forecast-graph-store/` - Modular graph state management including the "Duplicate with Edges" functionality and **smart positioning logic** (REFACTORED)
 - `src/lib/store/variables.ts` - Global variable state management.
 
 ## Design Improvements (Latest Updates)

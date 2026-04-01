@@ -14,12 +14,15 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
-import { 
-  useForecastGraphStore, 
-  ForecastNodeKind,
-  useLastEditedNodePosition,
-  calculateSmartNodePosition
-} from '@/lib/store/forecast-graph-store';
+import {
+  useForecastGraph,
+  useForecastGraphActions,
+  useCalculations,
+  useCalculationActions,
+  useSelectedNode
+} from '@/lib/store/forecast-graph-store/hooks';
+import { ForecastNodeKind } from '@/lib/store/forecast-graph-store/types';
+import { calculateSmartNodePosition } from '@/lib/store/forecast-graph-store/utils';
 import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/use-toast';
 import NodeConfigPanel from '@/components/forecast/node-config-panel';
@@ -122,67 +125,45 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   
-  // Last edited node position for smart positioning
-  const lastEditedNodePosition = useLastEditedNodePosition();
-  
-  // Zustand store selectors
+  // Get state from grouped hooks
   const { 
     forecastId,
     forecastName,
     forecastStartDate,
     forecastEndDate,
     organizationId,
+    nodes,
+    edges,
     isDirty,
     selectedNodeId,
     configPanelOpen,
-    nodes,
-    edges,
+    lastEditedNodePosition
+  } = useForecastGraph();
+  
+  const selectedNode = useSelectedNode();
+  
+  const { 
+    graphValidation,
+    isValidatingGraph,
+    isCalculating,
+    calculationError,
+    calculationResults
+  } = useCalculations();
+  
+  const { 
     addNode,
     setForecastMetadata,
     resetStore,
     setSelectedNodeId,
     setConfigPanelOpen,
-    duplicateNodeWithEdges,
-    // Graph validation state
-    graphValidation,
-    isValidatingGraph,
-    setValidatingGraph,
-    setGraphValidation,
-    // Calculation state
-    calculateForecast,
-    isCalculating,
-    calculationError,
-    calculationResults
-  } = useForecastGraphStore(
-    useShallow((state) => ({
-      forecastId: state.forecastId,
-      forecastName: state.forecastName,
-      forecastStartDate: state.forecastStartDate,
-      forecastEndDate: state.forecastEndDate,
-      organizationId: state.organizationId,
-      isDirty: state.isDirty,
-      selectedNodeId: state.selectedNodeId,
-      configPanelOpen: state.configPanelOpen,
-      nodes: state.nodes,
-      edges: state.edges,
-      addNode: state.addNode,
-      setForecastMetadata: state.setForecastMetadata,
-      resetStore: state.resetStore,
-      setSelectedNodeId: state.setSelectedNodeId,
-      setConfigPanelOpen: state.setConfigPanelOpen,
-      duplicateNodeWithEdges: state.duplicateNodeWithEdges,
-      // Graph validation state
-      graphValidation: state.graphValidation,
-      isValidatingGraph: state.isValidatingGraph,
-      setValidatingGraph: state.setValidatingGraph,
-      setGraphValidation: state.setGraphValidation,
-      // Calculation state
-      calculateForecast: state.calculateForecast,
-      isCalculating: state.isCalculating,
-      calculationError: state.calculationError,
-      calculationResults: state.calculationResults
-    }))
-  );
+    duplicateNodeWithEdges
+  } = useForecastGraphActions();
+  
+  const { 
+    calculateUnified,
+    setGraphValidation
+  } = useCalculationActions();
+  
   
   // Handle save with validation
   const handleSave = async () => {
@@ -198,29 +179,15 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
     if (!forecastStartDate || !forecastEndDate) {
       toast({
         title: 'Validation Error',
-        description: 'Please provide both start and end dates for the forecast period.',
+        description: 'Please provide both start and end dates for the forecast.',
         variant: 'destructive',
       });
       return;
     }
     
-    try {
-      await onSave();
-      toast({
-        title: 'Success',
-        description: 'Forecast saved successfully.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save forecast. Please try again.',
-        variant: 'destructive',
-      });
-      console.error('Save error:', error);
-    }
+    await onSave();
   };
-  
-  // Check for unsaved changes before destructive actions
+
   const checkUnsavedChanges = (action: () => void) => {
     if (isDirty) {
       setPendingAction(() => action);
@@ -229,8 +196,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
       action();
     }
   };
-  
-  // Execute pending action from dialog
+
   const executePendingAction = () => {
     if (pendingAction) {
       pendingAction();
@@ -238,49 +204,32 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
     }
     setUnsavedDialogOpen(false);
   };
-  
-  // Handle reload with unsaved changes check
+
   const handleReload = async () => {
-    if (!onReload) return;
-    
-    try {
+    if (onReload) {
       await onReload();
-      toast({
-        title: 'Reloaded',
-        description: 'Fresh data loaded from server.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to reload data. Please try again.',
-        variant: 'destructive',
-      });
-      console.error('Reload error:', error);
     }
   };
-  
-  // Add a new node of the specified kind
+
+  // Smart node positioning
+  const generateNodePosition = (): { x: number; y: number } => {
+    if (lastEditedNodePosition) {
+      return calculateSmartNodePosition(lastEditedNodePosition, nodes);
+    }
+    
+    // Default position if no last edited position
+    return { x: 300, y: 200 };
+  };
+
   const handleAddNode = (nodeKind: ForecastNodeKind) => {
-    // Calculate smart position based on last edited node
-    const smartPosition = calculateSmartNodePosition(lastEditedNodePosition, nodes);
-    
-    const nodeId = addNode({ 
-      type: nodeKind, 
-      data: {}, 
-      position: smartPosition
-    });
-    
-    // Select the new node and open configuration panel for it
-    setSelectedNodeId(nodeId);
-    setConfigPanelOpen(true);
-    
-    toast({
-      title: 'Node Added',
-      description: `${nodeKind} node added near your last edit. Configure its properties.`,
+    const position = generateNodePosition();
+    addNode({
+      type: nodeKind,
+      data: {},
+      position
     });
   };
-  
-  // Handle node selection for configuration
+
   const handleOpenNodeConfig = () => {
     if (selectedNodeId) {
       setConfigPanelOpen(true);
@@ -288,55 +237,51 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
       toast({
         title: 'No Node Selected',
         description: 'Please select a node to configure.',
+        variant: 'destructive',
       });
     }
   };
 
-  // Handle node duplication
   const handleDuplicateNode = (e?: React.MouseEvent) => {
-    // Prevent event bubbling that might trigger Sheet close
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
+    e?.preventDefault();
+    e?.stopPropagation();
     
-    if (selectedNodeId) {
-      const newNodeId = duplicateNodeWithEdges(selectedNodeId);
-      if (newNodeId) {
-        setSelectedNodeId(newNodeId); // Select the new duplicated node
-        toast({
-          title: 'Node Duplicated',
-          description: 'Node and its connections have been duplicated.',
-        });
-      } else {
-        toast({
-          title: 'Duplication Failed',
-          description: 'Could not duplicate the selected node.',
-          variant: 'destructive',
-        });
-      }
-    } else {
+    if (!selectedNodeId) {
       toast({
         title: 'No Node Selected',
         description: 'Please select a node to duplicate.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!selectedNode) {
+      console.error('Selected node not found in nodes array');
+      return;
+    }
+
+    try {
+      const newNodeId = duplicateNodeWithEdges(selectedNodeId);
+      
+      if (newNodeId) {
+        toast({
+          title: 'Node Duplicated',
+          description: `${selectedNode.type} node duplicated successfully.`,
+        });
+      } else {
+        throw new Error('Duplication failed');
+      }
+    } catch (error) {
+      console.error('Error duplicating node:', error);
+      toast({
+        title: 'Duplication Failed',
+        description: 'Failed to duplicate the selected node. Please try again.',
+        variant: 'destructive',
       });
     }
   };
 
-  // Check if forecast has metric nodes (required for calculation)
-  const hasMetricNodes = nodes.some(node => node.type === 'METRIC');
-  
-  // Check if calculation is possible - no longer requires pre-validation
-  const canCalculate = !isDirty && 
-                      hasMetricNodes && 
-                      !isCalculating && 
-                      !isValidatingGraph &&
-                      forecastId && 
-                      organizationId;
-
-
-
-  // Handle calculation with automatic validation
+  // NEW: Updated calculation method to use unified system (Phase 7)
   const handleCalculate = async () => {
     if (!forecastId || !organizationId) {
       toast({
@@ -367,8 +312,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
 
     try {
       // Automatically validate graph before calculation
-      console.log(`[ForecastToolbar] Validating graph before calculation`);
-      setValidatingGraph(true);
+      console.log(`[ForecastToolbar] Validating graph before unified calculation`);
       const graphConverter = new GraphConverter();
       const validation = graphConverter.validateGraph(nodes, edges);
       setGraphValidation(validation);
@@ -386,16 +330,19 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
         console.warn('[ForecastToolbar] Graph validation warnings:', validation.warnings);
       }
 
-      // Proceed with calculation
-      console.log(`[ForecastToolbar] Starting calculation for forecast ${forecastId}`);
-      await calculateForecast();
+      // NEW: Use unified calculation system (Phase 7)
+      console.log(`[ForecastToolbar] Starting unified calculation for forecast ${forecastId}`);
+      await calculateUnified({
+        calculationTypes: ['forecast', 'historical', 'budget'],
+        includeIntermediateNodes: true,
+      });
       
       toast({
-        title: 'Calculation Complete',
-        description: 'Forecast has been calculated successfully.',
+        title: 'Unified Calculation Complete',
+        description: 'All calculation types (forecast, historical, budget) completed successfully.',
       });
     } catch (error) {
-      console.error('[ForecastToolbar] Calculation failed:', error);
+      console.error('[ForecastToolbar] Unified calculation failed:', error);
       
       // Handle specific error types with better guidance
       let title = 'Calculation Failed';
@@ -404,8 +351,13 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
       if (error instanceof Error) {
         const errorMessage = error.message;
         
+        // Period configuration errors
+        if (errorMessage.includes('Period validation') || errorMessage.includes('MM-YYYY')) {
+          title = 'Period Configuration Error';
+          description = 'Invalid period configuration. Please check forecast periods in the display page.';
+        }
         // Historical data errors
-        if (errorMessage.includes('Historical data for') && errorMessage.includes('not found')) {
+        else if (errorMessage.includes('Historical data for') && errorMessage.includes('not found')) {
           title = 'Missing Historical Data';
           description = errorMessage.replace('Missing historical data: ', '');
         }
@@ -452,12 +404,12 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
         duration: 8000, // Show error messages longer for better readability
       });
     } finally {
-      setValidatingGraph(false);
     }
   };
 
+  // Check if there are any METRIC nodes in the graph
+  const hasMetricNodes = nodes.some(node => node.type === 'METRIC');
 
-  
   return (
     <CalculationErrorBoundary>
       <div className="space-y-6">
@@ -554,7 +506,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
             variant="outline" 
             size="sm" 
             onClick={() => handleAddNode('SEED')}
-            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-pink-700 border-pink-500 text-pink-400 hover:text-white"
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-red-700 border-red-500 text-red-400 hover:text-white"
           >
             <Flame className="h-4 w-4" />
             Seed
@@ -562,178 +514,172 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
         </div>
       </div>
       
-      {/* Actions Section */}
+      {/* Node Configuration Section */}
       <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
         <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
-          <span className="w-2 h-2 bg-orange-400 rounded-full"></span>
+          <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
+          Node Actions
+        </h3>
+        <div className="flex flex-col gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleOpenNodeConfig}
+            disabled={!selectedNodeId}
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-slate-600 border-slate-500 text-slate-300 hover:text-white disabled:opacity-50"
+          >
+            <Pencil className="h-4 w-4" />
+            Configure Selected Node
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleDuplicateNode}
+            disabled={!selectedNodeId}
+            className="flex items-center gap-2 justify-start bg-slate-800 hover:bg-slate-600 border-slate-500 text-slate-300 hover:text-white disabled:opacity-50"
+          >
+            <Copy className="h-4 w-4" />
+            Duplicate Selected Node
+          </Button>
+        </div>
+      </div>
+      
+      {/* Graph Validation Section */}
+      <GraphValidationDisplay onValidate={async () => {
+        const graphConverter = new GraphConverter();
+        const validation = graphConverter.validateGraph(nodes, edges);
+        setGraphValidation(validation);
+      }} />
+      
+      {/* NEW: Unified Calculation Section (Phase 7) */}
+      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+          <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+          Unified Calculation
+        </h3>
+        <div className="space-y-3">
+          <Button 
+            onClick={handleCalculate}
+            disabled={isCalculating || isDirty || !hasMetricNodes}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+          >
+            {isCalculating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Calculating...
+              </>
+            ) : (
+              <>
+                <Calculator className="mr-2 h-4 w-4" />
+                Calculate All (Forecast, Historical, Budget)
+              </>
+            )}
+          </Button>
+          
+          {calculationError && (
+            <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-medium">Calculation Error</div>
+                  <div className="mt-1">{calculationError}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {calculationResults && (
+            <div className="p-3 bg-green-900/50 border border-green-700 rounded text-green-200 text-sm">
+              <div className="flex items-start gap-2">
+                <BarChart3 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-medium">Calculation Complete</div>
+                  <div className="mt-1">
+                    Types: {calculationResults.calculationTypes?.join(', ') || 'Unknown'}
+                  </div>
+                  <div className="text-xs text-green-300 mt-1">
+                    Last calculated: {calculationResults.calculatedAt ? new Date(calculationResults.calculatedAt).toLocaleString() : 'Unknown'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {isDirty && (
+            <div className="text-xs text-yellow-400 bg-yellow-900/20 border border-yellow-700 rounded p-2">
+              <AlertTriangle className="h-3 w-3 inline mr-1" />
+              Save your changes before calculating
+            </div>
+          )}
+          
+          {!hasMetricNodes && (
+            <div className="text-xs text-orange-400 bg-orange-900/20 border border-orange-700 rounded p-2">
+              <AlertTriangle className="h-3 w-3 inline mr-1" />
+              Add at least one METRIC node to calculate
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Control Actions Section */}
+      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+          <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
           Actions
         </h3>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Button 
-            variant="default" 
-            size="sm"
             onClick={handleSave}
-            className="w-full flex items-center gap-2 justify-center bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={!isDirty}
+            className="w-full bg-green-600 hover:bg-green-700 text-white"
           >
-            <Save className="h-4 w-4" />
-            Save
+            <Save className="mr-2 h-4 w-4" />
+            Save Forecast
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            onClick={() => checkUnsavedChanges(onBack)}
+            className="w-full bg-slate-800 hover:bg-slate-600 border-slate-500 text-slate-300 hover:text-white"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to List
           </Button>
           
           {onReload && (
             <Button 
               variant="outline" 
-              size="sm"
               onClick={() => checkUnsavedChanges(handleReload)}
-              className="w-full flex items-center gap-2 justify-center bg-slate-800 hover:bg-slate-600 border-slate-600 text-slate-300"
+              className="w-full bg-slate-800 hover:bg-slate-600 border-slate-500 text-slate-300 hover:text-white"
             >
-              <RefreshCw className="h-4 w-4" />
-              Reload
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reload Forecast
             </Button>
           )}
-          
-          <div className="pt-2 border-t border-slate-600 space-y-2">
-            <p className="text-xs text-slate-400 font-medium">Node Actions:</p>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={(e) => handleDuplicateNode(e)}
-              disabled={!selectedNodeId}
-              className="w-full flex items-center gap-2 justify-center bg-slate-800 hover:bg-slate-600 border-slate-600 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Copy className="h-4 w-4" />
-              Duplicate Node
-            </Button>
-          </div>
         </div>
       </div>
       
-      {/* Status Section */}
-      {(isDirty || selectedNodeId) && (
-        <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
-          <h3 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
-            <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
-            Status
-          </h3>
-          <div className="space-y-1">
-            {isDirty && (
-              <div className="flex items-center gap-2 text-xs text-amber-400">
-                <span className="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
-                Unsaved changes
-              </div>
-            )}
-            {selectedNodeId && (
-              <div className="flex items-center gap-2 text-xs text-blue-400">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                Node selected
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      
-
-
-      {/* Calculation Section */}
-      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
-        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
-          <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
-          Calculation
-        </h3>
-        <div className="space-y-2">
-          <Button
-            onClick={handleCalculate}
-            disabled={!canCalculate}
-            variant="default"
-            size="sm"
-            className="w-full flex items-center gap-2 justify-center bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white"
-          >
-            {isCalculating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : isValidatingGraph ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Calculator className="h-4 w-4" />
-            )}
-            {isCalculating ? 'Calculating...' : isValidatingGraph ? 'Validating...' : 'Calculate Forecast'}
-          </Button>
-
-          {!canCalculate && !isCalculating && (
-            <div className="text-xs text-slate-400 px-2">
-              {isDirty && 'Save changes first'}
-              {!isDirty && !hasMetricNodes && 'Add a METRIC node'}
-              {!isDirty && hasMetricNodes && !forecastId && 'Missing forecast ID'}
-              {!isDirty && hasMetricNodes && !organizationId && 'Missing organization ID'}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Graph Status */}
-      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
-        <h3 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
-          <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
-          Graph Status
-        </h3>
-        <div className="space-y-1 text-xs text-slate-400">
-          <div>Nodes: {nodes.length}</div>
-          <div>Edges: {edges.length}</div>
-          <div>Metric Nodes: {nodes.filter(n => n.type === 'METRIC').length}</div>
-          <div>Data Nodes: {nodes.filter(n => n.type === 'DATA').length}</div>
-          <div>Operator Nodes: {nodes.filter(n => n.type === 'OPERATOR').length}</div>
-          <div>Constant Nodes: {nodes.filter(n => n.type === 'CONSTANT').length}</div>
-          <div>Seed Nodes: {nodes.filter(n => n.type === 'SEED').length}</div>
-          {graphValidation && (
-            <div className={`font-medium ${graphValidation.isValid ? 'text-green-400' : 'text-red-400'}`}>
-              Status: {graphValidation.isValid ? 'Valid' : `${graphValidation.errors.length} errors`}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Back Navigation */}
-      <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
-        <Button 
-          onClick={onBack}
-          variant="ghost" 
-          size="sm"
-          className="w-full flex items-center gap-2 justify-center text-slate-300 hover:text-white hover:bg-slate-600"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Forecasts
-        </Button>
-      </div>
-      
-      {/* Node configuration panel */}
+      {/* Node Configuration Panel */}
       <NodeConfigPanel 
-        open={configPanelOpen} 
-        onOpenChange={(isOpen) => {
-          setConfigPanelOpen(isOpen);
-          // Only deselect the node if the panel is being manually closed by the user
-          if (!isOpen) {
-            setSelectedNodeId(null);
-          }
-        }}
+        open={configPanelOpen}
+        onOpenChange={setConfigPanelOpen}
       />
       
-      {/* Unsaved changes dialog */}
+      {/* Unsaved Changes Dialog */}
       <AlertDialog open={unsavedDialogOpen} onOpenChange={setUnsavedDialogOpen}>
         <AlertDialogContent className="bg-slate-800 border-slate-700">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-slate-200">Unsaved Changes</AlertDialogTitle>
             <AlertDialogDescription className="text-slate-400">
-              You have unsaved changes that will be lost. Do you want to save them first?
+              You have unsaved changes. Are you sure you want to continue without saving?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setUnsavedDialogOpen(false)} className="bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-600">
+            <AlertDialogCancel className="bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-600">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white">
-              Save Changes
-            </AlertDialogAction>
             <AlertDialogAction onClick={executePendingAction} className="bg-red-600 hover:bg-red-700 text-white">
-              Discard Changes
+              Continue Without Saving
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

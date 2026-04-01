@@ -1,5 +1,8 @@
-import { IsNotEmpty, IsArray, ValidateNested, IsString, IsObject } from 'class-validator';
+import { IsNotEmpty, IsArray, ValidateNested, IsString, IsObject, IsOptional, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
+
+// Regex pattern for MM-YYYY format validation
+const MM_YYYY_PATTERN = /^(0[1-9]|1[0-2])-\d{4}$/;
 
 export class ForecastMetadataDto {
   @IsString()
@@ -13,6 +16,27 @@ export class ForecastMetadataDto {
   @IsString()
   @IsNotEmpty()
   forecastEndDate: string;
+
+  // New MM-YYYY period fields
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastStartMonth must be in MM-YYYY format' })
+  forecastStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'forecastEndMonth must be in MM-YYYY format' })
+  forecastEndMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualStartMonth must be in MM-YYYY format' })
+  actualStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(MM_YYYY_PATTERN, { message: 'actualEndMonth must be in MM-YYYY format' })
+  actualEndMonth?: string;
 }
 
 export class BulkNodeDto {

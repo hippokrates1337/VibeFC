@@ -51,6 +51,15 @@ export async function DELETE(
       );
     }
     
+    // Forward Authorization header if present
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const forwardHeaders: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (authHeader) {
+      forwardHeaders['Authorization'] = authHeader;
+    }
+    
     // Forward delete request to backend
     try {
       // The backend expects a body with ids array and organizationId
@@ -63,9 +72,7 @@ export async function DELETE(
       
       const response = await fetch(`${backendUrl}/data-intake/variables`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: forwardHeaders,
         body: JSON.stringify(requestPayload)
       });
       

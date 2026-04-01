@@ -14,9 +14,9 @@ import {
 } from '@/lib/store/variables';
 import { forecastApi } from '@/lib/api/forecast';
 import { 
-  useForecastGraphStore,
-  useLoadOrganizationForecasts 
-} from '@/lib/store/forecast-graph-store';
+  useForecastGraph,
+  useForecastGraphActions
+} from '@/lib/store/forecast-graph-store/hooks';
 
 export default function ProtectedLayout({
   children,
@@ -36,9 +36,9 @@ export default function ProtectedLayout({
   const variablesLoaded = useVariableStore(state => state.variables.length > 0 && !state.isLoading);
 
   // Forecast store action
-  const loadOrgForecastsAction = useLoadOrganizationForecasts();
-  const forecastStoreIsLoading = useForecastGraphStore(state => state.isLoading);
-  const forecastsLoaded = useForecastGraphStore(state => state.organizationForecasts.length > 0 && !state.isLoading);
+  const { loadOrganizationForecasts: loadOrgForecastsAction } = useForecastGraphActions();
+  const { isLoading: forecastStoreIsLoading, organizationForecasts } = useForecastGraph();
+  const forecastsLoaded = organizationForecasts.length > 0 && !forecastStoreIsLoading;
   
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -61,12 +61,14 @@ export default function ProtectedLayout({
     }
   }, [user, isLoading, router]);
   
-  // Fetch organization data
+  // Fetch organization data once when logged in with no orgs. Do not depend on
+  // `organizations` (array identity changes every time Zustand sets `[]`, which
+  // would retrigger this effect and loop refetches / loading skeleton forever).
   useEffect(() => {
     if (user && session?.access_token && organizations.length === 0) {
       fetchOrganizationData(user.id, session.access_token);
     }
-  }, [user, session, fetchOrganizationData, organizations]);
+  }, [user?.id, session?.access_token, fetchOrganizationData, organizations.length]);
   
   // Fetch variable data when organization is selected
   useEffect(() => {
@@ -74,7 +76,13 @@ export default function ProtectedLayout({
       setSelectedOrgIdForVariables(currentOrganization.id);
       fetchVariablesForOrg(user.id, session.access_token);
     }
-  }, [user, session, currentOrganization, setSelectedOrgIdForVariables, fetchVariablesForOrg]);
+  }, [
+    user?.id,
+    session?.access_token,
+    currentOrganization?.id,
+    setSelectedOrgIdForVariables,
+    fetchVariablesForOrg,
+  ]);
   
   // Fetch forecast data when organization is selected - TEMPORARILY DISABLED FOR DEBUGGING
   /*
@@ -104,12 +112,13 @@ export default function ProtectedLayout({
   // Show loading state with more specific conditions to prevent infinite loading
   const orgStore = useOrganizationStore.getState();
   const varStore = useVariableStore.getState();
-  const forecastStore = useForecastGraphStore.getState();
+  const forecastStore = useForecastGraph();
   
-  const shouldShowLoading = 
-    isLoading || // Auth loading
-    (!user && !isLoading) || // No user but not loading (should redirect)
-    (user && organizations.length === 0 && !orgStore.error && !orgStore.isLoading); // User exists, no orgs loaded, no error, not currently loading
+  // Show layout once org fetch finishes; empty org list is valid (do not spin forever).
+  const shouldShowLoading =
+    isLoading ||
+    (!user && !isLoading) ||
+    (user && organizations.length === 0 && !orgStore.error && orgStore.isLoading);
     
   console.log('🔍 PROTECTED LAYOUT DEBUG:', {
     isLoading,
@@ -176,6 +185,12 @@ export default function ProtectedLayout({
               </Link>
               <Link href="/forecast-definition" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                 Forecast Definition
+              </Link>
+              <Link href="/forecast-display" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
+                Forecast Display
+              </Link>
+              <Link href="/debug-calc" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
+                Debug Calc
               </Link>
             </nav>
           </div>

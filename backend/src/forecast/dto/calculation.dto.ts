@@ -1,13 +1,7 @@
-import { IsUUID, IsDateString, IsObject, IsArray, IsString, IsNumber, IsOptional } from 'class-validator';
+import { IsUUID, IsDateString, IsObject, IsArray, IsString, IsNumber, IsOptional, IsEnum, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
-/**
- * DTO for triggering forecast calculation
- */
-export class CalculateForecastDto {
-  @IsUUID()
-  readonly forecastId: string;
-}
+// Phase 8: CalculateForecastDto removed - use UnifiedCalculationRequestDto instead
 
 /**
  * DTO for monthly forecast value
@@ -97,4 +91,116 @@ export class CalculationHealthDto {
 
   @IsDateString()
   readonly timestamp: string;
+}
+
+// ========================================
+// Phase 3: Unified Calculation DTOs
+// ========================================
+
+/**
+ * Calculation types enum for unified calculations
+ */
+export enum CalculationTypeDto {
+  HISTORICAL = 'historical',
+  FORECAST = 'forecast',
+  BUDGET = 'budget'
+}
+
+/**
+ * DTO for unified calculation request
+ */
+export class UnifiedCalculationRequestDto {
+  @IsArray()
+  @IsEnum(CalculationTypeDto, { each: true })
+  readonly calculationTypes: CalculationTypeDto[];
+
+  @IsBoolean()
+  readonly includeIntermediateNodes: boolean;
+}
+
+/**
+ * DTO for unified monthly value with MM-YYYY identifier
+ */
+export class UnifiedMonthlyValueDto {
+  @IsString()
+  readonly month: string; // MM-YYYY format
+
+  @IsOptional()
+  @IsNumber()
+  readonly historical: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  readonly forecast: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  readonly budget: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  readonly calculated: number | null; // For intermediate nodes
+}
+
+/**
+ * DTO for unified node result
+ */
+export class UnifiedNodeResultDto {
+  @IsUUID()
+  readonly nodeId: string;
+
+  @IsString()
+  readonly nodeType: string; // 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED'
+
+  @IsArray()
+  @Type(() => UnifiedMonthlyValueDto)
+  readonly values: UnifiedMonthlyValueDto[];
+}
+
+/**
+ * DTO for period information
+ */
+export class PeriodInfoDto {
+  @IsString()
+  readonly forecastStartMonth: string; // MM-YYYY
+
+  @IsString()
+  readonly forecastEndMonth: string; // MM-YYYY
+
+  @IsString()
+  readonly actualStartMonth: string; // MM-YYYY
+
+  @IsString()
+  readonly actualEndMonth: string; // MM-YYYY
+}
+
+/**
+ * DTO for unified calculation result
+ */
+export class UnifiedCalculationResultDto {
+  @IsUUID()
+  readonly id: string;
+
+  @IsUUID()
+  readonly forecastId: string;
+
+  @IsDateString()
+  readonly calculatedAt: string;
+
+  @IsArray()
+  @IsEnum(CalculationTypeDto, { each: true })
+  readonly calculationTypes: CalculationTypeDto[];
+
+  @IsObject()
+  @Type(() => PeriodInfoDto)
+  readonly periodInfo: PeriodInfoDto;
+
+  @IsArray()
+  @Type(() => UnifiedNodeResultDto)
+  readonly metrics: UnifiedNodeResultDto[]; // Only metric nodes
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => UnifiedNodeResultDto)
+  readonly allNodes?: UnifiedNodeResultDto[]; // All nodes when includeIntermediateNodes = true
 } 

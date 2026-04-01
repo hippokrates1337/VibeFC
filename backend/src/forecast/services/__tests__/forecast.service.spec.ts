@@ -3,7 +3,7 @@ import { ForecastService } from '../forecast.service';
 import { SupabaseOptimizedService } from '../../../supabase/supabase-optimized.service';
 import { PerformanceService } from '../../../common/services/performance.service';
 import { Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { CreateForecastDto, UpdateForecastDto, ForecastDto } from '../../dto/forecast.dto';
+import { CreateForecastDto, UpdateForecastDto, ForecastDto, UpdateForecastPeriodsDto } from '../../dto/forecast.dto';
 
 // Mock Supabase client methods
 const mockSupabaseInsert = jest.fn();
@@ -31,6 +31,55 @@ describe('ForecastService', () => {
   let supabaseService: SupabaseOptimizedService;
   const testUserId = 'test-user-123';
   const testOrgId = 'test-org-123';
+
+  // Add new test data for MM-YYYY period testing
+  const createDtoWithPeriods: CreateForecastDto = {
+    name: 'Test Forecast with Periods',
+    forecastStartDate: '2023-01-01',
+    forecastEndDate: '2023-12-31',
+    organizationId: testOrgId,
+    forecastStartMonth: '01-2023',
+    forecastEndMonth: '12-2023',
+    actualStartMonth: '07-2022',
+    actualEndMonth: '12-2022',
+  };
+
+  const updatePeriodsDto: UpdateForecastPeriodsDto = {
+    forecastStartMonth: '02-2023',
+    forecastEndMonth: '11-2023',
+    actualStartMonth: '08-2022',
+    actualEndMonth: '01-2023',
+  };
+
+  const mockDbResultWithPeriods = {
+    id: 'forecast-123',
+    name: 'Test Forecast',
+    forecast_start_date: '2023-01-01',
+    forecast_end_date: '2023-12-31',
+    forecast_start_month: '01-2023',
+    forecast_end_month: '12-2023', 
+    actual_start_month: '07-2022',
+    actual_end_month: '12-2022',
+    organization_id: testOrgId,
+    user_id: testUserId,
+    created_at: '2023-01-01T00:00:00.000Z',
+    updated_at: '2023-01-01T00:00:00.000Z'
+  };
+
+  const expectedForecastWithPeriods: ForecastDto = {
+    id: 'forecast-123',
+    name: 'Test Forecast',
+    forecastStartDate: '2023-01-01',
+    forecastEndDate: '2023-12-31',
+    forecastStartMonth: '01-2023',
+    forecastEndMonth: '12-2023',
+    actualStartMonth: '07-2022',
+    actualEndMonth: '12-2022',
+    organizationId: testOrgId,
+    userId: testUserId,
+    createdAt: new Date('2023-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2023-01-01T00:00:00.000Z')
+  };
 
   const mockSupabaseService = {
     getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
@@ -122,6 +171,10 @@ describe('ForecastService', () => {
       name: 'New Forecast',
       forecast_start_date: '2023-01-01',
       forecast_end_date: '2023-12-31',
+      forecast_start_month: '01-2023',
+      forecast_end_month: '12-2023',
+      actual_start_month: '07-2022',
+      actual_end_month: '12-2022',
       organization_id: testOrgId,
       user_id: userId,
       created_at: '2023-01-01T00:00:00.000Z',
@@ -142,6 +195,10 @@ describe('ForecastService', () => {
         forecast_end_date: createDto.forecastEndDate,
         organization_id: createDto.organizationId,
         user_id: userId,
+        forecast_start_month: '01-2023', // MM-YYYY format from forecastStartDate
+        forecast_end_month: '12-2023',   // MM-YYYY format from forecastEndDate
+        actual_start_month: '07-2022',   // 6 months before forecast start
+        actual_end_month: '12-2022',     // 1 month before forecast start
       });
       expect(mockInsertSingle).toHaveBeenCalledTimes(1);
       expect(result).toEqual({
@@ -149,6 +206,10 @@ describe('ForecastService', () => {
         name: newForecast.name,
         forecastStartDate: newForecast.forecast_start_date,
         forecastEndDate: newForecast.forecast_end_date,
+        forecastStartMonth: newForecast.forecast_start_month,
+        forecastEndMonth: newForecast.forecast_end_month,
+        actualStartMonth: newForecast.actual_start_month,
+        actualEndMonth: newForecast.actual_end_month,
         organizationId: newForecast.organization_id,
         userId: newForecast.user_id,
         createdAt: new Date(newForecast.created_at),
@@ -362,6 +423,8 @@ describe('ForecastService', () => {
         name: updateDto.name,
         forecast_start_date: updateDto.forecastStartDate,
         forecast_end_date: updateDto.forecastEndDate,
+        forecast_start_month: '02-2023',
+        forecast_end_month: '11-2023',
         updated_at: expect.any(String)
       }));
       expect(mockUpdateMatch).toHaveBeenCalledWith({ id: forecastId, user_id: testUserId });
@@ -487,6 +550,213 @@ describe('ForecastService', () => {
       await expect(service.remove(forecastId, testUserId, mockRequest))
         .rejects.toThrow(new InternalServerErrorException(`Failed to delete forecast: ${dbError.message}`));
       expect(Logger.prototype.error).toHaveBeenCalled();
+    });
+  });
+
+  // --- Phase 1: MM-YYYY Period Tests ---
+  describe('Phase 1 - MM-YYYY Period Management', () => {
+    describe('create with MM-YYYY periods', () => {
+      const userId = testUserId;
+
+      it('should create forecast with provided MM-YYYY periods', async () => {
+        mockSupabaseInsert.mockReturnValue({
+          select: jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({ data: mockDbResultWithPeriods, error: null })
+        });
+
+        const result = await service.create(userId, createDtoWithPeriods, mockRequest);
+
+        expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
+        expect(mockSupabaseInsert).toHaveBeenCalledWith({
+          name: createDtoWithPeriods.name,
+          forecast_start_date: createDtoWithPeriods.forecastStartDate,
+          forecast_end_date: createDtoWithPeriods.forecastEndDate,
+          organization_id: createDtoWithPeriods.organizationId,
+          user_id: userId,
+          forecast_start_month: '01-2023',
+          forecast_end_month: '12-2023',
+          actual_start_month: createDtoWithPeriods.actualStartMonth,
+          actual_end_month: createDtoWithPeriods.actualEndMonth,
+        });
+        expect(result).toEqual(expectedForecastWithPeriods);
+      });
+
+      it('should create forecast with generated default MM-YYYY periods when not provided', async () => {
+        const createDtoWithoutPeriods: CreateForecastDto = {
+          name: 'Test Forecast',
+          forecastStartDate: '2023-06-01',
+          forecastEndDate: '2023-12-31',
+          organizationId: testOrgId,
+        };
+
+        const mockDbResultWithDefaults = {
+          ...mockDbResultWithPeriods,
+          forecast_start_date: '2023-06-01',
+          forecast_start_month: '06-2023',
+          forecast_end_month: '12-2023',
+          actual_start_month: '12-2022', // 6 months before
+          actual_end_month: '05-2023', // 1 month before
+        };
+
+        mockSupabaseInsert.mockReturnValue({
+          select: jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({ data: mockDbResultWithDefaults, error: null })
+        });
+
+        const result = await service.create(userId, createDtoWithoutPeriods, mockRequest);
+
+        // Verify default periods were generated
+        expect(mockSupabaseInsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            forecast_start_month: '06-2023',
+            forecast_end_month: '12-2023',
+            actual_start_month: '12-2022',
+            actual_end_month: '05-2023',
+          })
+        );
+      });
+    });
+
+    describe('updatePeriods', () => {
+      const forecastId = 'forecast-123';
+      const userId = testUserId;
+
+      beforeEach(() => {
+        // Mock findOne for ownership check
+        const mockFindOneSingle = jest.fn().mockResolvedValue({ 
+          data: mockDbResultWithPeriods, 
+          error: null 
+        });
+        const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+        const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+        mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
+      });
+
+      it('should update MM-YYYY periods successfully', async () => {
+        const mockUpdateSingle = jest.fn().mockResolvedValue({ 
+          data: { id: forecastId }, 
+          error: null 
+        });
+        const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
+        const mockUpdateMatch = jest.fn().mockReturnValue({ select: mockUpdateSelect });
+        mockSupabaseUpdate.mockReturnValue({ match: mockUpdateMatch });
+
+        await service.updatePeriods(forecastId, userId, updatePeriodsDto, mockRequest);
+
+        expect(mockSupabaseUpdate).toHaveBeenCalled();
+        expect(mockUpdateMatch).toHaveBeenCalledWith({ id: forecastId, user_id: userId });
+        expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast periods updated: ${forecastId} by user: ${userId}`);
+      });
+
+      it('should handle partial period updates', async () => {
+        const partialUpdateDto: UpdateForecastPeriodsDto = {
+          forecastStartMonth: '03-2023',
+          // Only updating forecast start month
+        };
+
+        const mockUpdateSingle = jest.fn().mockResolvedValue({ 
+          data: { id: forecastId }, 
+          error: null 
+        });
+        const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
+        const mockUpdateMatch = jest.fn().mockReturnValue({ select: mockUpdateSelect });
+        mockSupabaseUpdate.mockReturnValue({ match: mockUpdateMatch });
+
+        await service.updatePeriods(forecastId, userId, partialUpdateDto, mockRequest);
+
+        expect(mockSupabaseUpdate).toHaveBeenCalled();
+        expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast periods updated: ${forecastId} by user: ${userId}`);
+      });
+
+      it('should throw NotFoundException if forecast does not exist during period update', async () => {
+        const mockFindOneSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+        const mockFindOneMatch = jest.fn().mockReturnValue({ single: mockFindOneSingle });
+        const mockFindOneEq = jest.fn().mockReturnValue({ match: mockFindOneMatch });
+        mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
+
+        await expect(service.updatePeriods(forecastId, userId, updatePeriodsDto, mockRequest))
+          .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
+      });
+
+      it('should throw InternalServerErrorException if period update fails', async () => {
+        const dbError = { message: 'Update failed', code: 'DB500' };
+        const mockUpdateSingle = jest.fn().mockResolvedValue({ 
+          data: null, 
+          error: dbError 
+        });
+        const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
+        const mockUpdateMatch = jest.fn().mockReturnValue({ select: mockUpdateSelect });
+        mockSupabaseUpdate.mockReturnValue({ match: mockUpdateMatch });
+
+        await expect(service.updatePeriods(forecastId, userId, updatePeriodsDto, mockRequest))
+          .rejects.toThrow(new InternalServerErrorException(`Failed to update forecast periods ${forecastId}: ${dbError.message}`));
+        expect(Logger.prototype.error).toHaveBeenCalled();
+      });
+
+      it('should return early if no period fields to update', async () => {
+        const emptyUpdateDto: UpdateForecastPeriodsDto = {};
+
+        await service.updatePeriods(forecastId, userId, emptyUpdateDto, mockRequest);
+
+        // Should only call findOne for ownership check, not update
+        expect(mockSupabaseUpdate).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('updated findOne with MM-YYYY periods', () => {
+      const forecastId = 'forecast-123';
+      const userId = testUserId;
+
+      it('should return forecast with MM-YYYY period fields', async () => {
+        const mockSingle = jest.fn().mockResolvedValue({ 
+          data: mockDbResultWithPeriods, 
+          error: null 
+        });
+        const mockMatch = jest.fn().mockReturnValue({ single: mockSingle });
+        const mockSelectEq = jest.fn().mockReturnValue({ match: mockMatch });
+        mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
+
+        const result = await service.findOne(forecastId, userId, mockRequest);
+
+        expect(result).toEqual(expectedForecastWithPeriods);
+        expect(result.forecastStartMonth).toBe('01-2023');
+        expect(result.forecastEndMonth).toBe('12-2023');
+        expect(result.actualStartMonth).toBe('07-2022');
+        expect(result.actualEndMonth).toBe('12-2022');
+      });
+    });
+
+    describe('MM-YYYY period utility functions', () => {
+      it('should convert date to MM-YYYY format correctly', async () => {
+        // Test the private dateToMMYYYY method indirectly through create
+        const testDate = '2023-01-15'; // Mid-month date
+        const createDto: CreateForecastDto = {
+          name: 'Test',
+          forecastStartDate: testDate,
+          forecastEndDate: '2023-12-31',
+          organizationId: testOrgId,
+        };
+
+        mockSupabaseInsert.mockReturnValue({
+          select: jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({ 
+            data: { 
+              ...mockDbResultWithPeriods, 
+              forecast_start_month: '01-2023' 
+            }, 
+            error: null 
+          })
+        });
+
+        await service.create(testUserId, createDto, mockRequest);
+
+        // Verify the generated period is correct MM-YYYY format
+        expect(mockSupabaseInsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            forecast_start_month: '01-2023',
+          })
+        );
+      });
     });
   });
 }); 

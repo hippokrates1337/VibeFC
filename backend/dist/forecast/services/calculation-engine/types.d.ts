@@ -39,6 +39,7 @@ export interface MetricCalculationResult {
 export interface NodeCalculationResult {
     readonly nodeId: string;
     readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+    readonly nodeData?: unknown;
     readonly values: MonthlyNodeValue[];
 }
 export interface ForecastCalculationResult {
@@ -88,3 +89,43 @@ export interface SeedNodeAttributes {
     sourceMetricId: string;
 }
 export type NodeAttributes = DataNodeAttributes | ConstantNodeAttributes | OperatorNodeAttributes | MetricNodeAttributes | SeedNodeAttributes;
+export type CalculationType = 'historical' | 'forecast' | 'budget';
+export interface UnifiedCalculationRequest {
+    readonly calculationTypes: CalculationType[];
+    readonly includeIntermediateNodes: boolean;
+}
+export interface UnifiedMonthlyValue {
+    readonly month: string;
+    readonly historical: number | null;
+    readonly forecast: number | null;
+    readonly budget: number | null;
+    readonly calculated: number | null;
+}
+export interface UnifiedNodeResult {
+    readonly nodeId: string;
+    readonly nodeType: 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED';
+    readonly nodeData?: unknown;
+    readonly values: UnifiedMonthlyValue[];
+}
+export interface UnifiedCalculationResult {
+    readonly forecastId: string;
+    readonly calculatedAt: Date;
+    readonly calculationTypes: CalculationType[];
+    readonly periodInfo: {
+        readonly forecastStartMonth: string;
+        readonly forecastEndMonth: string;
+        readonly actualStartMonth: string;
+        readonly actualEndMonth: string;
+    };
+    readonly metrics: UnifiedNodeResult[];
+    readonly allNodes: UnifiedNodeResult[];
+}
+export interface MMYYYYUtils {
+    addMonths(month: string, monthsToAdd: number): string;
+    subtractMonths(month: string, monthsToSubtract: number): string;
+    compareMonths(month1: string, month2: string): number;
+    isValidMMYYYY(month: string): boolean;
+    getMonthsBetween(startMonth: string, endMonth: string): string[];
+    dateToMMYYYY(date: Date): string;
+    mmyyyyToFirstOfMonth(month: string): Date;
+}

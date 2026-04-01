@@ -19,7 +19,9 @@ const NodeValueOverlay: React.FC<NodeValueOverlayProps> = ({
   position = 'top-right',
   compact = true
 }) => {
-  if (!value || value.value === null) return null;
+  if (!value || value.value === null) {
+    return null;
+  }
 
   const displayValue = value.value;
   const valueType = value.valueType;
@@ -54,18 +56,19 @@ const NodeValueOverlay: React.FC<NodeValueOverlayProps> = ({
   };
 
   // Position styles
+  // Keep badges inside the node card (no negative inset) so React Flow viewport does not clip them
   const getPositionStyles = (pos: typeof position) => {
     switch (pos) {
       case 'top-right':
-        return 'absolute -top-2 -right-2';
+        return 'absolute top-1 right-1';
       case 'bottom-right':
-        return 'absolute -bottom-2 -right-2';
+        return 'absolute bottom-1 right-1';
       case 'top-left':
-        return 'absolute -top-2 -left-2';
+        return 'absolute top-1 left-1';
       case 'bottom-left':
-        return 'absolute -bottom-2 -left-2';
+        return 'absolute bottom-1 left-1';
       default:
-        return 'absolute -top-2 -right-2';
+        return 'absolute top-1 right-1';
     }
   };
 
@@ -85,10 +88,14 @@ const NodeValueOverlay: React.FC<NodeValueOverlayProps> = ({
         transition-all 
         duration-200
         hover:scale-105
-        z-10
+        z-[100]
         pointer-events-none
       `}
-      title={`${valueType}: ${displayValue.toLocaleString('de-DE')}`}
+      title={
+        nodeType === 'METRIC'
+          ? `Forecast (graph): ${displayValue.toLocaleString('de-DE')}`
+          : `${valueType}: ${displayValue.toLocaleString('de-DE')}`
+      }
     >
       {formattedValue}
     </div>

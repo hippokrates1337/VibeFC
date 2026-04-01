@@ -36,6 +36,12 @@ A collaborative platform for creating and maintaining financial forecasts.
   - **Backend Integration:** Complete API endpoints for calculation triggers and result storage
   - **Database Storage:** Persistent calculation results with history tracking
   - **Frontend Integration:** API client with authentication and error handling
+  - **✅ Phase 8 Complete - Unified Architecture:** 
+    - Single calculation engine handles historical, forecast, and budget calculations
+    - MM-YYYY period management for timezone-free calculations
+    - Unified data structures eliminate dual array architecture
+    - Enhanced performance with single calculation pass for all types
+    - All legacy endpoints and deprecated code removed
 - **Forecast Analysis:** View and analyze forecast results
 
 ## Tech Stack
@@ -288,7 +294,12 @@ The `src/setupTests.ts` file configures the Jest testing environment, ensuring b
 - `GET /forecasts` - List organization forecasts
 - `GET /forecasts/:id` - Get specific forecast
 - `PATCH /forecasts/:id` - Update forecast metadata
+- `PATCH /forecasts/:id/periods` - Update MM-YYYY forecast periods
 - `DELETE /forecasts/:id` - Delete forecast
+
+**Unified Calculations (Phase 8)**:
+- `POST /forecasts/:forecastId/calculate-unified` - Trigger all calculation types
+- `GET /forecasts/:forecastId/calculation-results-unified` - Get unified results
 
 **Nodes**:
 - `POST /forecasts/:forecastId/nodes` - Add node to forecast
