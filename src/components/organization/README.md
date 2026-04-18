@@ -46,9 +46,8 @@ This directory contains UI components for organization management and member adm
 - **Features**:
   - Email input with validation
   - Role selection dropdown
-  - Bulk invitation support
-  - Integration with invitation API
-  - Success/error feedback
+  - Calls the Nest API (`POST /organizations/:orgId/members`): existing users are added immediately; new emails trigger `auth.admin.inviteUserByEmail` plus a row in `organization_invitations`, then `POST /users/me/claim-invites` after login attaches them to the org
+  - Success/error feedback (copy distinguishes “invitation email sent” vs “member added”)
 - **Usage**: Used within organization management for member invitations
 
 ## Role-Based Access Control
@@ -75,9 +74,8 @@ Components use:
 ## API Integration
 
 Components interact with:
-- **Organization API**: CRUD operations for organizations
-- **Member API**: Member management and invitations
-- **Role API**: Role assignment and permission checking
+- **Organization API** (`src/lib/api-client.ts`): CRUD for organizations and members; invitations go through the backend (not direct Supabase inserts from the client)
+- **Organization store** (`src/lib/store/organization.ts`): Loads orgs/members via Supabase where appropriate, but **invite** uses `organizationApi.addMember`
 
 ## Usage Example
 

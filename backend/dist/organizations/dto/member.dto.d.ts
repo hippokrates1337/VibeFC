@@ -16,3 +16,6 @@ export declare class MemberDto {
     role: OrganizationRole;
     joined_at: Date;
 }
+export interface AddMemberResponseDto {
+    outcome: 'member_added' | 'invite_email_sent';
+}

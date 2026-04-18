@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase, Organization, OrganizationMember } from '@/lib/supabase';
 import { logger } from '@/lib/utils/logger';
+import { organizationApi, type AddMemberOutcome } from '@/lib/api-client';
 
 interface OrganizationState {
   organizations: Organization[];
@@ -22,7 +23,12 @@ interface OrganizationState {
   ) => Promise<Organization | null>;
   updateOrganization: (id: string, name: string, token: string) => Promise<Organization | null>;
   deleteOrganization: (id: string, token: string) => Promise<boolean>;
-  inviteMember: (email: string, role: string, currentOrgId: string, token: string) => Promise<boolean>;
+  inviteMember: (
+    email: string,
+    role: string,
+    currentOrgId: string,
+    token: string
+  ) => Promise<{ ok: boolean; outcome?: AddMemberOutcome; error?: string }>;
   updateMemberRole: (userId: string, role: string, currentOrgId: string, token: string) => Promise<boolean>;
   removeMember: (userId: string, currentOrgId: string, token: string) => Promise<boolean>;
 }
@@ -341,48 +347,35 @@ export const useOrganizationStore = create<OrganizationState>()(
       inviteMember: async (email: string, role: string, currentOrgId: string, token: string) => {
         logger.log(`[OrganizationStore] Inviting ${email} to organization ${currentOrgId} with role: ${role}`);
         set({ isLoading: true, error: null });
-        
+
         try {
           await supabase.auth.setSession({ access_token: token, refresh_token: '' });
-          
-          const { data: userData, error: userError } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('email', email)
-            .maybeSingle();
-            
-          if (userError) throw userError;
-          
-          if (!userData) {
-            const { error: inviteError } = await supabase
-              .from('organization_invitations')
-              .insert({
-                organization_id: currentOrgId,
-                email,
-                role
-              });
-              
-            if (inviteError) throw inviteError;
-          } else {
-            const { error: memberError } = await supabase
-              .from('organization_members')
-              .insert({
-                organization_id: currentOrgId,
-                user_id: userData.id,
-                role
-              });
-              
-            if (memberError) throw memberError;
+
+          const { data, error } = await organizationApi.addMember(currentOrgId, email, role);
+
+          if (error) {
+            const msg = error.message || 'Failed to invite member.';
+            set({ error: msg });
+            return { ok: false, error: msg };
           }
-          
+
+          if (!data?.outcome) {
+            const msg = 'Unexpected response from server.';
+            set({ error: msg });
+            return { ok: false, error: msg };
+          }
+
           await get().loadMembers(currentOrgId, token);
-          
-          logger.log(`[OrganizationStore] Successfully invited ${email} to organization ${currentOrgId}`);
-          return true;
+
+          logger.log(
+            `[OrganizationStore] Invite completed (${data.outcome}) for ${email} in org ${currentOrgId}`
+          );
+          return { ok: true, outcome: data.outcome };
         } catch (err: any) {
           logger.error(`[OrganizationStore] Error inviting member to org ${currentOrgId}:`, err);
-          set({ error: err.message || 'Failed to invite member.' });
-          return false;
+          const msg = err.message || 'Failed to invite member.';
+          set({ error: msg });
+          return { ok: false, error: msg };
         } finally {
           set({ isLoading: false });
         }

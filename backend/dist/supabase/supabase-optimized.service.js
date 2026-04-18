@@ -65,6 +65,20 @@ let SupabaseOptimizedService = SupabaseOptimizedService_1 = class SupabaseOptimi
     get client() {
         throw new Error('Direct client access not supported in optimized service. Use getClientForRequest() instead.');
     }
+    getServiceRoleClient() {
+        if (!this.serviceRoleKey) {
+            throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured. It is required for invitations and claim-invites.');
+        }
+        return (0, supabase_js_1.createClient)(this.supabaseUrl, this.serviceRoleKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+            },
+        });
+    }
+    hasServiceRoleKey() {
+        return Boolean(this.serviceRoleKey);
+    }
     createAuthenticatedClient(authHeader, user) {
         const keyToUse = (this.isTestEnvironment || this.isAdminMode) && this.serviceRoleKey
             ? this.serviceRoleKey

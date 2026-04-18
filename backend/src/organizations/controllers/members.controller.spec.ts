@@ -145,15 +145,17 @@ describe('MembersController (Integration)', () => {
   describe(`POST /organizations/${orgId}/members`, () => {
     const inviteDto: InviteMemberDto = { email: 'invite@test.com', role: OrganizationRole.VIEWER };
 
-    it('should invite a member and return 201 Created', async () => {
-      // Service returns void on success
-      mockMembersService.addMember.mockResolvedValue(undefined); 
+    it('should invite a member and return 201 Created with outcome', async () => {
+      mockMembersService.addMember.mockResolvedValue({ outcome: 'member_added' });
 
       await request(app.getHttpServer())
         .post(`/organizations/${orgId}/members`)
         .send(inviteDto)
-        .expect(201);
-        
+        .expect(201)
+        .expect((res) => {
+          expect(res.body.outcome).toBe('member_added');
+        });
+
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1); // Expect admin role check
       expect(mockMembersService.addMember).toHaveBeenCalledWith(orgId, inviteDto, expect.any(Object));

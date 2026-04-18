@@ -16,6 +16,8 @@ export declare class SupabaseOptimizedService implements OnModuleDestroy {
     onModuleDestroy(): void;
     getClientForRequest(request: Request): SupabaseClient;
     get client(): SupabaseClient;
+    getServiceRoleClient(): SupabaseClient;
+    hasServiceRoleKey(): boolean;
     private createAuthenticatedClient;
     private setAuthContext;
     private cleanupExpiredClients;

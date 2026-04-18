@@ -11,6 +11,12 @@ interface ApiResponse<T> {
   };
 }
 
+export type AddMemberOutcome = 'member_added' | 'invite_email_sent';
+
+export interface AddMemberResponse {
+  outcome: AddMemberOutcome;
+}
+
 // Helper function to get token from cookie
 function getAuthToken(): string | undefined {
   if (typeof document === 'undefined') return undefined;
@@ -44,18 +50,27 @@ async function fetchWithAuth<T>(
       headers,
     });
 
-    const data = await response.json();
+    const raw = await response.text();
+    let data: unknown = undefined;
+    if (raw) {
+      try {
+        data = JSON.parse(raw) as unknown;
+      } catch {
+        data = { message: raw };
+      }
+    }
 
     if (!response.ok) {
+      const errBody = (data || {}) as { message?: string };
       return {
         error: {
-          message: data.message || 'An error occurred',
+          message: errBody.message || 'An error occurred',
           statusCode: response.status,
         },
       };
     }
 
-    return { data };
+    return { data: data as T };
   } catch (error: any) {
     return {
       error: {
@@ -111,11 +126,22 @@ export const organizationApi = {
     });
   },
 
-  // Add a member to an organization
-  addMember: async (orgId: string, email: string, role: string): Promise<ApiResponse<void>> => {
-    return fetchWithAuth<void>(`/organizations/${orgId}/members`, {
+  // Add a member or send an Auth invitation email (existing vs new user)
+  addMember: async (
+    orgId: string,
+    email: string,
+    role: string,
+  ): Promise<ApiResponse<AddMemberResponse>> => {
+    return fetchWithAuth<AddMemberResponse>(`/organizations/${orgId}/members`, {
       method: 'POST',
       body: JSON.stringify({ email, role }),
+    });
+  },
+
+  /** Consumes pending organization_invitations for the current JWT user. */
+  claimPendingInvites: async (): Promise<ApiResponse<{ claimed: number }>> => {
+    return fetchWithAuth<{ claimed: number }>('/users/me/claim-invites', {
+      method: 'POST',
     });
   },
 

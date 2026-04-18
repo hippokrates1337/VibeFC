@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, HttpCode, HttpStatus, Request as NestRequest } from '@nestjs/common';
 import { MembersService } from '../services/members.service';
-import { InviteMemberDto, UpdateMemberRoleDto } from '../dto/member.dto';
+import { InviteMemberDto, UpdateMemberRoleDto, AddMemberResponseDto } from '../dto/member.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -35,7 +35,7 @@ export class MembersController {
     @Param('orgId') orgId: string,
     @Body() inviteMemberDto: InviteMemberDto,
     @NestRequest() req: RequestWithUser
-  ): Promise<void> {
+  ): Promise<AddMemberResponseDto> {
     return this.membersService.addMember(orgId, inviteMemberDto, req);
   }
 

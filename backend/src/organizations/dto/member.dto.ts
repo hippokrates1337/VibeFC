@@ -33,4 +33,9 @@ export class MemberDto {
   role: OrganizationRole;
   
   joined_at: Date;
+}
+
+/** Response from POST /organizations/:orgId/members (invite / add member). */
+export interface AddMemberResponseDto {
+  outcome: 'member_added' | 'invite_email_sent';
 } 
