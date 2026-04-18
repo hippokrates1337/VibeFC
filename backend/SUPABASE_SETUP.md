@@ -24,23 +24,25 @@ Update your `.env` file with your Supabase credentials:
 ```
 SUPABASE_URL="https://your-project-ref.supabase.co"
 SUPABASE_ANON_KEY="your-public-anon-key"
-// If you need to perform operations that bypass Row Level Security (RLS),
-// for specific admin tasks or system processes, you would configure a separate client
-// with SUPABASE_SERVICE_ROLE_KEY="your-service-role-key".
-// The main application services (like SupabaseService) are designed to use
-// the anon key along with the user's JWT to respect RLS.
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+# Optional: URL users land on after accepting an email invite (Auth redirect)
+# SUPABASE_INVITE_REDIRECT_TO="https://your-app.example.com/login"
 ```
 
 - You can find your Supabase URL and keys in the Supabase dashboard under Project Settings > API.
-- The `SUPABASE_ANON_KEY` is the **public anon key**.
-- The `SUPABASE_SERVICE_ROLE_KEY` (if used for admin tasks) has full access and bypasses RLS; use it cautiously.
+- The `SUPABASE_ANON_KEY` is the **public anon key**; Nest uses it with the caller’s JWT so RLS applies.
+- The `SUPABASE_SERVICE_ROLE_KEY` is **required** for organization invitations: Nest calls `auth.admin.inviteUserByEmail` and claims pending invites server-side. It bypasses RLS—keep it secret and server-only (never in the browser).
+
+### 2b. Auth email (invitations)
+
+Invites use Supabase Auth’s email flow. Configure **SMTP** (or a supported mail provider) under **Authentication → Emails** in the dashboard; otherwise `inviteUserByEmail` will not deliver messages. See [Custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp).
 
 ### 3. Create Database Schema
 
 1. In your Supabase dashboard, navigate to the SQL Editor.
-2. Execute the SQL script from `backend/sql/create_variables_table.sql` to create the necessary tables and policies.
+2. Execute the authoritative script `backend/sql/complete_supabase_setup.sql` once (it is idempotent). Do not run removed legacy scripts from `backend/sql`; they are superseded by this file.
 
-The schema includes:
+The `variables` table includes:
 - `id`: UUID primary key
 - `name`: Variable name
 - `type`: Variable type (ACTUAL, BUDGET, INPUT, or UNKNOWN)
@@ -48,6 +50,8 @@ The schema includes:
 - `user_id`: User identifier for row-level security
 - `organization_id`: Organization identifier (UUID, FK to organizations)
 - `created_at` and `updated_at`: Timestamps
+
+The same script also creates organizations, forecasts, RPCs, profiles, invitations, and related RLS (see comments at the top of the SQL file).
 
 ### 4. Test the Connection
 
@@ -91,7 +95,9 @@ For authentication with Supabase:
 
 1. Enable the authentication methods you want to use in the Supabase dashboard (Auth > Settings).
 2. Update your frontend to use Supabase Auth.
-3. Use the user's JWT token for authenticated requests.
+3. Use the user's JWT token for authenticated requests (the Next.js app stores the access token in the `sb-access-token` cookie for Nest API calls).
+
+After sign-in or sign-up, the frontend calls `POST /users/me/claim-invites` so any rows in `organization_invitations` matching the user’s email are turned into `organization_members` rows.
 
 ## Additional Resources
 

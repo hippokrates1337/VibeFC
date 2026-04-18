@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { joinBackendUrl } from '@/lib/api/join-backend-url';
 
 // Use NEXT_PUBLIC_BACKEND_URL to point to the separate backend service
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -35,7 +36,7 @@ async function fetchWithAuth<T>(
       };
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(joinBackendUrl(API_BASE_URL, endpoint), {
       ...options,
       headers: {
         'Content-Type': 'application/json',

@@ -138,13 +138,15 @@ export class ForecastService {
       return []; // Return empty array for security
     }
 
-    // Build the filter conditions in a separate step
+    // List by organization only. Row-level security already limits rows to organizations
+    // the JWT may access; do not additionally filter by creator (user_id), or members
+    // miss forecasts created by teammates (and the UI disagrees with the Supabase table).
+    this.logger.debug(`Listing forecasts for organization ${organizationId} (requester ${userId})`);
     const client = this.supabaseService.getClientForRequest(request);
     const { data, error } = await client
       .from('forecasts')
       .select('*')
-      .eq('organization_id', organizationId)
-      .filter('user_id', 'eq', userId); // Use filter syntax instead of chained eq()
+      .eq('organization_id', organizationId);
 
     if (error) {
       this.logger.error(`Failed to fetch forecasts: ${error.message}`, error.stack);
@@ -163,19 +165,17 @@ export class ForecastService {
       throw new NotFoundException(`Forecast with ID ${id} not found.`);
     }
 
-    // First filter by ID
     const client = this.supabaseService.getClientForRequest(request);
     const { data, error } = await client
       .from('forecasts')
       .select('*')
       .eq('id', id)
-      .match({ user_id: userId }) // Using match for additional filtering instead of chained eq()
       .single();
 
     if (error) {
       // Check specifically for PostgreSQL not found error
       if (error.code === 'PGRST116' || error.message?.includes('not found')) {
-        this.logger.warn(`Forecast ${id} not found or does not belong to user ${userId}.`);
+        this.logger.warn(`Forecast ${id} not found or not accessible for user ${userId}.`);
         throw new NotFoundException(`Forecast with ID ${id} not found.`);
       }
       
@@ -188,7 +188,6 @@ export class ForecastService {
       throw new NotFoundException(`Forecast with ID ${id} not found.`);
     }
 
-    // Extra security check is no longer needed since match() already filters by user_id
     return this.mapDbEntityToDto(data);
   }
 
@@ -245,12 +244,11 @@ export class ForecastService {
       return;
     }
 
-    // Use match for combined filtering of id and user_id
     const client = this.supabaseService.getClientForRequest(request);
     const { data, error } = await client
       .from('forecasts')
       .update(updateData)
-      .match({ id, user_id: userId }) // Match on both id and user_id instead of chained eq calls
+      .eq('id', id)
       .select('id')
       .single();
 
@@ -271,7 +269,6 @@ export class ForecastService {
    * Update only the MM-YYYY period fields for a forecast
    */
   async updatePeriods(id: string, userId: string, dto: UpdateForecastPeriodsDto, request: Request): Promise<void> {
-    // First check if the forecast belongs to this user
     await this.findOne(id, userId, request);
     
     // Check if there's anything to update before proceeding
@@ -306,12 +303,11 @@ export class ForecastService {
       return;
     }
 
-    // Use match for combined filtering of id and user_id
     const client = this.supabaseService.getClientForRequest(request);
     const { data, error } = await client
       .from('forecasts')
       .update(updateData)
-      .match({ id, user_id: userId })
+      .eq('id', id)
       .select('id')
       .single();
 
@@ -329,7 +325,6 @@ export class ForecastService {
   }
 
   async remove(id: string, userId: string, request: Request): Promise<void> {
-    // First verify the forecast exists and belongs to this user
     try {
       await this.findOne(id, userId, request);
     } catch (error) {
@@ -342,13 +337,11 @@ export class ForecastService {
       throw new InternalServerErrorException('An error occurred while trying to delete the forecast');
     }
     
-    // If we get here, the forecast exists and belongs to the user
-    // Use match for combined filtering of id and user_id
     const client = this.supabaseService.getClientForRequest(request);
     const { error } = await client
       .from('forecasts')
       .delete()
-      .match({ id, user_id: userId }); // Match on both id and user_id instead of chained eq calls
+      .eq('id', id);
 
     if (error) {
       this.logger.error(`Error deleting forecast ${id}: ${error.message}`, error.stack);

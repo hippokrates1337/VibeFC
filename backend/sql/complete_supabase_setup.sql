@@ -1,7 +1,29 @@
 -- =============================================================================
--- VibeFC full database setup (fresh Supabase project)
--- Project ref: yspnngenawwvocgucxmh
--- Run once in Supabase Dashboard → SQL Editor (postgres or service role).
+-- VibeFC — authoritative Supabase schema (single source of truth)
+--
+-- Purpose: Idempotent DDL for public schema used by the Next.js app and Nest
+-- backend (organizations, forecasts, variables, RPCs, RLS).
+--
+-- How to run: Supabase Dashboard → SQL Editor (prefer postgres / dashboard).
+--
+-- Idempotency: Uses IF NOT EXISTS, CREATE OR REPLACE, and DROP POLICY IF EXISTS
+-- so you can re-run safely; it does not DROP data tables.
+--
+-- Existing database (you already have data):
+--   1) Take a backup (Dashboard → Database → Backups, or pg_dump).
+--   2) Run this script (or only the new sections if you prefer a minimal patch).
+--   3) Backfill profiles once: after the auth trigger exists, run:
+--        INSERT INTO public.profiles (id, email, updated_at)
+--        SELECT id, email, NOW() FROM auth.users
+--        ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, updated_at = NOW();
+--   4) Verify: SELECT * FROM public.organization_members_with_emails LIMIT 5;
+--        SELECT id FROM public.profiles WHERE email = 'you@example.com' LIMIT 1;
+--
+-- Do not run legacy scripts from backend/sql that were removed in favour of this
+-- file (they can conflict on enums, policies, or UUID defaults).
+--
+-- Test-only RPC: backend tests may call set_auth_user_id; that is not defined
+-- here — create separately if you need service-role user impersonation in CI.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -71,6 +93,88 @@ ALTER TABLE public.variables
 CREATE INDEX IF NOT EXISTS idx_variables_organization_id ON public.variables(organization_id);
 
 -- -----------------------------------------------------------------------------
+-- 2b. Profiles (email directory for invites + member list view)
+-- RLS note: invite flow looks up any user by email from the client, so SELECT
+-- is open to authenticated users (privacy tradeoff). Tighten later with a
+-- SECURITY DEFINER RPC if required.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles (email);
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Profiles are readable by authenticated users" ON public.profiles;
+CREATE POLICY "Profiles are readable by authenticated users"
+  ON public.profiles FOR SELECT
+  TO authenticated
+  USING (true);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile"
+  ON public.profiles FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
+CREATE OR REPLACE FUNCTION public.sync_profile_from_auth_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, updated_at)
+  VALUES (NEW.id, NEW.email, NOW())
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created_sync_profile ON auth.users;
+CREATE TRIGGER on_auth_user_created_sync_profile
+  AFTER INSERT OR UPDATE OF email ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_profile_from_auth_user();
+
+-- -----------------------------------------------------------------------------
+-- 2c. Organization invitations (emails not yet registered)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.organization_invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  role organization_role NOT NULL DEFAULT 'viewer',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (organization_id, email)
+);
+
+-- -----------------------------------------------------------------------------
+-- 2d. Member directory view (PostgREST / Supabase client)
+-- security_invoker: evaluate RLS as the querying user (Postgres 15+).
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW public.organization_members_with_emails
+WITH (security_invoker = true)
+AS
+SELECT
+  om.id,
+  om.organization_id,
+  om.user_id,
+  om.role,
+  om.joined_at,
+  p.email
+FROM public.organization_members om
+LEFT JOIN public.profiles p ON p.id = om.user_id;
+
+GRANT SELECT ON public.organization_members_with_emails TO authenticated;
+
+-- -----------------------------------------------------------------------------
 -- 3. Org trigger: creator becomes admin
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.add_organization_creator_as_admin()
@@ -133,6 +237,24 @@ $$;
 GRANT EXECUTE ON FUNCTION public.user_organization_ids() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.user_organization_ids_where_admin() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.user_organization_ids_where_editor_or_admin() TO authenticated;
+
+ALTER TABLE public.organization_invitations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view invitations for their organizations" ON public.organization_invitations;
+DROP POLICY IF EXISTS "Admins can create invitations for their organizations" ON public.organization_invitations;
+DROP POLICY IF EXISTS "Admins can delete invitations for their organizations" ON public.organization_invitations;
+
+CREATE POLICY "Admins can view invitations for their organizations"
+  ON public.organization_invitations FOR SELECT
+  USING (organization_id IN (SELECT public.user_organization_ids_where_admin()));
+
+CREATE POLICY "Admins can create invitations for their organizations"
+  ON public.organization_invitations FOR INSERT
+  WITH CHECK (organization_id IN (SELECT public.user_organization_ids_where_admin()));
+
+CREATE POLICY "Admins can delete invitations for their organizations"
+  ON public.organization_invitations FOR DELETE
+  USING (organization_id IN (SELECT public.user_organization_ids_where_admin()));
 
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
@@ -219,7 +341,7 @@ CREATE POLICY "Admins can delete data"
   USING (organization_id IN (SELECT public.user_organization_ids_where_admin()));
 
 -- -----------------------------------------------------------------------------
--- 5. Backend-oriented variable policies (matches backend/sql/backend_policy.sql)
+-- 5. Backend-oriented variable policies (service-style user_id values)
 -- -----------------------------------------------------------------------------
 DROP POLICY IF EXISTS "Backend service can insert variables" ON public.variables;
 DROP POLICY IF EXISTS "Backend service can update variables" ON public.variables;
@@ -546,30 +668,31 @@ DECLARE
   v_nodes JSONB;
   v_edges JSONB;
   attrs JSONB;
-  v_start date;
-  v_end date;
+  -- Named to avoid Supabase SQL Editor mis-parsing "v_*" locals as table identifiers in RLS hints.
+  work_forecast_start date;
+  work_forecast_end date;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.forecasts WHERE id = p_forecast_id) THEN
     RAISE EXCEPTION 'Forecast not found: %', p_forecast_id;
   END IF;
 
-  SELECT forecast_start_date, forecast_end_date INTO v_start, v_end FROM public.forecasts WHERE id = p_forecast_id;
+  SELECT forecast_start_date, forecast_end_date INTO work_forecast_start, work_forecast_end FROM public.forecasts WHERE id = p_forecast_id;
 
-  v_start := COALESCE(
+  work_forecast_start := COALESCE(
     (NULLIF(trim(p_forecast_data->>'forecastStartDate'), ''))::date,
-    v_start
+    work_forecast_start
   );
-  v_end := COALESCE(
+  work_forecast_end := COALESCE(
     (NULLIF(trim(p_forecast_data->>'forecastEndDate'), ''))::date,
-    v_end
+    work_forecast_end
   );
 
   UPDATE public.forecasts SET
     name = COALESCE(p_forecast_data->>'name', name),
-    forecast_start_date = v_start,
-    forecast_end_date = v_end,
-    forecast_start_month = to_char(v_start, 'MM-YYYY'),
-    forecast_end_month = to_char(v_end, 'MM-YYYY'),
+    forecast_start_date = work_forecast_start,
+    forecast_end_date = work_forecast_end,
+    forecast_start_month = to_char(work_forecast_start, 'MM-YYYY'),
+    forecast_end_month = to_char(work_forecast_end, 'MM-YYYY'),
     actual_start_month = COALESCE(NULLIF(p_forecast_data->>'actualStartMonth', ''), actual_start_month),
     actual_end_month = COALESCE(NULLIF(p_forecast_data->>'actualEndMonth', ''), actual_end_month),
     updated_at = NOW()

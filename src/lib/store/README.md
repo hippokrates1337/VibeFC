@@ -450,7 +450,7 @@ The store exposes the following key actions:
 
 ### Member Management
 - `loadMembers(organizationId, token)`: Loads members for a specific organization
-- `inviteMember(email, role, currentOrgId, token)`: Invites a new member to the organization
+- `inviteMember(email, role, currentOrgId, token)`: Calls Nest `POST /organizations/:orgId/members` (adds existing users or sends Auth invite + records `organization_invitations`); returns `{ ok, outcome?, error? }`
 - `updateMemberRole(userId, role, currentOrgId, token)`: Updates a member's role
 - `removeMember(userId, currentOrgId, token)`: Removes a member from the organization
 

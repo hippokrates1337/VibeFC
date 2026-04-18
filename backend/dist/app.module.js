@@ -15,6 +15,7 @@ const health_module_1 = require("./health/health.module");
 const organizations_module_1 = require("./organizations/organizations.module");
 const forecast_module_1 = require("./forecast/forecast.module");
 const test_auth_module_1 = require("./test-auth/test-auth.module");
+const users_module_1 = require("./users/users.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -30,6 +31,7 @@ exports.AppModule = AppModule = __decorate([
             organizations_module_1.OrganizationsModule,
             forecast_module_1.ForecastModule,
             test_auth_module_1.TestAuthModule,
+            users_module_1.UsersModule,
         ],
     })
 ], AppModule);

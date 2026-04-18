@@ -8,6 +8,7 @@ import { useOrganizationStore } from '@/lib/store/organization';
 import { useVariableStore } from '@/lib/store/variables';
 import { useForecastGraph, useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
 import { mapSupabaseForecastRowToClient } from '@/lib/api/forecast';
+import { organizationApi } from '@/lib/api-client';
 
 interface AuthContextType {
   user: User | null;
@@ -66,6 +67,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (userId && token) {
       console.log('[AuthProvider] Valid session detected, fetching initial org and variable data for user:', userId);
+      try {
+        const claimRes = await organizationApi.claimPendingInvites();
+        if (claimRes.data?.claimed && claimRes.data.claimed > 0) {
+          console.log('[AuthProvider] Claimed pending organization invitations:', claimRes.data.claimed);
+        }
+      } catch (e) {
+        console.warn('[AuthProvider] claim-invites request failed (non-fatal):', e);
+      }
       fetchOrgData(userId, token);
       fetchVars(userId, token);
       // Forecast data will be fetched by the new useEffect hook below when organization data is ready.
@@ -157,24 +166,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_IN') {
         if (session?.access_token) {
           setAuthCookie(session.access_token, session.expires_in);
-          
-          // Only trigger initial data fetch if we don't already have organization data
-          // This prevents clearing unsaved changes when browser window is restored
+
           const currentOrgStore = useOrganizationStore.getState();
-          
           const hasOrgData = currentOrgStore.organizations.length > 0;
-          const hasUnsavedChanges = isDirty;
           const isAlreadyLoading = currentOrgStore.isLoading;
-          
+
           if (!hasOrgData && !isAlreadyLoading) {
             console.log('[AuthProvider] SIGNED_IN: No existing org data and not loading, fetching fresh data');
-            triggerInitialDataFetch(session);
+            void triggerInitialDataFetch(session);
           } else {
-            console.log('[AuthProvider] SIGNED_IN: Org data exists or already loading, skipping data fetch', {
-              hasOrgData,
-              isAlreadyLoading,
-              hasUnsavedChanges
-            });
+            console.log(
+              '[AuthProvider] SIGNED_IN: Org data already present; still claiming pending invites',
+              { hasOrgData, isAlreadyLoading },
+            );
+            void organizationApi
+              .claimPendingInvites()
+              .then((res) => {
+                if (
+                  res.data?.claimed &&
+                  res.data.claimed > 0 &&
+                  session.user?.id &&
+                  session.access_token
+                ) {
+                  return fetchOrgData(session.user.id, session.access_token);
+                }
+              })
+              .catch((e) =>
+                console.warn('[AuthProvider] claim-invites on SIGNED_IN failed (non-fatal):', e),
+              );
           }
         } else {
           console.warn('[AuthProvider] SIGNED_IN event received but session/token missing.');

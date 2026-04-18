@@ -3,6 +3,7 @@ import type {
   UnifiedCalculationResult,
   UnifiedCalculationRequest
 } from '@/types/forecast';
+import { joinBackendUrl } from '@/lib/api/join-backend-url';
 
 // Legacy types for deprecated methods (Phase 8 cleanup - these methods will be removed)
 interface ForecastCalculationResult {
@@ -146,7 +147,7 @@ async function fetchWithAuth<T>(
       headers.set('Authorization', `Bearer ${token}`);
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(joinBackendUrl(API_BASE_URL, endpoint), {
       ...options,
       headers,
     });

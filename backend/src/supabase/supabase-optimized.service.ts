@@ -94,6 +94,28 @@ export class SupabaseOptimizedService implements OnModuleDestroy {
     throw new Error('Direct client access not supported in optimized service. Use getClientForRequest() instead.');
   }
 
+  /**
+   * Returns a Supabase client using the service role key (bypasses RLS).
+   * Use only for trusted server-side operations (e.g. Auth admin, claim invites).
+   */
+  getServiceRoleClient(): SupabaseClient {
+    if (!this.serviceRoleKey) {
+      throw new Error(
+        'SUPABASE_SERVICE_ROLE_KEY is not configured. It is required for invitations and claim-invites.',
+      );
+    }
+    return createClient(this.supabaseUrl, this.serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+
+  hasServiceRoleKey(): boolean {
+    return Boolean(this.serviceRoleKey);
+  }
+
   private createAuthenticatedClient(authHeader: string, user: UserInfo): SupabaseClient {
     const keyToUse = (this.isTestEnvironment || this.isAdminMode) && this.serviceRoleKey 
       ? this.serviceRoleKey 

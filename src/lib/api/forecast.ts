@@ -1,6 +1,7 @@
 import { ForecastNodeClient, ForecastEdgeClient } from '@/lib/store/forecast-graph-store';
 import { formatToMmYyyy } from '@/lib/store/forecast-graph-store/utils/date-utils';
 import type { ForecastPeriods } from '@/types/forecast';
+import { joinBackendUrl } from '@/lib/api/join-backend-url';
 
 /** YYYY-MM-DD (date-only), matches backend expectations for bulk-save metadata */
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -131,7 +132,7 @@ async function fetchWithAuth<T>(
       headers.set('Authorization', `Bearer ${token}`);
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(joinBackendUrl(API_BASE_URL, endpoint), {
       ...options,
       headers,
     });

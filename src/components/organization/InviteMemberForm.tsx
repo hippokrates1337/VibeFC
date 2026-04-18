@@ -42,22 +42,27 @@ export function InviteMemberForm() {
     setSuccess(null);
 
     try {
-      const success = await inviteMemberAction(
+      const result = await inviteMemberAction(
         email,
         role,
         currentOrganization.id,
         session.access_token
       );
-      
-      if (!success) throw new Error('Failed to invite member');
-      
-      setSuccess(`Invitation sent to ${email}`);
-      setEmail(''); // Reset form
+
+      if (!result.ok) throw new Error(result.error || 'Failed to invite member');
+
+      const successMessage =
+        result.outcome === 'invite_email_sent'
+          ? `We sent an invitation link to ${email}. They can join after signing up.`
+          : `${email} was added to this organization.`;
+
+      setSuccess(successMessage);
+      setEmail('');
       setRole('viewer');
-      
-      toast({ 
-        title: "Success", 
-        description: `Invitation sent to ${email}` 
+
+      toast({
+        title: 'Success',
+        description: successMessage,
       });
     } catch (err: any) {
       setError(err.message || 'Failed to invite member');
