@@ -143,11 +143,18 @@ export function buildHierarchicalStructure(
       return null;
     }
 
-    const children = childrenMap.get(nodeId) || [];
+    // Edges can list the same child under multiple parents (DAG / shared inputs), but
+    // parentMap only stores one parent per child. Without filtering, the same node would
+    // appear in multiple branches, duplicate React row keys, and collapse would hide only
+    // one branch—leaving "stuck" visible rows under other expanded ancestors.
+    const rawChildIds = childrenMap.get(nodeId) || [];
+    const childIds = Array.from(new Set(rawChildIds)).filter(
+      (childId) => parentMap.get(childId) === nodeId
+    );
     const newPath = [...path, nodeId];
     
     // Build child hierarchy recursively
-    const hierarchicalChildren = children
+    const hierarchicalChildren = childIds
       .map(childId => buildHierarchy(childId, level + 1, newPath))
       .filter((child): child is HierarchicalNode => child !== null);
 

@@ -17,16 +17,18 @@ export function StoreHydrationProvider({ children }: StoreHydrationProviderProps
     if (typeof window !== 'undefined') {
       console.log('🔄 Initializing store hydration...');
       
-      // Rehydrate forecast graph store
-      useForecastGraphStore.persist.rehydrate().then(() => {
-        console.log('✅ Forecast graph store hydrated');
-        // Set hydration flag after successful rehydration
-        useForecastGraphStore.getState()._setHasHydrated(true);
-      }).catch((error) => {
-        console.error('❌ Failed to hydrate forecast graph store:', error);
-        // Still set hydration flag to prevent infinite loading
-        useForecastGraphStore.getState()._setHasHydrated(true);
-      });
+      // Rehydrate forecast graph store (rehydrate may return void or Promise<void>)
+      Promise.resolve(useForecastGraphStore.persist.rehydrate())
+        .then(() => {
+          console.log('✅ Forecast graph store hydrated');
+          // Set hydration flag after successful rehydration
+          useForecastGraphStore.getState()._setHasHydrated(true);
+        })
+        .catch((error: unknown) => {
+          console.error('❌ Failed to hydrate forecast graph store:', error);
+          // Still set hydration flag to prevent infinite loading
+          useForecastGraphStore.getState()._setHasHydrated(true);
+        });
     }
   }, []);
 

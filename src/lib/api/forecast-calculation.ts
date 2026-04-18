@@ -240,7 +240,7 @@ function transformUnifiedFromDto(dto: UnifiedCalculationResultDto): UnifiedCalcu
     // Handle case where metrics array might be undefined
     const transformedMetrics = (dto.metrics || [])
       .map((metric) => {
-        const m = metric as Record<string, unknown>;
+        const m = metric as unknown as Record<string, unknown>;
         const nodeId = (metric.nodeId ?? m.metricNodeId ?? m.node_id) as string | undefined;
         return {
           nodeId,
@@ -261,7 +261,7 @@ function transformUnifiedFromDto(dto: UnifiedCalculationResultDto): UnifiedCalcu
     // Handle case where allNodes array might be undefined
     const transformedAllNodes = (dto.allNodes || [])
       .map((node) => {
-        const n = node as Record<string, unknown>;
+        const n = node as unknown as Record<string, unknown>;
         const nodeId = (node.nodeId ?? n.node_id ?? n.metricNodeId) as string | undefined;
         return {
           nodeId,

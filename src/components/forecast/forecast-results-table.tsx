@@ -293,25 +293,26 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
         isActualPeriod: m.isActualPeriod
       }));
       const dataRows = flattenedNodesForExport.map((hierarchicalNode) => {
+        const nodeType = hierarchicalNode.node.type ?? '';
         const mergedData = getUnifiedMergedTimeSeriesData(hierarchicalNode.node.id);
         const values = mergedData?.values ?? [];
         const monthCells = resultPeriodColumns.map((col) => {
           const monthData = mergedData?.values.find((v) => v.month === col.month);
-          return rawNumericForPeriodCell(monthData, col.segment, hierarchicalNode.node.type);
+          return rawNumericForPeriodCell(monthData, col.segment, nodeType);
         });
         const kind = metricSeriesKindFromNode(hierarchicalNode.node);
         const fyCells = fyYears.flatMap((y) => {
           const fy = fyForecastAndBudget(
             values,
             y,
-            hierarchicalNode.node.type,
+            nodeType,
             kind
           );
           return [fy.forecast, fy.budget];
         });
         return {
           nodeLabel: getDisplayName(hierarchicalNode.node),
-          nodeType: hierarchicalNode.node.type,
+          nodeType,
           seriesLabel: seriesLabelForExport(hierarchicalNode.node),
           level: hierarchicalNode.level,
           cells: [...monthCells, ...fyCells]
@@ -505,6 +506,7 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
 
               <TableBody>
                 {flattenedNodes.map((hierarchicalNode) => {
+                  const nodeType = hierarchicalNode.node.type ?? '';
                   const mergedData = getUnifiedMergedTimeSeriesData(hierarchicalNode.node.id);
                   
                   return (
@@ -577,7 +579,7 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
                       
                       {resultPeriodColumns.map((pc, colIndex) => {
                         const monthData = mergedData?.values.find((v) => v.month === pc.month);
-                        const text = formatPeriodCellValue(monthData, pc.segment, hierarchicalNode.node.type);
+                        const text = formatPeriodCellValue(monthData, pc.segment, nodeType);
                         const isDash = text === '-';
 
                         return (
@@ -605,7 +607,7 @@ export function ForecastResultsTable({ className }: ForecastResultsTableProps) {
                         const fy = fyForecastAndBudget(
                           mergedData?.values ?? [],
                           y,
-                          hierarchicalNode.node.type,
+                          nodeType,
                           metricSeriesKindFromNode(hierarchicalNode.node)
                         );
                         const fText = formatFyCellValue(fy.forecast);

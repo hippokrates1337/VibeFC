@@ -446,7 +446,9 @@ function StepRow({
               <AlertTriangle className="h-4 w-4 text-red-400" aria-hidden />
             </span>
           ) : (
-            <CheckCircle2 className="h-4 w-4 text-green-400" aria-hidden title="No error" />
+            <span title="No error">
+              <CheckCircle2 className="h-4 w-4 text-green-400" aria-hidden />
+            </span>
           )}
           <Button
             variant="ghost"
@@ -501,9 +503,11 @@ export function StepExecutionLog({
 
   // Extract unique values for filter options
   const filterOptions = useMemo(() => {
-    const nodeTypes = [...new Set(steps.map(step => step.nodeType))];
-    const calculationTypes = [...new Set(steps.map(step => step.calculationType))] as CalculationType[];
-    const months = [...new Set(steps.map(step => step.month))];
+    const nodeTypes = Array.from(new Set(steps.map((step) => step.nodeType)));
+    const calculationTypes = Array.from(
+      new Set(steps.map((step) => step.calculationType))
+    ) as CalculationType[];
+    const months = Array.from(new Set(steps.map((step) => step.month)));
 
     return { nodeTypes, calculationTypes, months };
   }, [steps]);

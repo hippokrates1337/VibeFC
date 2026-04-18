@@ -559,8 +559,9 @@ export function NodeDebugDetails({ nodeId, debugResults, calculationTree }: Node
   }, [nodeId, calculationTree]);
 
   // Get steps for this node
-  const nodeSteps = useMemo(() => {
-    return debugResults.debugInfo.calculationSteps.filter(step => step.nodeId === nodeId);
+  const nodeSteps = useMemo((): DebugCalculationStep[] => {
+    const steps = debugResults.debugInfo.calculationSteps as DebugCalculationStep[];
+    return steps.filter((step) => step.nodeId === nodeId);
   }, [nodeId, debugResults]);
 
   // Calculate statistics
@@ -569,8 +570,10 @@ export function NodeDebugDetails({ nodeId, debugResults, calculationTree }: Node
       .map(step => step.output)
       .filter(output => output !== null) as number[];
     
-    const calculationTypes = [...new Set(nodeSteps.map(step => step.calculationType))];
-    const monthsProcessed = [...new Set(nodeSteps.map(step => step.month))];
+    const calculationTypes = Array.from(
+      new Set(nodeSteps.map((step) => step.calculationType))
+    );
+    const monthsProcessed = Array.from(new Set(nodeSteps.map((step) => step.month)));
     const errorCount = nodeSteps.filter(step => step.errorMessage).length;
     const totalExecutionTime = nodeSteps.reduce((sum, step) => sum + step.executionTimeMs, 0);
 

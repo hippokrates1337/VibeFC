@@ -301,9 +301,10 @@ export const createDebugActions = (set: (partial: any) => void, get: () => any) 
    */
   getFilteredSteps: (): DebugCalculationStep[] => {
     const state = get();
-    const { calculationSteps, filters } = state;
+    const calculationSteps = state.calculationSteps as DebugCalculationStep[];
+    const { filters } = state;
     
-    return calculationSteps.filter(step => {
+    return calculationSteps.filter((step) => {
       // Filter by node types
       if (filters.nodeTypes.size > 0 && !filters.nodeTypes.has(step.nodeType)) {
         return false;
@@ -350,7 +351,8 @@ export const createDebugActions = (set: (partial: any) => void, get: () => any) 
    */
   getSelectedNodeDetails: () => {
     const state = get();
-    const { selectedNode, calculationTree, calculationSteps } = state;
+    const { selectedNode, calculationTree } = state;
+    const calculationSteps = state.calculationSteps as DebugCalculationStep[];
     
     if (!selectedNode || !calculationTree) {
       return null;
@@ -374,13 +376,13 @@ export const createDebugActions = (set: (partial: any) => void, get: () => any) 
     if (!node) return null;
     
     // Get related steps
-    const nodeSteps = calculationSteps.filter(step => step.nodeId === selectedNode);
+    const nodeSteps = calculationSteps.filter((step) => step.nodeId === selectedNode);
     
     return {
       node,
       steps: nodeSteps,
       totalExecutionTime: nodeSteps.reduce((sum, step) => sum + step.executionTimeMs, 0),
-      errorCount: nodeSteps.filter(step => step.errorMessage).length
+      errorCount: nodeSteps.filter((step) => step.errorMessage).length
     };
   },
 
@@ -395,10 +397,11 @@ export const createDebugActions = (set: (partial: any) => void, get: () => any) 
       return null;
     }
     
-    const { performanceMetrics, calculationSteps } = debugResults.debugInfo;
+    const { performanceMetrics } = debugResults.debugInfo;
+    const calculationSteps = debugResults.debugInfo.calculationSteps as DebugCalculationStep[];
     
     // Calculate additional metrics
-    const stepsByNode = calculationSteps.reduce((acc, step) => {
+    const stepsByNode = calculationSteps.reduce((acc: Record<string, DebugCalculationStep[]>, step) => {
       if (!acc[step.nodeId]) {
         acc[step.nodeId] = [];
       }
@@ -411,14 +414,14 @@ export const createDebugActions = (set: (partial: any) => void, get: () => any) 
       stepCount: steps.length,
       totalTime: steps.reduce((sum, step) => sum + step.executionTimeMs, 0),
       averageTime: steps.reduce((sum, step) => sum + step.executionTimeMs, 0) / steps.length,
-      errorCount: steps.filter(step => step.errorMessage).length
+      errorCount: steps.filter((step) => step.errorMessage).length
     }));
     
     return {
       metrics: performanceMetrics,
       nodeStats,
       totalSteps: calculationSteps.length,
-      totalErrors: calculationSteps.filter(step => step.errorMessage).length,
+      totalErrors: calculationSteps.filter((step) => step.errorMessage).length,
       slowestNodes: nodeStats.sort((a, b) => b.totalTime - a.totalTime).slice(0, 5)
     };
   }

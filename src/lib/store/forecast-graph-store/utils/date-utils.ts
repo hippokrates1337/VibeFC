@@ -120,13 +120,13 @@ export const monthsFromUnifiedCalculationResults = (
     result.allNodes?.find((n) => n.values?.length) ??
     result.metrics?.find((n) => n.values?.length);
   if (!node?.values?.length) return null;
-  const keys = [
-    ...new Set(
+  const keys = Array.from(
+    new Set(
       node.values
         .map((v) => coerceMonthToMmYyyyKey(v.month))
         .filter((k): k is string => Boolean(k))
-    ),
-  ];
+    )
+  );
   if (keys.length === 0) return null;
   keys.sort(compareMmYyyyAsc);
   const dates = keys

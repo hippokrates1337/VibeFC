@@ -3,7 +3,14 @@
  * Types for the debug calculation system frontend interface
  */
 
-import type { DebugCalculationTree } from '@/lib/api/debug-calculation';
+import type {
+  CalculationType,
+  DebugCalculationResult,
+  DebugCalculationStep,
+  DebugCalculationTree,
+  DebugLevel,
+  DebugPerformanceMetrics,
+} from '@/lib/api/debug-calculation';
 
 // Re-export types from the API for consistency
 export type {

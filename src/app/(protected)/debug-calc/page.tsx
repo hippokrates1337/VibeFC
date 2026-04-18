@@ -441,7 +441,12 @@ export default function DebugCalcPage() {
   
   // Get forecasts from store
   const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
-  const { loadForecast, loadOrganizationForecasts } = useForecastGraphActions();
+  const {
+    loadForecast,
+    loadOrganizationForecasts,
+    setLoading: setForecastLoading,
+    setError: setForecastError,
+  } = useForecastGraphActions();
   
   // Debug logging for forecasts
   console.log('[DebugPage] Available forecasts count:', forecasts.length);
@@ -488,20 +493,51 @@ export default function DebugCalcPage() {
     debugError: debug.debugError
   });
 
-  // Load organization forecasts when component mounts
+  // Load organization forecasts (same pattern as forecast-definition page)
   useEffect(() => {
-    const loadForecasts = async () => {
-      if (currentOrganization?.id && forecasts.length === 0 && !isForecastListLoading) {
-        try {
-          console.log('[DebugPage] Loading organization forecasts for:', currentOrganization.id);
-          await loadOrganizationForecasts(currentOrganization.id);
-        } catch (error) {
-          console.error('[DebugPage] Failed to load organization forecasts:', error);
+    const fetchForecasts = async () => {
+      if (!currentOrganization?.id) {
+        loadOrganizationForecasts([]);
+        return;
+      }
+
+      if (forecasts.length > 0 || isForecastListLoading) {
+        return;
+      }
+
+      try {
+        setForecastLoading(true);
+        setForecastError(null);
+
+        console.log('[DebugPage] Loading organization forecasts for:', currentOrganization.id);
+        const { data, error } = await forecastApi.getForecasts(currentOrganization.id);
+
+        if (error) {
+          console.error('[DebugPage] Failed to fetch organization forecasts:', error.message);
+          setForecastError(error.message);
+          loadOrganizationForecasts([]);
+          return;
         }
+
+        loadOrganizationForecasts(data ?? []);
+      } catch (err) {
+        console.error('[DebugPage] Failed to load organization forecasts:', err);
+        setForecastError(err instanceof Error ? err.message : 'Failed to fetch forecasts');
+        loadOrganizationForecasts([]);
+      } finally {
+        setForecastLoading(false);
       }
     };
-    loadForecasts();
-  }, [currentOrganization?.id, forecasts.length, isForecastListLoading, loadOrganizationForecasts]);
+
+    fetchForecasts();
+  }, [
+    currentOrganization?.id,
+    forecasts.length,
+    isForecastListLoading,
+    loadOrganizationForecasts,
+    setForecastLoading,
+    setForecastError,
+  ]);
 
   // Load forecast when selection changes
   useEffect(() => {

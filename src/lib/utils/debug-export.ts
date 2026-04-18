@@ -78,8 +78,8 @@ export class DebugDataExporter {
     const steps = this.data.debugInfo.calculationSteps;
     const metrics = this.data.debugInfo.performanceMetrics;
 
-    const nodeTypes = [...new Set(steps.map((s) => s.nodeType))];
-    const calculationTypes = [...new Set(steps.map((s) => s.calculationType))];
+    const nodeTypes = Array.from(new Set(steps.map((s) => s.nodeType)));
+    const calculationTypes = Array.from(new Set(steps.map((s) => s.calculationType)));
     const errorSteps = steps.filter((s) => s.errorMessage);
     const successSteps = steps.filter((s) => !s.errorMessage);
 
