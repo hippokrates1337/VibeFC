@@ -1,6 +1,7 @@
 import { Organization, OrganizationMember } from '@/lib/supabase';
+import { joinBackendUrl } from '@/lib/api/join-backend-url';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || '/api';
 
 // Define response types
 interface ApiResponse<T> {
@@ -45,7 +46,7 @@ async function fetchWithAuth<T>(
       headers.set('Authorization', `Bearer ${token}`);
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(joinBackendUrl(API_BASE_URL, endpoint), {
       ...options,
       headers,
     });

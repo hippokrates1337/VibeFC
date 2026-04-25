@@ -113,12 +113,12 @@ let ForecastService = ForecastService_1 = class ForecastService {
             this.logger.warn('Attempt to find forecasts without providing a userId');
             return [];
         }
+        this.logger.debug(`Listing forecasts for organization ${organizationId} (requester ${userId})`);
         const client = this.supabaseService.getClientForRequest(request);
         const { data, error } = await client
             .from('forecasts')
             .select('*')
-            .eq('organization_id', organizationId)
-            .filter('user_id', 'eq', userId);
+            .eq('organization_id', organizationId);
         if (error) {
             this.logger.error(`Failed to fetch forecasts: ${error.message}`, error.stack);
             throw new common_1.InternalServerErrorException(`Failed to fetch forecasts: ${error.message}`);
@@ -136,11 +136,10 @@ let ForecastService = ForecastService_1 = class ForecastService {
             .from('forecasts')
             .select('*')
             .eq('id', id)
-            .match({ user_id: userId })
             .single();
         if (error) {
             if (error.code === 'PGRST116' || error.message?.includes('not found')) {
-                this.logger.warn(`Forecast ${id} not found or does not belong to user ${userId}.`);
+                this.logger.warn(`Forecast ${id} not found or not accessible for user ${userId}.`);
                 throw new common_1.NotFoundException(`Forecast with ID ${id} not found.`);
             }
             this.logger.error(`Error fetching forecast ${id}: ${error.message}`, error.stack);
@@ -195,7 +194,7 @@ let ForecastService = ForecastService_1 = class ForecastService {
         const { data, error } = await client
             .from('forecasts')
             .update(updateData)
-            .match({ id, user_id: userId })
+            .eq('id', id)
             .select('id')
             .single();
         if (error) {
@@ -234,7 +233,7 @@ let ForecastService = ForecastService_1 = class ForecastService {
         const { data, error } = await client
             .from('forecasts')
             .update(updateData)
-            .match({ id, user_id: userId })
+            .eq('id', id)
             .select('id')
             .single();
         if (error) {
@@ -262,7 +261,7 @@ let ForecastService = ForecastService_1 = class ForecastService {
         const { error } = await client
             .from('forecasts')
             .delete()
-            .match({ id, user_id: userId });
+            .eq('id', id);
         if (error) {
             this.logger.error(`Error deleting forecast ${id}: ${error.message}`, error.stack);
             throw new common_1.InternalServerErrorException(`Failed to delete forecast: ${error.message}`);

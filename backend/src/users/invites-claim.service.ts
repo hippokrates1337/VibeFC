@@ -85,6 +85,26 @@ export class InvitesClaimService {
       });
 
       if (insErr) {
+        const duplicateKey =
+          (insErr as { code?: string }).code === '23505' ||
+          insErr.message.includes('organization_members_organization_id_user_id_key');
+
+        if (duplicateKey) {
+          this.logger.debug(
+            `claim-invites membership already exists (race-safe): org=${inv.organization_id} user=${userId}`,
+          );
+          const { error: delDupInviteErr } = await admin
+            .from('organization_invitations')
+            .delete()
+            .eq('id', inv.id);
+          if (delDupInviteErr) {
+            this.logger.warn(
+              `claim-invites duplicate member but invite delete failed: ${delDupInviteErr.message}`,
+            );
+          }
+          continue;
+        }
+
         this.logger.error(`claim-invites insert member failed: ${insErr.message}`);
         continue;
       }
