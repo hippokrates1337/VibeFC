@@ -186,6 +186,8 @@ Done = typecheck + lint + unit tests pass for every workspace you touched.
 
 ## Phase 3 — Rewrite the forecast engine (the "circular dependency" bugs) (~1–2 weeks)
 
+> **Status:** engine done (`packages/forecast-engine`, spec in `docs/forecast-engine.md`); backend and editor validation switched over; tree engine deleted. Open: the UI items (SEED input handle, `isValidConnection` with `checkForecastConnection`, cycle highlighting, `rank` column + drag-to-reorder), the DATA `offsetMonths` storage migration to the lag convention, and a `missingAsZero` toggle in the DATA node panel.
+
 ### What is actually wrong
 
 The engine evaluates **tree by tree**. Each METRIC becomes a root, and trees are ordered by SEED references (`calculation-engine/services/tree-processor.ts:38-71`). That ordering treats a SEED reference, which always means *previous month* (t-1), as if it were a *same-month* dependency. Five confirmed defects follow:
