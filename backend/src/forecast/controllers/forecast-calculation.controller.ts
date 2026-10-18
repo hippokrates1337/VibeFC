@@ -234,7 +234,7 @@ export class ForecastCalculationController {
     try {
       this.logger.log(`[ForecastCalculationController] [Debug] Get calculation steps for forecast ${forecastId} requested by user ${user.userId}`);
       
-      const result = await this.debugCalculationService.getCalculationSteps(forecastId);
+      const result = await this.debugCalculationService.getCalculationSteps(forecastId, user.userId);
 
       this.logger.log(`[ForecastCalculationController] [Debug] Retrieved ${result.length} calculation steps for forecast ${forecastId}`);
       

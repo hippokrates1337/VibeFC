@@ -12,6 +12,7 @@ import {
   DebugCalculationRequest, 
   DebugCalculationResult, 
   DebugConfiguration,
+  DebugCalculationStep,
   DebugCalculationTree,
   DebugTreeNode,
   CalculationType
@@ -28,6 +29,29 @@ import { CalculationTree, CalculationTreeNode } from './calculation-engine/types
 @Injectable()
 export class DebugCalculationService {
   private readonly logger = new Logger(DebugCalculationService.name);
+
+  /**
+   * Steps of the last debug run, keyed by user + forecast. The collector itself is a
+   * shared singleton, so reading it directly would return whoever ran last.
+   */
+  private static readonly MAX_STORED_RUNS = 50;
+  private readonly lastStepsByRun = new Map<string, DebugCalculationStep[]>();
+
+  private runKey(userId: string, forecastId: string): string {
+    return `${userId}:${forecastId}`;
+  }
+
+  private storeSteps(userId: string, forecastId: string, steps: DebugCalculationStep[]): void {
+    const key = this.runKey(userId, forecastId);
+    this.lastStepsByRun.delete(key);
+    this.lastStepsByRun.set(key, [...steps]);
+    if (this.lastStepsByRun.size > DebugCalculationService.MAX_STORED_RUNS) {
+      const oldestKey = this.lastStepsByRun.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.lastStepsByRun.delete(oldestKey);
+      }
+    }
+  }
 
   /**
    * Map CalculationType from debug-types to CalculationTypeDto
@@ -107,9 +131,10 @@ export class DebugCalculationService {
 
       // Collect debug information
       const debugInfo = this.debugCollector.getDebugInfo();
-      
+
       this.debugCollector.recordPhaseEnd('resultBuilding');
       this.debugCollector.endCalculation();
+      this.storeSteps(userId, forecastId, debugInfo.calculationSteps);
 
       // Create debug result
       const debugResult: DebugCalculationResultDto = {
@@ -178,16 +203,13 @@ export class DebugCalculationService {
   }
 
   /**
-   * Get detailed calculation steps from the last debug calculation
-   * This would typically be stored and retrieved from the database
+   * Get the calculation steps of this user's last debug calculation for this forecast.
+   * Only runs the same user started are returned (the run itself was access-checked
+   * when it loaded the forecast). Kept in memory per instance.
    */
-  async getCalculationSteps(forecastId: string): Promise<any[]> {
+  async getCalculationSteps(forecastId: string, userId: string): Promise<DebugCalculationStep[]> {
     this.logger.log(`[DebugCalculation] Getting calculation steps for forecast ${forecastId}`);
-    
-    // In a real implementation, this would retrieve stored debug steps from the database
-    // For now, return the current debug collector steps
-    const debugInfo = this.debugCollector.getDebugInfo();
-    return debugInfo.calculationSteps;
+    return this.lastStepsByRun.get(this.runKey(userId, forecastId)) ?? [];
   }
 
   /**
