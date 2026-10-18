@@ -20,6 +20,7 @@ import { SeedNodeStrategy } from '../strategies/seed-node-strategy';
 @Injectable()
 export class NodeEvaluator {
   private strategies = new Map<NodeType, NodeEvaluationStrategy>();
+  private readonly verboseLogs = process.env.CALC_ENGINE_VERBOSE_LOGS === 'true';
 
   constructor(
     private readonly dataNodeStrategy: DataNodeStrategy,
@@ -60,11 +61,15 @@ export class NodeEvaluator {
       throw new Error(`Unknown node type: ${node.nodeType}`);
     }
 
-    this.logger.log(`[NodeEvaluator] Evaluating ${node.nodeType} node ${node.nodeId} for month ${month}, type ${calculationType}`);
+    if (this.verboseLogs) {
+      this.logger.log(`[NodeEvaluator] Evaluating ${node.nodeType} node ${node.nodeId} for month ${month}, type ${calculationType}`);
+    }
 
     try {
       const result = await strategy.evaluate(node, month, calculationType, enhancedContext);
-      this.logger.log(`[NodeEvaluator] Node ${node.nodeId} evaluation result: ${result}`);
+      if (this.verboseLogs) {
+        this.logger.log(`[NodeEvaluator] Node ${node.nodeId} evaluation result: ${result}`);
+      }
       return result;
     } catch (error) {
       this.logger.error(`[NodeEvaluator] Error evaluating node ${node.nodeId}:`, error);

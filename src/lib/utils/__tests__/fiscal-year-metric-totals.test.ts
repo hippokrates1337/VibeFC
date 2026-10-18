@@ -7,7 +7,6 @@ import type { MergedTimeSeriesValue } from '@/types/forecast';
 
 function row(partial: Partial<MergedTimeSeriesValue> & { month: string }): MergedTimeSeriesValue {
   return {
-    month: partial.month,
     forecast: null,
     budget: null,
     historical: null,

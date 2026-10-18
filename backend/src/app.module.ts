@@ -8,6 +8,8 @@ import { ForecastModule } from './forecast/forecast.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
 import { UsersModule } from './users/users.module';
 
+const ENABLE_TEST_AUTH_ENDPOINT = process.env.ENABLE_TEST_AUTH_ENDPOINT === 'true';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -18,7 +20,7 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     OrganizationsModule,
     ForecastModule,
-    TestAuthModule,
+    ...(ENABLE_TEST_AUTH_ENDPOINT ? [TestAuthModule] : []),
     UsersModule,
   ],
 })

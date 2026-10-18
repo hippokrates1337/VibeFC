@@ -52,7 +52,7 @@ describe('Forecast Node Operations (RLS Focused)', () => {
       const nodeDto: CreateForecastNodeDto = {
         forecastId: aliceNodeTestForecastId, 
         kind: ForecastNodeKind.CONSTANT,
-        attributes: { value: 123 },
+        attributes: { name: 'Constant A', value: 123 },
         position: { x: 10, y: 20 },
       };
       const response = await request(app.getHttpServer())
@@ -64,14 +64,14 @@ describe('Forecast Node Operations (RLS Focused)', () => {
       expect(response.body).toHaveProperty('id');
       expect(response.body.forecastId).toBe(aliceNodeTestForecastId);
       expect(response.body.kind).toBe(ForecastNodeKind.CONSTANT);
-      expect(response.body.attributes).toEqual({ value: 123 });
+      expect(response.body.attributes).toEqual({ name: 'Constant A', value: 123 });
     });
 
     it('Charlie should get 404 when trying to create a node in Alice\'s forecast', async () => {
       const nodeDto: CreateForecastNodeDto = {
         forecastId: aliceNodeTestForecastId,
         kind: ForecastNodeKind.DATA,
-        attributes: { variableId: 'some-var', offsetMonths: 0 },
+        attributes: { name: 'Data A', variableId: 'some-var', offsetMonths: 0 },
         position: { x: 30, y: 40 },
       };
       await request(app.getHttpServer())
@@ -86,7 +86,7 @@ describe('Forecast Node Operations (RLS Focused)', () => {
       const nodeDto: CreateForecastNodeDto = {
         forecastId: nonExistentForecastId,
         kind: ForecastNodeKind.CONSTANT,
-        attributes: { value: 456 },
+        attributes: { name: 'Constant B', value: 456 },
         position: { x: 50, y: 60 },
       };
       await request(app.getHttpServer())
@@ -170,7 +170,7 @@ describe('Forecast Node Operations (RLS Focused)', () => {
       const createNodeDto: CreateForecastNodeDto = {
         forecastId: aliceNodeTestForecastId,
         kind: ForecastNodeKind.CONSTANT,
-        attributes: { value: 555 },
+        attributes: { name: 'Constant C', value: 555 },
         position: { x: 10, y: 10 },
       };
       const response = await request(app.getHttpServer())
@@ -183,7 +183,7 @@ describe('Forecast Node Operations (RLS Focused)', () => {
 
     it('Alice should be able to update her node\'s attributes and position', async () => {
       const updateNodeDto: UpdateForecastNodeDto = {
-        attributes: { value: 777 },
+        attributes: { name: 'Constant C Updated', value: 777 },
         position: { x: 15, y: 25 },
       };
       await request(app.getHttpServer())
@@ -196,12 +196,12 @@ describe('Forecast Node Operations (RLS Focused)', () => {
         .get(`/forecasts/${aliceNodeTestForecastId}/nodes/${nodeToUpdateId}`)
         .set('Authorization', `Bearer ${aliceAuthToken}`)
         .expect(200);
-      expect(verifyResponse.body.attributes).toEqual({ value: 777 });
+      expect(verifyResponse.body.attributes).toEqual({ name: 'Constant C Updated', value: 777 });
       expect(verifyResponse.body.position).toEqual({ x: 15, y: 25 });
     });
 
     it('Charlie should get 404 when trying to update a node in Alice\'s forecast', async () => {
-      const updateNodeDto: UpdateForecastNodeDto = { attributes: { value: 999 } }; 
+      const updateNodeDto: UpdateForecastNodeDto = { attributes: { name: 'Constant C Denied', value: 999 } }; 
       await request(app.getHttpServer())
         .patch(`/forecasts/${aliceNodeTestForecastId}/nodes/${nodeToUpdateId}`)
         .set('Authorization', `Bearer ${charlieAuthToken}`)
@@ -210,7 +210,7 @@ describe('Forecast Node Operations (RLS Focused)', () => {
     });
 
     it('Alice should get 404 when trying to update a non-existent node in her forecast', async () => {
-      const updateNodeDto: UpdateForecastNodeDto = { attributes: { value: 111 } }; 
+      const updateNodeDto: UpdateForecastNodeDto = { attributes: { name: 'Constant C Missing', value: 111 } }; 
       await request(app.getHttpServer())
         .patch(`/forecasts/${aliceNodeTestForecastId}/nodes/${uuidv4()}`)
         .set('Authorization', `Bearer ${aliceAuthToken}`)
@@ -225,7 +225,7 @@ describe('Forecast Node Operations (RLS Focused)', () => {
       const createNodeDto: CreateForecastNodeDto = {
         forecastId: aliceNodeTestForecastId,
         kind: ForecastNodeKind.METRIC,
-        attributes: { label: 'To Delete', budgetVariableId: uuidv4(), historicalVariableId: uuidv4() },
+        attributes: { label: 'To Delete', budgetVariableId: uuidv4(), historicalVariableId: uuidv4(), useCalculated: true },
         position: { x: 200, y: 200 },
       };
       const response = await request(app.getHttpServer())

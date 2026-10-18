@@ -31,22 +31,6 @@ if (!supabaseUrl && typeof window !== 'undefined') {
   }
 }
 
-// Final fallback: hard-coded values for development (TEMPORARY)
-if (!supabaseUrl && typeof window !== 'undefined') {
-  console.warn('⚠️ Using hardcoded Supabase URL for development');
-  supabaseUrl = 'https://rfjcfypsaixxenafuxky.supabase.co';
-  // Note: You'll need to get the anon key from your Supabase dashboard
-}
-
-if (process.env.NODE_ENV === 'development') {
-  console.log('🔍 SUPABASE INIT:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    url: supabaseUrl,
-    keyPrefix: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 10)}...` : 'undefined...'
-  });
-}
-
 if (!supabaseUrl || !supabaseAnonKey) {
   const missing: string[] = [];
   if (!supabaseUrl) {

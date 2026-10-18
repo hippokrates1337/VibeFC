@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { Request } from 'express';
 import { DataIntakeService } from '../../data-intake/data-intake.service';
@@ -9,7 +9,6 @@ import { ForecastCalculationResultDto, CalculationHealthDto, UnifiedCalculationR
 import { ForecastDto } from '../dto/forecast.dto';
 import { GraphConverter } from './calculation-engine/graph-converter';
 import { VariableDataService } from './calculation-engine/variable-data-service';
-import { CalculationEngine } from './calculation-engine/calculation-engine';
 import { CalculationEngineCore } from './calculation-engine/calculation-engine-core';
 import { CalculationAdapter } from './calculation-engine/adapters/calculation-adapter';
 import type { 
@@ -20,7 +19,6 @@ import type {
   CalculationTreeNode,
   CalculationTree,
   UnifiedCalculationRequest,
-  CalculationType,
   UnifiedCalculationResult
 } from './calculation-engine/types';
 
@@ -38,10 +36,8 @@ export class ForecastCalculationService {
     private readonly forecastService: ForecastService,
     private readonly forecastNodeService: ForecastNodeService,
     private readonly forecastEdgeService: ForecastEdgeService,
-    private readonly legacyEngine: CalculationEngine,
     private readonly newEngine: CalculationEngineCore,
-    private readonly adapter: CalculationAdapter,
-    @Inject('USE_NEW_CALCULATION_ENGINE') private readonly useNewEngine: boolean
+    private readonly adapter: CalculationAdapter
   ) {}
 
   /**
@@ -127,195 +123,6 @@ export class ForecastCalculationService {
     } catch (error) {
       this.logger.error(`[ForecastCalculation] [CombinedCalculation] Combined calculation failed:`, error);
       throw error;
-    }
-  }
-
-  /**
-   * Execute real calculation using frontend calculation engine
-   * @private
-   */
-  private async executeRealCalculation(
-    forecastId: string,
-    forecast: any,
-    nodes: ForecastNodeClient[],
-    edges: ForecastEdgeClient[],
-    variables: Variable[]
-  ): Promise<ExtendedForecastCalculationResult> {
-    try {
-      this.logger.log(`[ForecastCalculation] Starting real calculation engine execution`);
-      
-      // Validate data integrity first
-      this.validateDataIntegrity(nodes, edges);
-      
-      // Initialize calculation services - use injected calculation engine
-      const graphConverter = new GraphConverter();
-      const calculationEngine = this.legacyEngine;
-      
-      // Validate graph and convert to calculation trees
-      this.logger.log(`[ForecastCalculation] Validating graph structure`);
-      const validation = graphConverter.validateGraph(nodes, edges);
-      
-      if (!validation.isValid) {
-        this.logger.error(`[ForecastCalculation] Graph validation failed:`, validation.errors);
-        throw new BadRequestException(`Invalid forecast graph: ${validation.errors.join(', ')}`);
-      }
-      
-      if (validation.warnings.length > 0) {
-        this.logger.warn(`[ForecastCalculation] Graph validation warnings:`, validation.warnings);
-      }
-      
-      // Convert graph to calculation trees
-      this.logger.log(`[ForecastCalculation] Converting graph to calculation trees`);
-      const clientNodes = nodes.map(n => this.convertNodeToClientFormat(n as any));
-      const clientEdges = edges.map(e => this.convertEdgeToClientFormat(e as any));
-      const trees = graphConverter.convertToTrees(clientNodes, clientEdges);
-      this.logger.log(`[ForecastCalculation] Generated ${trees.length} calculation trees`);
-      
-      // Execute extended calculation to get all node results
-      this.logger.log(`[ForecastCalculation] Executing extended calculation for period ${forecast.forecastStartDate} to ${forecast.forecastEndDate}`);
-      const extendedResult = await calculationEngine.calculateForecastExtended(
-        trees,
-        new Date(`${forecast.forecastStartDate}T00:00:00.000Z`),
-        new Date(`${forecast.forecastEndDate}T00:00:00.000Z`),
-        variables
-      );
-      
-      // Return the extended result with forecast ID (backward compatible as it extends ForecastCalculationResult)
-      return {
-        ...extendedResult,
-        forecastId
-      };
-      
-    } catch (error) {
-      this.logger.error(`[ForecastCalculation] Real calculation execution failed:`, error);
-      
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      
-      if (error instanceof Error) {
-        // Handle specific calculation errors that should be shown to users
-        if (error.message.includes('Graph validation failed')) {
-          throw new BadRequestException(`Invalid forecast graph: ${error.message}`);
-        }
-        if (error.message.includes('Variable not found')) {
-          throw new BadRequestException(`Missing variable data: ${error.message}`);
-        }
-        if (error.message.includes('Calculation failed')) {
-          throw new BadRequestException(`Calculation error: ${error.message}`);
-        }
-        if (error.message.includes('Historical data for')) {
-          throw new BadRequestException(`Missing historical data: ${error.message}`);
-        }
-        if (error.message.includes('Historical variable')) {
-          throw new BadRequestException(`Variable configuration error: ${error.message}`);
-        }
-        if (error.message.includes('Node evaluation failed')) {
-          throw new BadRequestException(`Node calculation error: ${error.message}`);
-        }
-        if (error.message.includes('has no historical variable configured')) {
-          throw new BadRequestException(`Configuration error: ${error.message}`);
-        }
-        if (error.message.includes('not found in calculation trees')) {
-          throw new BadRequestException(`Graph structure error: ${error.message}`);
-        }
-      }
-      
-      throw new InternalServerErrorException(
-        `Calculation engine execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-  }
-
-  /**
-   * Execute historical calculation using calculation engine
-   * @private
-   */
-  private async executeHistoricalCalculation(
-    forecastId: string,
-    nodes: ForecastNodeClient[],
-    edges: ForecastEdgeClient[],
-    variables: Variable[],
-    actualStartDate: Date,
-    actualEndDate: Date
-  ): Promise<ExtendedForecastCalculationResult> {
-    try {
-      this.logger.log(`[ForecastCalculation] Starting historical calculation engine execution`);
-      
-      // Validate data integrity first
-      this.validateDataIntegrity(nodes, edges);
-      
-      // Initialize calculation services - use injected calculation engine
-      const graphConverter = new GraphConverter();
-      const calculationEngine = this.legacyEngine;
-      
-      // Validate graph and convert to calculation trees
-      this.logger.log(`[ForecastCalculation] Validating graph structure`);
-      const validation = graphConverter.validateGraph(nodes, edges);
-      
-      if (!validation.isValid) {
-        this.logger.error(`[ForecastCalculation] Graph validation failed:`, validation.errors);
-        throw new BadRequestException(`Invalid forecast graph: ${validation.errors.join(', ')}`);
-      }
-      
-      if (validation.warnings.length > 0) {
-        this.logger.warn(`[ForecastCalculation] Graph validation warnings:`, validation.warnings);
-      }
-      
-      // Convert graph to calculation trees
-      this.logger.log(`[ForecastCalculation] Converting graph to calculation trees`);
-      const clientNodes = nodes.map(n => this.convertNodeToClientFormat(n as any));
-      const clientEdges = edges.map(e => this.convertEdgeToClientFormat(e as any));
-      const trees = graphConverter.convertToTrees(clientNodes, clientEdges);
-      this.logger.log(`[ForecastCalculation] Generated ${trees.length} calculation trees`);
-      
-      // Execute historical calculation for actual period
-      this.logger.log(`[ForecastCalculation] Executing historical calculation for period ${actualStartDate.toISOString()} to ${actualEndDate.toISOString()}`);
-      const historicalResult = await calculationEngine.calculateHistoricalValues(
-        trees,
-        actualStartDate,
-        actualEndDate,
-        variables
-      );
-      
-      // Return the historical result with forecast ID
-      return {
-        ...historicalResult,
-        forecastId
-      };
-      
-    } catch (error) {
-      this.logger.error(`[ForecastCalculation] Historical calculation execution failed:`, error);
-      
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      
-      if (error instanceof Error) {
-        // Handle specific calculation errors that should be shown to users
-        if (error.message.includes('Graph validation failed')) {
-          throw new BadRequestException(`Invalid forecast graph: ${error.message}`);
-        }
-        if (error.message.includes('Variable not found')) {
-          throw new BadRequestException(`Missing variable data: ${error.message}`);
-        }
-        if (error.message.includes('Historical calculation failed')) {
-          throw new BadRequestException(`Historical calculation error: ${error.message}`);
-        }
-        if (error.message.includes('Historical data for')) {
-          throw new BadRequestException(`Missing historical data: ${error.message}`);
-        }
-        if (error.message.includes('Historical variable')) {
-          throw new BadRequestException(`Variable configuration error: ${error.message}`);
-        }
-        if (error.message.includes('Node evaluation failed')) {
-          throw new BadRequestException(`Node calculation error: ${error.message}`);
-        }
-      }
-      
-      throw new InternalServerErrorException(
-        `Historical calculation execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
     }
   }
 
@@ -503,97 +310,6 @@ export class ForecastCalculationService {
   }
 
   /**
-   * Store calculation results in the database
-   * @private
-   */
-  private async storeCalculationResultsLegacy(
-    forecastId: string,
-    organizationId: string,
-    results: ExtendedForecastCalculationResult,
-    request: Request
-  ): Promise<ForecastCalculationResultDto> {
-    try {
-      const client = this.supabaseService.getClientForRequest(request);
-      
-      // Store the complete extended results in JSONB
-      const storedResults = {
-        metrics: results.metrics,
-        allNodes: results.allNodes // Include all node results
-      };
-      
-      const { data, error } = await client
-        .from('forecast_calculation_results')
-        .insert({
-          forecast_id: forecastId,
-          organization_id: organizationId,
-          calculated_at: new Date().toISOString(),
-          results: storedResults // Store both metrics and all nodes as JSONB
-        })
-        .select()
-        .single();
-
-      if (error) {
-        this.logger.error(`[ForecastCalculation] Failed to store results:`, error);
-        throw new InternalServerErrorException(`Failed to store calculation results: ${error.message}`);
-      }
-
-      return this.mapDatabaseResultToDto(data);
-    } catch (error) {
-      this.logger.error(`[ForecastCalculation] Error storing calculation results:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Store historical calculation results in the database
-   * @private
-   */
-  private async storeHistoricalCalculationResults(
-    forecastId: string,
-    organizationId: string,
-    results: ExtendedForecastCalculationResult,
-    actualStartDate: Date,
-    actualEndDate: Date,
-    request: Request
-  ): Promise<ForecastCalculationResultDto> {
-    try {
-      const client = this.supabaseService.getClientForRequest(request);
-      
-      // Store the historical results with metadata about the actual period
-      const storedResults = {
-        metrics: results.metrics,
-        allNodes: results.allNodes,
-        actualPeriod: {
-          startDate: actualStartDate.toISOString(),
-          endDate: actualEndDate.toISOString()
-        },
-        calculationType: 'historical' // Mark this as a historical calculation
-      };
-      
-      const { data, error } = await client
-        .from('forecast_calculation_results')
-        .insert({
-          forecast_id: forecastId,
-          organization_id: organizationId,
-          calculated_at: new Date().toISOString(),
-          results: storedResults // Store historical results with metadata
-        })
-        .select()
-        .single();
-
-      if (error) {
-        this.logger.error(`[ForecastCalculation] Failed to store historical results:`, error);
-        throw new InternalServerErrorException(`Failed to store historical calculation results: ${error.message}`);
-      }
-
-      return this.mapDatabaseResultToDto(data);
-    } catch (error) {
-      this.logger.error(`[ForecastCalculation] Error storing historical calculation results:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Map database entity to DTO
    * @private
    */
@@ -646,9 +362,8 @@ export class ForecastCalculationService {
       // Validate data integrity using transformed data
       this.validateDataIntegrity(transformedNodes, transformedEdges);
 
-      // Initialize calculation engine - use injected legacy engine
+      // Convert graph to trees and execute via adapter-backed core engine
       const graphConverter = new GraphConverter();
-      const calculationEngine = this.legacyEngine;
 
       // Convert graph to calculation trees (validation happens inside convertToTrees)
       this.logger.log(`[ForecastCalculation] Converting graph to calculation trees`);
@@ -659,21 +374,44 @@ export class ForecastCalculationService {
       // Execute combined calculation
       const forecastStartDate = new Date(`${forecast.forecastStartDate}T00:00:00.000Z`);
       const forecastEndDate = new Date(`${forecast.forecastEndDate}T00:00:00.000Z`);
-
-      const result = await calculationEngine.calculateComprehensive(
+      const result = await this.adapter.calculateWithPeriods(
         trees,
-        forecastStartDate,
-        forecastEndDate,
-        actualStartDate,
-        actualEndDate,
-        transformedVariables
+        this.dateToMMYYYY(forecastStartDate),
+        this.dateToMMYYYY(forecastEndDate),
+        this.dateToMMYYYY(actualStartDate),
+        this.dateToMMYYYY(actualEndDate),
+        transformedVariables,
+        {
+          calculationTypes: ['historical', 'forecast', 'budget'],
+          includeIntermediateNodes: true,
+        }
       );
 
       // Return result with the forecast ID set
       this.logger.log(`[ForecastCalculation] Combined calculation engine execution completed`);
       return {
-        ...result,
-        forecastId: forecastId
+        forecastId,
+        calculatedAt: result.calculatedAt,
+        metrics: result.metrics.map((metric) => ({
+          metricNodeId: metric.nodeId,
+          values: metric.values.map((value) => ({
+            date: this.mmyyyyToDate(value.month),
+            forecast: value.forecast,
+            budget: value.budget,
+            historical: value.historical,
+          })),
+        })),
+        allNodes: result.allNodes.map((node) => ({
+          nodeId: node.nodeId,
+          nodeType: node.nodeType as 'DATA' | 'CONSTANT' | 'OPERATOR' | 'METRIC' | 'SEED',
+          values: node.values.map((value) => ({
+            date: this.mmyyyyToDate(value.month),
+            forecast: value.forecast,
+            budget: value.budget,
+            historical: value.historical,
+            calculated: value.calculated,
+          })),
+        })),
       };
 
     } catch (error) {
@@ -771,13 +509,7 @@ export class ForecastCalculationService {
       this.logger.log(`[ForecastCalculation] Starting comprehensive calculation for forecast ${forecastId} by user ${userId}`);
       this.logger.log(`[ForecastCalculation] Calculation types: [${calculationRequest.calculationTypes.join(', ')}]`);
       this.logger.log(`[ForecastCalculation] Include intermediate nodes: ${calculationRequest.includeIntermediateNodes}`);
-      this.logger.log(`[ForecastCalculation] Using ${this.useNewEngine ? 'NEW' : 'LEGACY'} calculation engine`);
-
-      if (this.useNewEngine) {
-        return await this.calculateWithNewEngine(forecastId, userId, request, calculationRequest);
-      } else {
-        return await this.calculateWithLegacyEngine(forecastId, userId, request, calculationRequest);
-      }
+      return await this.calculateWithNewEngine(forecastId, userId, request, calculationRequest);
     } catch (error) {
       this.logger.error(`[ForecastCalculation] Comprehensive calculation failed for forecast ${forecastId}:`, error);
       throw error;
@@ -891,70 +623,6 @@ export class ForecastCalculationService {
   }
 
   /**
-   * Calculate using the legacy engine (existing implementation)
-   */
-  private async calculateWithLegacyEngine(
-    forecastId: string,
-    userId: string,
-    request: Request,
-    calculationRequest: UnifiedCalculationRequestDto
-  ): Promise<UnifiedCalculationResultDto> {
-    this.logger.log(`[ForecastCalculation] [LEGACY ENGINE] Processing forecast ${forecastId}`);
-
-    // 1. Fetch and validate forecast with period metadata
-    const forecast = await this.forecastService.findOne(forecastId, userId, request);
-    if (!forecast) {
-      throw new NotFoundException(`Forecast ${forecastId} not found`);
-    }
-
-    this.logger.log(`[ForecastCalculation] [Unified] Forecast found: ${forecast.name}`);
-
-    // 2. Extract or generate period information from forecast metadata
-    const periodInfo = this.extractPeriodInfoFromForecast(forecast);
-    this.logger.log(`[ForecastCalculation] [Unified] Period info: Forecast ${periodInfo.forecastStartMonth} to ${periodInfo.forecastEndMonth}, Actual ${periodInfo.actualStartMonth} to ${periodInfo.actualEndMonth}`);
-
-    // 3. Fetch forecast graph (nodes and edges)
-    const nodes = await this.forecastNodeService.findByForecast(forecastId, request);
-    const edges = await this.forecastEdgeService.findByForecast(forecastId, request);
-
-    this.logger.log(`[ForecastCalculation] [Unified] Graph loaded: ${nodes.length} nodes, ${edges.length} edges`);
-
-    // 4. Fetch organization variables for calculation
-    const variablesResponse = await this.dataIntakeService.getVariablesByUser(userId, request);
-    const variables = variablesResponse.variables || [];
-
-    this.logger.log(`[ForecastCalculation] [Unified] Variables loaded: ${variables.length} variables`);
-
-    // 5. Transform data for calculation engine
-    const transformedNodes = this.transformNodesToCalculationFormat(nodes);
-    const transformedEdges = this.transformEdgesToCalculationFormat(edges);
-    const transformedVariables = this.transformVariablesToCalculationFormat(variables);
-
-    this.logger.log(`[ForecastCalculation] [Unified] Data transformed for unified calculation engine`);
-
-    // 6. Execute unified calculation
-    const calculationResult = await this.executeUnifiedCalculation(
-      forecastId,
-      transformedNodes,
-      transformedEdges,
-      transformedVariables,
-      periodInfo,
-      calculationRequest
-    );
-
-    // 7. Store unified calculation results
-    const storedResult = await this.storeUnifiedCalculationResults(
-      forecastId,
-      forecast.organizationId,
-      calculationResult,
-      request
-    );
-
-    this.logger.log(`[ForecastCalculation] [Unified] Unified calculation completed and stored for forecast ${forecastId}`);
-    return storedResult;
-  }
-
-  /**
    * Extract period information from forecast metadata or generate defaults
    * @private
    */
@@ -1047,105 +715,6 @@ export class ForecastCalculationService {
       return y1 - y2;
     }
     return m1 - m2;
-  }
-
-  /**
-   * Execute unified calculation using calculation engine
-   * @private
-   */
-  private async executeUnifiedCalculation(
-    forecastId: string,
-    nodes: ForecastNodeClient[],
-    edges: ForecastEdgeClient[],
-    variables: Variable[],
-    periodInfo: PeriodInfoDto,
-    calculationRequest: UnifiedCalculationRequestDto
-  ): Promise<UnifiedCalculationResult> {
-    try {
-      this.logger.log(`[ForecastCalculation] [Unified] Starting unified calculation engine execution`);
-      
-      // Validate data integrity first
-      this.validateDataIntegrity(nodes, edges);
-      
-      // Initialize calculation services - use injected calculation engine
-      const graphConverter = new GraphConverter();
-      const calculationEngine = this.legacyEngine;
-      
-      // Validate graph and convert to calculation trees
-      this.logger.log(`[ForecastCalculation] [Unified] Validating graph structure`);
-      const validation = graphConverter.validateGraph(nodes, edges);
-      
-      if (!validation.isValid) {
-        this.logger.error(`[ForecastCalculation] [Unified] Graph validation failed:`, validation.errors);
-        throw new BadRequestException(`Invalid forecast graph: ${validation.errors.join(', ')}`);
-      }
-      
-      if (validation.warnings.length > 0) {
-        this.logger.warn(`[ForecastCalculation] [Unified] Graph validation warnings:`, validation.warnings);
-      }
-      
-      // Convert graph to calculation trees
-      this.logger.log(`[ForecastCalculation] [Unified] Converting graph to calculation trees`);
-      const clientNodes = nodes.map(n => this.convertNodeToClientFormat(n as any));
-      const clientEdges = edges.map(e => this.convertEdgeToClientFormat(e as any));
-      const trees = graphConverter.convertToTrees(clientNodes, clientEdges);
-      this.logger.log(`[ForecastCalculation] [Unified] Generated ${trees.length} calculation trees`);
-      
-      // Convert DTO calculation types to engine types
-      const engineCalculationTypes: CalculationType[] = calculationRequest.calculationTypes.map(
-        (type: CalculationTypeDto) => type as CalculationType
-      );
-
-      // Prepare unified calculation request for engine
-      const unifiedRequest: UnifiedCalculationRequest = {
-        calculationTypes: engineCalculationTypes,
-        includeIntermediateNodes: calculationRequest.includeIntermediateNodes
-      };
-      
-      // Execute unified calculation
-      this.logger.log(`[ForecastCalculation] [Unified] Executing unified calculation for periods`);
-      const result = await calculationEngine.calculateWithPeriods(
-        trees,
-        periodInfo.forecastStartMonth,
-        periodInfo.forecastEndMonth,
-        periodInfo.actualStartMonth,
-        periodInfo.actualEndMonth,
-        variables,
-        unifiedRequest
-      );
-      
-      // Return the result with forecast ID set
-      this.logger.log(`[ForecastCalculation] [Unified] Unified calculation engine execution completed`);
-      return {
-        ...result,
-        forecastId: forecastId
-      };
-      
-    } catch (error) {
-      this.logger.error(`[ForecastCalculation] [Unified] Unified calculation execution failed:`, error);
-      
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      
-      if (error instanceof Error) {
-        // Handle specific calculation errors that should be shown to users
-        if (error.message.includes('Graph validation failed')) {
-          throw new BadRequestException(`Invalid forecast graph: ${error.message}`);
-        }
-        if (error.message.includes('Variable not found')) {
-          throw new BadRequestException(`Missing variable data: ${error.message}`);
-        }
-        if (error.message.includes('Calculation failed')) {
-          throw new BadRequestException(`Calculation error: ${error.message}`);
-        }
-        if (error.message.includes('Invalid MM-YYYY')) {
-          throw new BadRequestException(`Period format error: ${error.message}`);
-        }
-      }
-      
-      throw new InternalServerErrorException(`Unified calculation execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
   }
 
   /**

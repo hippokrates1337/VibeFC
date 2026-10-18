@@ -2,14 +2,14 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Forecast, forecastApi } from '@/lib/api/forecast';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
-import { Loader2, BarChart3, Calendar, Clock } from 'lucide-react';
+import { Loader2, BarChart3, Clock } from 'lucide-react';
 import { useOrganizationStore } from '@/lib/store/organization';
-import { useForecastGraph, useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
+import { useForecastGraph, useOrganizationForecastsLoader } from '@/lib/store/forecast-graph-store/hooks';
 
 // Helper function to safely format dates
 const formatDateSafe = (dateString: string | null | undefined, formatPattern: string): string => {
@@ -56,47 +56,13 @@ const getForecastSummary = (forecast: Forecast): string => {
 };
 
 // Enhanced graph preview component that shows realistic graph structure
-const GraphPreview = ({ forecast }: { forecast: Forecast }) => {
-  const [graphSummary, setGraphSummary] = useState<{
-    nodeCount: number;
-    edgeCount: number;
-    nodeTypes: string[];
-  } | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+interface ForecastListItem extends Forecast {
+  nodeCount?: number;
+  edgeCount?: number;
+  nodeTypes?: string[];
+}
 
-  // Fetch graph summary when component mounts
-  useEffect(() => {
-    const fetchGraphSummary = async () => {
-      setIsLoading(true);
-      try {
-        // This is a simple approach - we could optimize this by having a backend endpoint
-        // that returns forecasts with summary data in one call
-        const response = await forecastApi.getForecast(forecast.id);
-        if (response.data) {
-          const nodeTypes = response.data.nodes.map(node => node.kind);
-          const uniqueNodeTypes = nodeTypes.filter((type, index, arr) => arr.indexOf(type) === index);
-          
-          setGraphSummary({
-            nodeCount: response.data.nodes.length,
-            edgeCount: response.data.edges.length,
-            nodeTypes: uniqueNodeTypes
-          });
-        }
-      } catch (error) {
-        console.warn(`Failed to fetch graph summary for forecast ${forecast.id}:`, error);
-        // Fallback to empty graph
-        setGraphSummary({
-          nodeCount: 0,
-          edgeCount: 0,
-          nodeTypes: []
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchGraphSummary();
-  }, [forecast.id]);
+const GraphPreview = ({ forecast }: { forecast: ForecastListItem }) => {
 
   // Color mapping for different node types
   const getNodeColor = (type: string, index: number) => {
@@ -149,16 +115,11 @@ const GraphPreview = ({ forecast }: { forecast: Forecast }) => {
     return edges;
   };
 
-  if (isLoading) {
-    return (
-      <div className="h-32 flex items-center justify-center bg-slate-700 rounded-md border border-slate-600 p-4">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-      </div>
-    );
-  }
-
-  const nodePositions = generateNodePositions(graphSummary?.nodeCount || 0, graphSummary?.nodeTypes || []);
-  const edges = generateEdges(nodePositions, graphSummary?.edgeCount || 0);
+  const nodeCount = forecast.nodeCount ?? 0;
+  const edgeCount = forecast.edgeCount ?? 0;
+  const nodeTypes = forecast.nodeTypes ?? [];
+  const nodePositions = generateNodePositions(nodeCount, nodeTypes);
+  const edges = generateEdges(nodePositions, edgeCount);
 
   return (
     <div className="h-32 flex flex-col items-center justify-center bg-slate-700 rounded-md border border-slate-600 p-4 relative overflow-hidden">
@@ -196,10 +157,10 @@ const GraphPreview = ({ forecast }: { forecast: Forecast }) => {
       {/* Content */}
       <BarChart3 className="h-8 w-8 text-blue-400 mb-2 relative z-10" />
       <div className="text-center relative z-10">
-        {graphSummary && graphSummary.nodeCount > 0 ? (
+        {nodeCount > 0 ? (
           <>
             <p className="text-sm text-slate-300 font-medium">
-              {graphSummary.nodeCount} nodes, {graphSummary.edgeCount} connections
+              {nodeCount} nodes, {edgeCount} connections
             </p>
             <p className="text-xs text-slate-400 mt-1">
               {getForecastSummary(forecast)}
@@ -222,46 +183,7 @@ export default function ForecastDefinitionPage() {
   const currentOrganizationFromStore = useOrganizationStore((state) => state.currentOrganization);
 
   const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
-  const { loadOrganizationForecasts, setLoading: setForecastLoading, setError: setForecastError } = useForecastGraphActions();
-
-  // Load forecasts when organization changes
-  useEffect(() => {
-    const fetchForecasts = async () => {
-      if (!currentOrganizationFromStore?.id) {
-        // Clear forecasts if no organization selected
-        loadOrganizationForecasts([]);
-        return;
-      }
-
-      try {
-        setForecastLoading(true);
-        setForecastError(null);
-        
-        const { data, error } = await forecastApi.getForecasts(currentOrganizationFromStore.id);
-        
-        if (error) {
-          console.error('Failed to fetch organization forecasts:', error.message);
-          setForecastError(error.message);
-          loadOrganizationForecasts([]);
-          return;
-        }
-        
-        if (data) {
-          loadOrganizationForecasts(data);
-        } else {
-          loadOrganizationForecasts([]);
-        }
-      } catch (apiError: any) {
-        console.error('Error calling forecastApi.getForecasts:', apiError);
-        setForecastError(apiError?.message || 'Failed to fetch forecasts');
-        loadOrganizationForecasts([]);
-      } finally {
-        setForecastLoading(false);
-      }
-    };
-
-    fetchForecasts();
-  }, [currentOrganizationFromStore?.id, loadOrganizationForecasts, setForecastLoading, setForecastError]);
+  useOrganizationForecastsLoader(currentOrganizationFromStore?.id);
 
   // Create a new forecast
   const handleCreateForecast = async () => {
@@ -299,7 +221,10 @@ export default function ForecastDefinitionPage() {
       
       if (data) {
         router.push(`/forecast-definition/${data.id}`);
+        return;
       }
+
+      throw new Error('No forecast data returned from API');
     } catch (error: any) {
       console.error('Error creating forecast:', error);
       toast({
@@ -307,6 +232,7 @@ export default function ForecastDefinitionPage() {
         description: 'Failed to create forecast: ' + error.message,
         variant: 'destructive',
       });
+    } finally {
       setIsCreating(false);
     }
   };
@@ -359,7 +285,7 @@ export default function ForecastDefinitionPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <GraphPreview forecast={forecast} />
+                      <GraphPreview forecast={forecast as ForecastListItem} />
                     </CardContent>
                     <CardFooter className="flex justify-between border-t border-slate-700 p-4 bg-slate-800">
                       <div className="text-xs text-slate-400 flex items-center gap-1">

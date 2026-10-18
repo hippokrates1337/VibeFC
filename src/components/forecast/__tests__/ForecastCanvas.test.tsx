@@ -92,38 +92,36 @@ jest.mock('reactflow', () => {
   };
 });
 
-// Mock Zustand store
-jest.mock('@/lib/store/forecast-graph-store', () => ({
-  useForecastGraphStore: jest.fn(),
-  useForecastNodes: jest.fn(),
-  useForecastEdges: jest.fn(),
-  useDeleteNode: () => jest.fn(),
-  useDeleteEdge: () => jest.fn(),
-  useOpenConfigPanelForNode: () => jest.fn()
+jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
+  useForecastGraph: jest.fn(),
+  useForecastGraphActions: jest.fn(),
 }));
 
-// Import after mocking
-const { useForecastGraphStore, useForecastNodes, useForecastEdges } = jest.requireMock('@/lib/store/forecast-graph-store');
+const { useForecastGraph, useForecastGraphActions } = jest.requireMock(
+  '@/lib/store/forecast-graph-store/hooks'
+) as { useForecastGraph: jest.Mock; useForecastGraphActions: jest.Mock };
+
+const defaultGraphActions = () => ({
+  deleteNode: jest.fn(),
+  deleteEdge: jest.fn(),
+  openConfigPanelForNode: jest.fn(),
+  onNodesChange: jest.fn(),
+  onEdgesChange: jest.fn(),
+  addEdge: jest.fn(),
+  setSelectedNodeId: jest.fn(),
+});
 
 describe('ForecastCanvas', () => {
   beforeEach(() => {
-    // Setup default mock implementation
     const mockNodes = [{ id: 'node1' }, { id: 'node2' }];
     const mockEdges = [{ id: 'edge1', source: 'node1', target: 'node2' }];
-    
-    useForecastNodes.mockReturnValue(mockNodes);
-    useForecastEdges.mockReturnValue(mockEdges);
-    
-    useForecastGraphStore.mockImplementation((selector: any) => 
-      selector({
-        nodes: mockNodes,
-        edges: mockEdges,
-        onNodesChange: jest.fn(),
-        onEdgesChange: jest.fn(),
-        addEdge: jest.fn(),
-        setSelectedNodeId: jest.fn(),
-      })
-    );
+
+    useForecastGraph.mockReturnValue({
+      nodes: mockNodes,
+      edges: mockEdges,
+      configPanelOpen: false,
+    });
+    useForecastGraphActions.mockReturnValue(defaultGraphActions());
   });
 
   afterEach(() => {
@@ -167,20 +165,16 @@ describe('ForecastCanvas', () => {
     const mockOnNodesChange = jest.fn();
     const emptyNodes: any[] = [];
     const emptyEdges: any[] = [];
-    
-    useForecastNodes.mockReturnValue(emptyNodes);
-    useForecastEdges.mockReturnValue(emptyEdges);
-    
-    useForecastGraphStore.mockImplementation((selector: any) => 
-      selector({
-        nodes: emptyNodes,
-        edges: emptyEdges,
-        onNodesChange: mockOnNodesChange,
-        onEdgesChange: jest.fn(),
-        addEdge: jest.fn(),
-        setSelectedNodeId: jest.fn(),
-      })
-    );
+
+    useForecastGraph.mockReturnValue({
+      nodes: emptyNodes,
+      edges: emptyEdges,
+      configPanelOpen: false,
+    });
+    useForecastGraphActions.mockReturnValue({
+      ...defaultGraphActions(),
+      onNodesChange: mockOnNodesChange,
+    });
 
     render(<ForecastCanvas />);
     screen.getByTestId('trigger-nodes-change').click();
@@ -192,20 +186,16 @@ describe('ForecastCanvas', () => {
     const mockOnEdgesChange = jest.fn();
     const emptyNodes: any[] = [];
     const emptyEdges: any[] = [];
-    
-    useForecastNodes.mockReturnValue(emptyNodes);
-    useForecastEdges.mockReturnValue(emptyEdges);
-    
-    useForecastGraphStore.mockImplementation((selector: any) => 
-      selector({
-        nodes: emptyNodes,
-        edges: emptyEdges,
-        onNodesChange: jest.fn(),
-        onEdgesChange: mockOnEdgesChange,
-        addEdge: jest.fn(),
-        setSelectedNodeId: jest.fn(),
-      })
-    );
+
+    useForecastGraph.mockReturnValue({
+      nodes: emptyNodes,
+      edges: emptyEdges,
+      configPanelOpen: false,
+    });
+    useForecastGraphActions.mockReturnValue({
+      ...defaultGraphActions(),
+      onEdgesChange: mockOnEdgesChange,
+    });
 
     render(<ForecastCanvas />);
     screen.getByTestId('trigger-edges-change').click();
@@ -217,20 +207,16 @@ describe('ForecastCanvas', () => {
     const mockAddEdge = jest.fn();
     const emptyNodes: any[] = [];
     const emptyEdges: any[] = [];
-    
-    useForecastNodes.mockReturnValue(emptyNodes);
-    useForecastEdges.mockReturnValue(emptyEdges);
-    
-    useForecastGraphStore.mockImplementation((selector: any) => 
-      selector({
-        nodes: emptyNodes,
-        edges: emptyEdges,
-        onNodesChange: jest.fn(),
-        onEdgesChange: jest.fn(),
-        addEdge: mockAddEdge,
-        setSelectedNodeId: jest.fn(),
-      })
-    );
+
+    useForecastGraph.mockReturnValue({
+      nodes: emptyNodes,
+      edges: emptyEdges,
+      configPanelOpen: false,
+    });
+    useForecastGraphActions.mockReturnValue({
+      ...defaultGraphActions(),
+      addEdge: mockAddEdge,
+    });
 
     render(<ForecastCanvas />);
     screen.getByTestId('trigger-connect').click();

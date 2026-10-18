@@ -1,10 +1,8 @@
 import { renderHook, act } from '@testing-library/react';
-import { 
-  useForecastGraphStore, 
+import {
+  useForecastGraphStore,
   calculateSmartNodePosition,
-  useLastEditedNodePosition,
-  useUpdateLastEditedNodePosition,
-  type ForecastNodeClient 
+  type ForecastNodeClient,
 } from '../forecast-graph-store';
 
 // Mock logger to avoid console output in tests
@@ -93,7 +91,7 @@ describe('Smart Node Positioning', () => {
     it('should track last edited node position when adding a node', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Initially no last edited position
@@ -114,7 +112,7 @@ describe('Smart Node Positioning', () => {
     it('should track last edited node position when updating node data', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add a node first
@@ -138,7 +136,7 @@ describe('Smart Node Positioning', () => {
     it('should track last edited node position when updating node position', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add a node first
@@ -162,7 +160,7 @@ describe('Smart Node Positioning', () => {
     it('should track last edited node position when duplicating a node', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add a node first
@@ -186,7 +184,7 @@ describe('Smart Node Positioning', () => {
     it('should preserve last edited position when resetting store', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add a node to set last edited position
@@ -210,18 +208,15 @@ describe('Smart Node Positioning', () => {
 
     it('should allow manual update of last edited position', () => {
       const { result } = renderHook(() => ({
-        updatePosition: useUpdateLastEditedNodePosition(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
-      // Initially no last edited position
       expect(result.current.lastEditedPosition).toBeNull();
 
       act(() => {
-        result.current.updatePosition({ x: 400, y: 300 });
+        useForecastGraphStore.setState({ lastEditedNodePosition: { x: 400, y: 300 } });
       });
 
-      // Should update the last edited position
       expect(result.current.lastEditedPosition).toEqual({ x: 400, y: 300 });
     });
   });
@@ -230,7 +225,7 @@ describe('Smart Node Positioning', () => {
     it('should track position changes from onNodesChange', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add a node first
@@ -262,7 +257,7 @@ describe('Smart Node Positioning', () => {
     it('should track position changes while dragging', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add a node first
@@ -294,7 +289,7 @@ describe('Smart Node Positioning', () => {
     it('should track position changes when drag ends', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add a node first
@@ -326,7 +321,7 @@ describe('Smart Node Positioning', () => {
     it('should handle multiple position changes and use the latest one', () => {
       const { result } = renderHook(() => ({
         store: useForecastGraphStore(),
-        lastEditedPosition: useLastEditedNodePosition(),
+        lastEditedPosition: useForecastGraphStore((s) => s.lastEditedNodePosition),
       }));
 
       // Add two nodes

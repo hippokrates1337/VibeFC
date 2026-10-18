@@ -16,11 +16,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:e2e": "playwright test",
     "backend:dev": "cd backend && npm run start:dev",
     "backend:build": "cd backend && npm run build",
-    "types:build": "cd packages/shared-types && npm run build",
-    "prisma:generate": "cd backend && npx prisma generate",
-    "setup-env": "node setup-env.js"
+    "types:build": "cd packages/shared-types && npm run build"
   },
   "dependencies": {
     "@babel/plugin-proposal-decorators": "^7.27.1",
@@ -80,6 +79,7 @@
     "@typescript-eslint/parser": "^6.21.0",
     "autoprefixer": "^10.4.17",
     "babel-jest": "^29.7.0",
+    "babel-plugin-transform-typescript-metadata": "^0.4.0",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.1.0",
     "glob": "^10.3.10",

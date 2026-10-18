@@ -1,7 +1,23 @@
-passwords.txt
+# Dependencies
 node_modules
-data
-/.next/
+
+# Secrets and local env (commit only the .example files)
 .env
-.env.local
+.env.*
+!.env.example
+passwords.txt
 mcp.json
+
+# Build output
+/.next/
+backend/dist/
+*.tsbuildinfo
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+/debug-*.png
+
+# Local data
+data

@@ -55,15 +55,11 @@ export class JwtAuthGuard implements CanActivate {
       
       // Add the user data to the request object for use in subsequent handlers/services
       // IMPORTANT: Ensure the structure matches what controllers/services expect (e.g., userId)
-      request.user = { 
-        id: user.id, // Standard Supabase user object has `id`
-        userId: user.id, // Add userId if other code expects it specifically
+      request.user = {
+        userId: user.id,
         email: user.email,
-        // Include other relevant fields from `user` if necessary
-        // organizationId might need to be fetched separately later if not in JWT
-       };
-      
-      this.logger.log(`User ${user.id} authenticated successfully.`);
+      };
+
       return true;
     } catch (error) {
       if (error instanceof UnauthorizedException) {

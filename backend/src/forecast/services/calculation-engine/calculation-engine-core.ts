@@ -28,6 +28,7 @@ import { DebugCollectorService } from '../debug-collector.service';
 
 @Injectable()
 export class CalculationEngineCore {
+  private readonly verboseLogs = process.env.CALC_ENGINE_VERBOSE_LOGS === 'true';
   
   constructor(
     private readonly nodeEvaluator: NodeEvaluator,
@@ -54,13 +55,15 @@ export class CalculationEngineCore {
       this.logger.log(`[CalculationEngineCore] Calculation types: [${request.calculationTypes.join(', ')}]`);
       this.logger.log(`[CalculationEngineCore] Include all nodes: ${request.includeAllNodes}`);
       this.logger.log(`[CalculationEngineCore] Processing ${request.trees.length} calculation trees`);
-      this.logger.log(`[CalculationEngineCore] Request structure:`, JSON.stringify({
-        calculationTypes: request.calculationTypes,
-        includeAllNodes: request.includeAllNodes,
-        treesCount: request.trees.length,
-        periods: request.periods,
-        variablesCount: request.variables.length
-      }, null, 2));
+      if (this.verboseLogs) {
+        this.logger.log(`[CalculationEngineCore] Request structure:`, JSON.stringify({
+          calculationTypes: request.calculationTypes,
+          includeAllNodes: request.includeAllNodes,
+          treesCount: request.trees.length,
+          periods: request.periods,
+          variablesCount: request.variables.length
+        }));
+      }
 
       // Debug: Record validation phase start
       if (this.debugCollector.isDebugSessionActive()) {
@@ -94,10 +97,12 @@ export class CalculationEngineCore {
       const orderedTrees = this.treeProcessor.orderByDependencies(request.trees);
       const periods = this.periodService.processPeriods(request.periods);
 
-      this.logger.log(`[CalculationEngineCore] Tree processing order: [${orderedTrees.map(t => t.rootMetricNodeId).join(', ')}]`);
-      this.logger.log(`[CalculationEngineCore] Forecast months: [${periods.forecastMonths.join(', ')}]`);
-      this.logger.log(`[CalculationEngineCore] Actual months: [${periods.actualMonths.join(', ')}]`);
-      this.logger.log(`[CalculationEngineCore] All calculation months: [${periods.allMonths.join(', ')}]`);
+      if (this.verboseLogs) {
+        this.logger.log(`[CalculationEngineCore] Tree processing order: [${orderedTrees.map(t => t.rootMetricNodeId).join(', ')}]`);
+        this.logger.log(`[CalculationEngineCore] Forecast months: [${periods.forecastMonths.join(', ')}]`);
+        this.logger.log(`[CalculationEngineCore] Actual months: [${periods.actualMonths.join(', ')}]`);
+        this.logger.log(`[CalculationEngineCore] All calculation months: [${periods.allMonths.join(', ')}]`);
+      }
 
       // Debug: Record tree processing end and calculation start
       if (this.debugCollector.isDebugSessionActive()) {
@@ -168,7 +173,9 @@ export class CalculationEngineCore {
     // Process trees in dependency order
     for (let i = 0; i < trees.length; i++) {
       const tree = trees[i];
-      this.logger.log(`[CalculationEngineCore] Processing tree ${i + 1}/${trees.length} (metric: ${tree.rootMetricNodeId})`);
+      if (this.verboseLogs) {
+        this.logger.log(`[CalculationEngineCore] Processing tree ${i + 1}/${trees.length} (metric: ${tree.rootMetricNodeId})`);
+      }
       
       // Debug: Record tree start
       if (this.debugCollector.isDebugSessionActive()) {
@@ -197,7 +204,9 @@ export class CalculationEngineCore {
     // Get nodes in calculation order (dependencies first)
     const nodes = this.treeProcessor.flattenToNodes(tree);
     
-    this.logger.log(`[CalculationEngineCore] Tree ${tree.rootMetricNodeId} has ${nodes.length} nodes to calculate`);
+    if (this.verboseLogs) {
+      this.logger.log(`[CalculationEngineCore] Tree ${tree.rootMetricNodeId} has ${nodes.length} nodes to calculate`);
+    }
     
     // Calculate each node (METRIC root only — subgraph runs via evaluator)
     for (const node of nodes) {
@@ -239,7 +248,9 @@ export class CalculationEngineCore {
     context: CalculationContext
   ): Promise<NodeResult> {
     const nodeStartTime = Date.now();
-    this.logger.log(`[CalculationEngineCore] Calculating node ${node.nodeId} (${node.nodeType})`);
+    if (this.verboseLogs) {
+      this.logger.log(`[CalculationEngineCore] Calculating node ${node.nodeId} (${node.nodeType})`);
+    }
     
     const values: MonthlyValue[] = [];
     let stepCounter = 0;
@@ -357,7 +368,9 @@ export class CalculationEngineCore {
       this.debugCollector.endNode(node.nodeId, executionInfo);
     }
     
-    this.logger.log(`[CalculationEngineCore] Node ${node.nodeId} calculated with ${values.length} monthly values in ${nodeExecutionTime}ms`);
+    if (this.verboseLogs) {
+      this.logger.log(`[CalculationEngineCore] Node ${node.nodeId} calculated with ${values.length} monthly values in ${nodeExecutionTime}ms`);
+    }
     return nodeResult;
   }
 
@@ -394,9 +407,25 @@ export class CalculationEngineCore {
   ): CalculationContext {
     // Clear cache for fresh calculation
     this.cache.clear();
+
+    const variableLookup = new Map(
+      request.variables.map((variable) => [variable.id, variable] as const)
+    );
+
+    const variableMonthValueLookup = new Map<string, Map<string, number | null>>();
+    for (const variable of request.variables) {
+      const monthLookup = new Map<string, number | null>();
+      for (const point of variable.timeSeries) {
+        const monthKey = this.periodService.dateToMMYYYY(point.date);
+        monthLookup.set(monthKey, point.value ?? null);
+      }
+      variableMonthValueLookup.set(variable.id, monthLookup);
+    }
     
     return {
       variables: request.variables,
+      variableLookup,
+      variableMonthValueLookup,
       periods,
       cache: this.cache,
       nodeResults: new Map(),

@@ -14,7 +14,9 @@ interface IVariableDataService {
   getVariableValueForMonth(
     variableId: string,
     targetDate: Date,
-    variables: readonly Variable[]
+    variables: readonly Variable[],
+    variableLookup?: Map<string, Variable>,
+    variableMonthValueLookup?: Map<string, Map<string, number | null>>
   ): number | null;
 
   /**
@@ -29,7 +31,9 @@ interface IVariableDataService {
     variableId: string,
     targetDate: Date,
     offsetMonths: number,
-    variables: readonly Variable[]
+    variables: readonly Variable[],
+    variableLookup?: Map<string, Variable>,
+    variableMonthValueLookup?: Map<string, Map<string, number | null>>
   ): number | null;
 
   /**
@@ -40,7 +44,9 @@ interface IVariableDataService {
     variableId: string,
     targetDate: Date,
     variables: readonly Variable[],
-    offsetMonths?: number
+    offsetMonths?: number,
+    variableLookup?: Map<string, Variable>,
+    variableMonthValueLookup?: Map<string, Map<string, number | null>>
   ): Promise<number | null>;
 }
 
@@ -54,12 +60,14 @@ export class VariableDataService implements IVariableDataService {
   getVariableValueForMonth(
     variableId: string,
     targetDate: Date,
-    variables: readonly Variable[]
+    variables: readonly Variable[],
+    variableLookup?: Map<string, Variable>,
+    variableMonthValueLookup?: Map<string, Map<string, number | null>>
   ): number | null {
     try {
       const normalizedDate = this.normalizeToFirstOfMonth(targetDate);
 
-      const variable = variables.find(v => v.id === variableId);
+      const variable = variableLookup?.get(variableId) ?? variables.find(v => v.id === variableId);
 
       if (!variable) {
         return null;
@@ -68,6 +76,12 @@ export class VariableDataService implements IVariableDataService {
       // Compare via year & month in UTC to avoid millisecond-level mismatches
       const targetYear = normalizedDate.getUTCFullYear();
       const targetMonth = normalizedDate.getUTCMonth();
+
+      const targetMonthKey = `${String(targetMonth + 1).padStart(2, '0')}-${targetYear}`;
+      const indexedValue = variableMonthValueLookup?.get(variableId)?.get(targetMonthKey);
+      if (indexedValue !== undefined) {
+        return indexedValue;
+      }
 
       const timeSeriesEntry = variable.timeSeries.find(ts => {
         const tsDate = this.normalizeToFirstOfMonth(ts.date);
@@ -87,11 +101,13 @@ export class VariableDataService implements IVariableDataService {
     variableId: string,
     targetDate: Date,
     offsetMonths: number,
-    variables: readonly Variable[]
+    variables: readonly Variable[],
+    variableLookup?: Map<string, Variable>,
+    variableMonthValueLookup?: Map<string, Map<string, number | null>>
   ): number | null {
     try {
       const offsetDate = this.addMonths(targetDate, offsetMonths);
-      return this.getVariableValueForMonth(variableId, offsetDate, variables);
+      return this.getVariableValueForMonth(variableId, offsetDate, variables, variableLookup, variableMonthValueLookup);
     } catch (error) {
       throw new Error(`Failed to get variable value with offset: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -119,12 +135,14 @@ export class VariableDataService implements IVariableDataService {
     variableId: string,
     targetDate: Date,
     variables: readonly Variable[],
-    offsetMonths?: number
+    offsetMonths?: number,
+    variableLookup?: Map<string, Variable>,
+    variableMonthValueLookup?: Map<string, Map<string, number | null>>
   ): Promise<number | null> {
     if (offsetMonths !== undefined && offsetMonths !== 0) {
-      return this.getVariableValueWithOffset(variableId, targetDate, offsetMonths, variables);
+      return this.getVariableValueWithOffset(variableId, targetDate, offsetMonths, variables, variableLookup, variableMonthValueLookup);
     } else {
-      return this.getVariableValueForMonth(variableId, targetDate, variables);
+      return this.getVariableValueForMonth(variableId, targetDate, variables, variableLookup, variableMonthValueLookup);
     }
   }
 

@@ -45,22 +45,8 @@ DROP POLICY IF EXISTS "Users can view their own variables" ON public.variables;
 DROP POLICY IF EXISTS "Users can insert their own variables" ON public.variables;
 DROP POLICY IF EXISTS "Users can update their own variables" ON public.variables;
 DROP POLICY IF EXISTS "Users can delete their own variables" ON public.variables;
-
-CREATE POLICY "Users can view their own variables"
-  ON public.variables FOR SELECT
-  USING (auth.uid()::text = user_id);
-
-CREATE POLICY "Users can insert their own variables"
-  ON public.variables FOR INSERT
-  WITH CHECK (auth.uid()::text = user_id);
-
-CREATE POLICY "Users can update their own variables"
-  ON public.variables FOR UPDATE
-  USING (auth.uid()::text = user_id);
-
-CREATE POLICY "Users can delete their own variables"
-  ON public.variables FOR DELETE
-  USING (auth.uid()::text = user_id);
+-- Access to variables is org-scoped only (section 4). The former user_id-based
+-- policies let a user write rows into any organization_id, so they were removed.
 
 -- -----------------------------------------------------------------------------
 -- 2. Organizations
@@ -325,59 +311,32 @@ DROP POLICY IF EXISTS "Editors and admins can update data" ON public.variables;
 DROP POLICY IF EXISTS "Admins can delete data" ON public.variables;
 
 CREATE POLICY "Members can view data in their organizations"
-  ON public.variables FOR SELECT
+  ON public.variables FOR SELECT TO authenticated
   USING (organization_id IN (SELECT public.user_organization_ids()));
 
 CREATE POLICY "Editors and admins can create data"
-  ON public.variables FOR INSERT
+  ON public.variables FOR INSERT TO authenticated
   WITH CHECK (organization_id IN (SELECT public.user_organization_ids_where_editor_or_admin()));
 
 CREATE POLICY "Editors and admins can update data"
-  ON public.variables FOR UPDATE
-  USING (organization_id IN (SELECT public.user_organization_ids_where_editor_or_admin()));
+  ON public.variables FOR UPDATE TO authenticated
+  USING (organization_id IN (SELECT public.user_organization_ids_where_editor_or_admin()))
+  WITH CHECK (organization_id IN (SELECT public.user_organization_ids_where_editor_or_admin()));
 
 CREATE POLICY "Admins can delete data"
-  ON public.variables FOR DELETE
+  ON public.variables FOR DELETE TO authenticated
   USING (organization_id IN (SELECT public.user_organization_ids_where_admin()));
 
 -- -----------------------------------------------------------------------------
--- 5. Backend-oriented variable policies (service-style user_id values)
+-- 5. Removed: legacy "Backend service" variable policies
+-- They allowed anyone (incl. the anon key) to read all variables (USING (true))
+-- and to write rows with magic user_id values. Dropped here so re-running this
+-- script cleans up older databases. See migrations/20261018_lockdown_variables_rls.sql.
 -- -----------------------------------------------------------------------------
 DROP POLICY IF EXISTS "Backend service can insert variables" ON public.variables;
 DROP POLICY IF EXISTS "Backend service can update variables" ON public.variables;
 DROP POLICY IF EXISTS "Backend service can delete variables" ON public.variables;
 DROP POLICY IF EXISTS "Backend service can view all variables" ON public.variables;
-
-CREATE POLICY "Backend service can insert variables"
-  ON public.variables FOR INSERT
-  WITH CHECK (
-    user_id = 'frontend-user'
-    OR user_id = 'debug-user'
-    OR user_id = 'anonymous'
-    OR user_id LIKE 'backend-%'
-  );
-
-CREATE POLICY "Backend service can update variables"
-  ON public.variables FOR UPDATE
-  USING (
-    user_id = 'frontend-user'
-    OR user_id = 'debug-user'
-    OR user_id = 'anonymous'
-    OR user_id LIKE 'backend-%'
-  );
-
-CREATE POLICY "Backend service can delete variables"
-  ON public.variables FOR DELETE
-  USING (
-    user_id = 'frontend-user'
-    OR user_id = 'debug-user'
-    OR user_id = 'anonymous'
-    OR user_id LIKE 'backend-%'
-  );
-
-CREATE POLICY "Backend service can view all variables"
-  ON public.variables FOR SELECT
-  USING (true);
 
 -- -----------------------------------------------------------------------------
 -- 6. Forecast graph tables (+ MM-YYYY columns used by ForecastService)

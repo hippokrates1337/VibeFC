@@ -1,11 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
-// SupabaseService might not be needed if no supabase checks are done here
-// import { SupabaseService } from '../supabase/supabase.service';
 
 @Controller('health')
 export class HealthController {
-  // Remove SupabaseService injection if no longer needed
-  constructor(/* private readonly supabaseService: SupabaseService */) {}
+  constructor() {}
 
   @Get()
   async check() {
@@ -16,5 +13,4 @@ export class HealthController {
     };
   }
 
-  // Removed the @Get('supabase') checkSupabase method as it relied on the old testConnection
 } 

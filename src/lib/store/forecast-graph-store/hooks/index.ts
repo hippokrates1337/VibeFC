@@ -6,3 +6,4 @@ export {
   useForecastMonths,
   useNodeVisualizationValue,
 } from './use-visualization';
+export { useOrganizationForecastsLoader } from './use-organization-forecasts-loader';

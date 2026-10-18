@@ -82,7 +82,7 @@ describe('ForecastToolbar', () => {
     isDirty: true,
     selectedNodeId: null,
     configPanelOpen: false,
-    nodes: [],
+    nodes: [] as Array<{ id: string; type: string; data: Record<string, unknown> }>,
     edges: [],
     isLoading: false,
     error: null,

@@ -16,16 +16,7 @@ import {
 } from '@nestjs/common';
 import { DataIntakeService } from './data-intake.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { Request } from 'express';
-
-// Extend Express Request type to include user property
-interface RequestWithUser extends Request {
-  user: {
-    userId: string;
-    organizationId?: string;
-    [key: string]: any;
-  };
-}
+import { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
 
 // DTOs
 import { AddVariablesDto } from './dto/add-variables.dto';
@@ -42,7 +33,7 @@ export class DataIntakeController {
   // CREATE - Add new variables
   @Post('variables')
   @HttpCode(201) // Set HTTP status code to 201 Created
-  async addVariables(@Req() req: RequestWithUser, @Body() addVariablesDto: AddVariablesDto) {
+  async addVariables(@Req() req: AuthenticatedRequest, @Body() addVariablesDto: AddVariablesDto) {
     try {
       this.logger.log(`Received add variables request with ${addVariablesDto?.variables?.length || 0} variables`);
       
@@ -90,7 +81,7 @@ export class DataIntakeController {
 
   // READ - Get variables by user ID
   @Get('variables/:userId')
-  async getVariablesByUser(@Req() req: RequestWithUser, @Param('userId') userId: string) {
+  async getVariablesByUser(@Req() req: AuthenticatedRequest, @Param('userId') userId: string) {
     try {
       this.logger.log(`Fetching variables for user: ${userId}`);
       
@@ -121,7 +112,7 @@ export class DataIntakeController {
 
   // UPDATE - Update variables
   @Put('variables')
-  async updateVariables(@Req() req: RequestWithUser, @Body() updateVariablesDto: UpdateVariablesDto) {
+  async updateVariables(@Req() req: AuthenticatedRequest, @Body() updateVariablesDto: UpdateVariablesDto) {
     try {
       this.logger.log(`Received update variables request with ${updateVariablesDto?.variables?.length || 0} variables`);
       
@@ -152,7 +143,7 @@ export class DataIntakeController {
 
   // DELETE - Delete variables
   @Delete('variables')
-  async deleteVariables(@Req() req: RequestWithUser, @Body() deleteVariablesDto: DeleteVariablesDto) {
+  async deleteVariables(@Req() req: AuthenticatedRequest, @Body() deleteVariablesDto: DeleteVariablesDto) {
     try {
       this.logger.log(`Received delete variables request with ${deleteVariablesDto?.ids?.length || 0} variables from user ${req.user?.userId}`);
       

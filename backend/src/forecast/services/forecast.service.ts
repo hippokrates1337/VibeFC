@@ -422,4 +422,22 @@ export class ForecastService {
       actualEndMonth: entity.actual_end_month,
     };
   }
+
+  /**
+   * Forecast list with graph summary fields expected by the Next.js client.
+   * Node/edge counts are placeholders (0 / empty) until a dedicated aggregation exists.
+   */
+  async findSummariesByOrganization(
+    userId: string,
+    organizationId: string,
+    request: Request,
+  ): Promise<Array<ForecastDto & { nodeCount: number; edgeCount: number; nodeTypes: string[] }>> {
+    const list = await this.findAll(userId, organizationId, request);
+    return list.map((f) => ({
+      ...f,
+      nodeCount: 0,
+      edgeCount: 0,
+      nodeTypes: [] as string[],
+    }));
+  }
 } 

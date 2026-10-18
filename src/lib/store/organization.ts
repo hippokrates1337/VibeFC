@@ -52,7 +52,6 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ isLoading: true, error: null });
 
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
           const { data: memberships, error: membershipError } = await supabase
             .from('organization_members')
@@ -109,7 +108,6 @@ export const useOrganizationStore = create<OrganizationState>()(
       loadMembers: async (organizationId, token) => {
         logger.log(`[OrganizationStore] Loading members for org ID: ${organizationId}`);
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
           const { data, error } = await supabase
             .from('organization_members_with_emails')
@@ -147,7 +145,6 @@ export const useOrganizationStore = create<OrganizationState>()(
 
         try {
           set({ isLoading: true, error: null });
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
           const { data: membershipData, error: membershipError } = await supabase
             .from('organization_members')
@@ -196,12 +193,9 @@ export const useOrganizationStore = create<OrganizationState>()(
         // UI" and unmounts the create-org modal, losing form state and error messages.
         set({ error: null });
 
+        // The shared supabase client already holds the user's session (AuthProvider owns it).
+        // Never call setSession here: overwriting it drops the refresh token.
         try {
-          await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken ?? '',
-          });
-
           const { data: newOrg, error: createError } = await supabase
             .from('organizations')
             .insert({ name, owner_id: userId })
@@ -250,7 +244,6 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ isLoading: true, error: null });
         
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
           const { data: updatedOrg, error } = await supabase
             .from('organizations')
@@ -289,7 +282,6 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ isLoading: true, error: null });
         
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
           // First, delete all members associated with this organization
           const { error: memberDeleteError } = await supabase
@@ -349,7 +341,6 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ isLoading: true, error: null });
 
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
 
           const { data, error } = await organizationApi.addMember(currentOrgId, email, role);
 
@@ -386,7 +377,6 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ isLoading: true, error: null });
         
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
           const { error } = await supabase
             .from('organization_members')
@@ -426,7 +416,6 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ isLoading: true, error: null });
         
         try {
-          await supabase.auth.setSession({ access_token: token, refresh_token: '' });
           
           const { error } = await supabase
             .from('organization_members')

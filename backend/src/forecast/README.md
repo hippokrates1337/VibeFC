@@ -15,17 +15,12 @@ The forecast calculation system processes user-defined forecast graphs to produc
    - Handles data fetching, validation, and result storage
    - Integrates with calculation engine and provides error handling
 
-2. **CalculationEngine** (`services/calculation-engine/calculation-engine.ts`)
-   - Main interface to the calculation system
-   - Routes requests to appropriate implementation (legacy/new)
-   - Maintains backward compatibility
-
-3. **CalculationEngineCore** (`services/calculation-engine/calculation-engine-core.ts`)
+2. **CalculationEngineCore** (`services/calculation-engine/calculation-engine-core.ts`)
    - New refactored calculation engine implementation
-   - Single unified calculation method replacing legacy complexity
+   - Single unified calculation method
    - Uses strategy pattern for node evaluation
 
-4. **VariableDataService** (`services/calculation-engine/variable-data-service.ts`)
+3. **VariableDataService** (`services/calculation-engine/variable-data-service.ts`)
    - Handles variable data retrieval and time-series operations
    - Provides data access layer for calculation engine
    - Manages UTC date normalization for consistency
@@ -199,9 +194,8 @@ API Request → Validation → Data Fetching → Graph Conversion → Calculatio
 ## API Endpoints
 
 ### Calculation Operations
-- `POST /forecasts/:id/calculate` - Trigger forecast calculation (legacy)
-- `POST /forecasts/:id/calculate-with-periods` - Unified calculation with period support
-- `GET /forecasts/:id/calculation-results` - Get latest calculation results
+- `POST /forecasts/:forecastId/calculate-unified` - Unified calculation with period support
+- `GET /forecasts/:forecastId/calculation-results-unified` - Get latest unified calculation results
 - `GET /forecasts/:id/calculation-results/history` - Get calculation history
 
 ### Period Management
@@ -285,7 +279,7 @@ This creates a calculation where:
 ## Monitoring & Health Checks
 
 ### Logging
-- Detailed calculation step logging with context
+- Summary-level logs by default with opt-in verbose engine traces (`CALC_ENGINE_VERBOSE_LOGS=true`)
 - Error context preservation for debugging
 - Performance metrics tracking
 - Cache hit/miss statistics

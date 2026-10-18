@@ -90,22 +90,12 @@ jest.mock('@/lib/store/variables', () => ({
   },
 }));
 
-// Mock forecast graph store
-const mockForecastStore = {
-  forecastId: 'test-forecast-id',
-  isDirty: true,
-  nodes: [{ id: 'node-1', type: 'CONSTANT' }],
-  organizationId: 'test-org-id',
-  loadOrganizationForecasts: jest.fn(),
-  resetStore: jest.fn(),
-  setLoading: jest.fn(),
-  setError: jest.fn(),
-};
+const mockResetStore = jest.fn();
 
-jest.mock('@/lib/store/forecast-graph-store', () => ({
-  useForecastGraphStore: {
-    getState: jest.fn(() => mockForecastStore),
-  },
+jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
+  useForecastGraphActions: jest.fn(() => ({
+    resetStore: mockResetStore,
+  })),
 }));
 
 // Import mocked stores after mocking
@@ -256,8 +246,7 @@ describe('AuthProvider - Unsaved Changes Preservation', () => {
       expect(existingOrgStore.fetchOrganizationData).not.toHaveBeenCalled();
     });
     
-    // Verify that resetStore was NOT called because we have unsaved changes
-    expect(mockForecastStore.resetStore).not.toHaveBeenCalled();
+    expect(mockResetStore).not.toHaveBeenCalled();
   });
 
   it('should fetch fresh data when SIGNED_IN event occurs with no existing data', async () => {
@@ -334,6 +323,6 @@ describe('AuthProvider - Unsaved Changes Preservation', () => {
 
     // Verify that all stores were cleared
     expect(currentOrgStore.clearOrganizationData).toHaveBeenCalled();
-    expect(mockForecastStore.resetStore).toHaveBeenCalled();
+    expect(mockResetStore).toHaveBeenCalled();
   });
 }); 

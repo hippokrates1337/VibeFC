@@ -8,15 +8,11 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useOrganizationStore } from '@/lib/store/organization';
 import { 
-  useVariableStore, 
   useSetSelectedOrganizationId, 
   useFetchVariables 
 } from '@/lib/store/variables';
-import { forecastApi } from '@/lib/api/forecast';
-import { 
-  useForecastGraph,
-  useForecastGraphActions
-} from '@/lib/store/forecast-graph-store/hooks';
+import { computeProtectedLayoutLoadingState } from './layout-loading-state';
+import { isDebugToolsEnabled } from '@/lib/config/feature-flags';
 
 export default function ProtectedLayout({
   children,
@@ -28,36 +24,16 @@ export default function ProtectedLayout({
   const fetchOrganizationData = useOrganizationStore((state) => state.fetchOrganizationData);
   const organizations = useOrganizationStore((state) => state.organizations);
   const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
+  const orgStoreIsLoading = useOrganizationStore((state) => state.isLoading);
+  const orgStoreError = useOrganizationStore((state) => state.error);
   
   // Variable store actions and state
   const setSelectedOrgIdForVariables = useSetSelectedOrganizationId();
   const fetchVariablesForOrg = useFetchVariables();
-  const variableStoreIsLoading = useVariableStore(state => state.isLoading);
-  const variablesLoaded = useVariableStore(state => state.variables.length > 0 && !state.isLoading);
 
-  // Forecast store action
-  const { loadOrganizationForecasts: loadOrgForecastsAction } = useForecastGraphActions();
-  const { isLoading: forecastStoreIsLoading, organizationForecasts } = useForecastGraph();
-  const forecastsLoaded = organizationForecasts.length > 0 && !forecastStoreIsLoading;
-  
-  // Redirect to login if not authenticated
   useEffect(() => {
-    console.log('🛡️ PROTECTED LAYOUT: Auth check effect triggered', {
-      isLoading,
-      hasUser: !!user,
-      shouldRedirect: !isLoading && !user,
-      currentPath: typeof window !== 'undefined' ? window.location.pathname : 'SSR'
-    });
-    
     if (!isLoading && !user) {
-      console.log('🛡️ PROTECTED LAYOUT: Redirecting to root - user not authenticated');
-      console.log('🛡️ PROTECTED LAYOUT: About to call router.push("/")');
-      try {
-        router.push('/');
-        console.log('🛡️ PROTECTED LAYOUT: router.push("/") executed');
-      } catch (error) {
-        console.error('🛡️ PROTECTED LAYOUT: router.push failed:', error);
-      }
+      router.replace('/login');
     }
   }, [user, isLoading, router]);
   
@@ -84,72 +60,15 @@ export default function ProtectedLayout({
     fetchVariablesForOrg,
   ]);
   
-  // Fetch forecast data when organization is selected - TEMPORARILY DISABLED FOR DEBUGGING
-  /*
-  useEffect(() => {
-    const fetchAndLoadForecasts = async () => {
-      if (user && session?.access_token && currentOrganization?.id) {
-        try {
-          // Consider adding a loading state specific to this fetch if needed
-          const { data, error } = await forecastApi.getForecasts(currentOrganization.id);
-          if (error) {
-            console.error('Failed to fetch organization forecasts:', error.message);
-            // Optionally set an error state in forecastGraphStore here
-            return;
-          }
-          if (data) {
-            loadOrgForecastsAction(data);
-          }
-        } catch (apiError) {
-          console.error('Error calling forecastApi.getForecasts:', apiError);
-        }
-      }
-    };
-    fetchAndLoadForecasts();
-  }, [user, session, currentOrganization, loadOrgForecastsAction]);
-  */
-  
-  // Show loading state with more specific conditions to prevent infinite loading
-  const orgStore = useOrganizationStore.getState();
-  const varStore = useVariableStore.getState();
-  const forecastStore = useForecastGraph();
-  
-  // Show layout once org fetch finishes; empty org list is valid (do not spin forever).
-  const shouldShowLoading =
-    isLoading ||
-    (!user && !isLoading) ||
-    (user && organizations.length === 0 && !orgStore.error && orgStore.isLoading);
-    
-  console.log('🔍 PROTECTED LAYOUT DEBUG:', {
-    isLoading,
-    hasUser: !!user,
-    userId: user?.id,
+  const shouldShowLoading = computeProtectedLayoutLoadingState({
+    isAuthLoading: isLoading,
+    hasUser: Boolean(user),
     organizationCount: organizations.length,
-    currentOrg: currentOrganization?.name,
-    variableStoreIsLoading,
-    variablesLoaded,
-    orgStoreError: orgStore.error,
-    orgStoreIsLoading: orgStore.isLoading,
-    varStoreError: varStore.error,
-    varStoreIsLoading: varStore.isLoading,
-    varStoreCount: varStore.variables.length,
-    forecastStoreIsLoading: forecastStore.isLoading,
-    forecastStoreError: forecastStore.error,
-    forecastCount: forecastStore.organizationForecasts.length,
-    shouldShowLoading,
-    timestamp: new Date().toISOString()
+    isOrganizationLoading: orgStoreIsLoading,
+    organizationError: orgStoreError,
   });
-    
+
   if (shouldShowLoading) {
-    console.log('🛡️ PROTECTED LAYOUT: Showing loading spinner', {
-      reason: shouldShowLoading ? 'shouldShowLoading is true' : 'unknown',
-      isLoading,
-      hasUser: !!user,
-      orgCount: organizations.length,
-      orgError: orgStore.error,
-      orgIsLoading: orgStore.isLoading
-    });
-    
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
@@ -157,13 +76,9 @@ export default function ProtectedLayout({
     );
   }
   
-  // If not authenticated, don't render the children
   if (!user) {
-    console.log('🛡️ PROTECTED LAYOUT: No user, returning null');
     return null;
   }
-  
-  console.log('🛡️ PROTECTED LAYOUT: Rendering layout with children');
   
   return (
     <div className="min-h-screen flex flex-col">
@@ -189,9 +104,11 @@ export default function ProtectedLayout({
               <Link href="/forecast-display" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                 Forecast Display
               </Link>
-              <Link href="/debug-calc" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
-                Debug Calc
-              </Link>
+              {isDebugToolsEnabled() && (
+                <Link href="/debug-calc" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
+                  Debug Calc
+                </Link>
+              )}
             </nav>
           </div>
           

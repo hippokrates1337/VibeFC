@@ -16,6 +16,7 @@ import { PeriodService } from '../services/period-service';
 
 @Injectable()
 export class DataNodeStrategy implements NodeEvaluationStrategy {
+  private readonly verboseLogs = process.env.CALC_ENGINE_VERBOSE_LOGS === 'true';
   
   constructor(
     private readonly variableDataService: VariableDataService,
@@ -53,10 +54,12 @@ export class DataNodeStrategy implements NodeEvaluationStrategy {
         ? this.periodService.addMonths(month, attributes.offsetMonths)
         : month;
 
-      context.logger.log(`[DataNodeStrategy] Evaluating DATA node ${node.nodeId} for month ${month} (target: ${targetMonth}), type: ${calculationType}, offset: ${attributes.offsetMonths}`);
+      if (this.verboseLogs) {
+        context.logger.log(`[DataNodeStrategy] Evaluating DATA node ${node.nodeId} for month ${month} (target: ${targetMonth}), type: ${calculationType}, offset: ${attributes.offsetMonths}`);
+      }
 
       // Find the variable
-      const variable = context.variables.find(v => v.id === attributes.variableId);
+      const variable = context.variableLookup.get(attributes.variableId);
       if (!variable) {
         context.logger.warn(`[DataNodeStrategy] Variable ${attributes.variableId} not found for DATA node ${node.nodeId}`);
         const result = null;
@@ -121,7 +124,9 @@ export class DataNodeStrategy implements NodeEvaluationStrategy {
           result = null;
       }
 
-      context.logger.log(`[DataNodeStrategy] DATA node ${node.nodeId} (${calculationType}) result: ${result} for month ${targetMonth}`);
+      if (this.verboseLogs) {
+        context.logger.log(`[DataNodeStrategy] DATA node ${node.nodeId} (${calculationType}) result: ${result} for month ${targetMonth}`);
+      }
       
       // Cache the result
       context.cache.set(cacheKey, result);
@@ -180,7 +185,10 @@ export class DataNodeStrategy implements NodeEvaluationStrategy {
       const value = await this.variableDataService.getVariableValue(
         variableId,
         targetDate,
-        context.variables
+        context.variables,
+        undefined,
+        context.variableLookup,
+        context.variableMonthValueLookup
       );
 
       return value;
@@ -204,9 +212,11 @@ export class DataNodeStrategy implements NodeEvaluationStrategy {
   ): Promise<number> {
     const raw = await this.getVariableValue(variableId, targetMonth, context);
     if (raw === null) {
-      context.logger.log(
-        `[DataNodeStrategy] No value for variable ${variableId} at ${targetMonth} (${calculationType}), DATA ${dataNodeId} — using 0 fallback`
-      );
+      if (this.verboseLogs) {
+        context.logger.log(
+          `[DataNodeStrategy] No value for variable ${variableId} at ${targetMonth} (${calculationType}), DATA ${dataNodeId} — using 0 fallback`
+        );
+      }
       return 0;
     }
     return raw;

@@ -4,6 +4,7 @@ import './globals.css'
 import { ThemeProvider } from '@/providers/theme-provider'
 import { AuthProvider } from '@/providers/auth-provider'
 import { StoreHydrationProvider } from '@/providers/store-hydration-provider'
+import { ErrorBoundaryProvider } from '@/providers/error-boundary-provider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -27,11 +28,13 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <StoreHydrationProvider>
-            <AuthProvider>
-              <main className="min-h-screen">
-                {children}
-              </main>
-            </AuthProvider>
+            <ErrorBoundaryProvider>
+              <AuthProvider>
+                <main className="min-h-screen">
+                  {children}
+                </main>
+              </AuthProvider>
+            </ErrorBoundaryProvider>
           </StoreHydrationProvider>
         </ThemeProvider>
       </body>

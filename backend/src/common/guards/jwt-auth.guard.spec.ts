@@ -99,7 +99,6 @@ describe('JwtAuthGuard', () => {
       expect(mockGetUser).toHaveBeenCalledTimes(1);
       expect(mockGetUser).toHaveBeenCalledWith(mockToken);
       expect(mockRequest.user).toEqual({ 
-        id: mockUser.id, 
         userId: mockUser.id, 
         email: mockUser.email 
       });

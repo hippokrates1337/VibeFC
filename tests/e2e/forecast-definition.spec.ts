@@ -1,4 +1,5 @@
 import { test, expect, Page, BrowserContext, Route, Request } from '@playwright/test';
+import { invalidLoginCredentialsLocator } from './helpers/login-error';
 
 /**
  * E2E Tests for Forecast Definition Feature
@@ -7,9 +8,9 @@ import { test, expect, Page, BrowserContext, Route, Request } from '@playwright/
  * Uses the same authentication pattern as data-intake.spec.ts
  */
 
-// Test user credentials
-const TEST_EMAIL = 'testuser@dummydomain.org';
-const TEST_PASSWORD = 'password';
+// Test user credentials (match data-intake / forecast-calculation e2e)
+const TEST_EMAIL = process.env.TEST_USER_EMAIL || 'testuser@dummydomain.org';
+const TEST_PASSWORD = process.env.TEST_USER_PASSWORD || 'password';
 
 // Mock data structures
 interface MockForecast {
@@ -78,8 +79,8 @@ test.describe('Forecast Definition E2E Tests', () => {
     
     if (currentUrl.includes('/login')) {
       // Check for specific error messages
-      const errorElement = page.locator('div:has-text("Invalid login credentials")');
-      const isErrorVisible = await errorElement.isVisible();
+      const errorElement = invalidLoginCredentialsLocator(page);
+      const isErrorVisible = await errorElement.isVisible().catch(() => false);
       
       if (isErrorVisible) {
         throw new Error(`Authentication failed: Test user ${TEST_EMAIL} does not exist or password is incorrect.`);
@@ -195,40 +196,7 @@ test.describe('Forecast Definition E2E Tests', () => {
       await setupForecastApiMocks(page, backendUrl, userId);
     }
     
-    // Also catch any unhandled backend requests
-    await page.route('**/forecasts**', async (route, request) => {
-      const url = request.url();
-      console.log(`Unhandled forecast API request: ${request.method()} ${url}`);
-      
-      // Default response for unhandled requests
-      if (request.method() === 'POST' && url.includes('/forecasts') && !url.includes('/forecasts/')) {
-        // Forecast creation
-        const requestData = request.postDataJSON();
-        const newForecastId = `forecast-${Date.now()}`;
-        const newForecast: MockForecast = {
-          id: newForecastId,
-          name: requestData?.name || 'New Forecast',
-          forecastStartDate: requestData?.forecastStartDate || '2024-01-01',
-          forecastEndDate: requestData?.forecastEndDate || '2024-12-31',
-          organizationId: requestData?.organizationId || MOCK_ORG.id,
-          userId: userId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        
-        await route.fulfill({ 
-          status: 201, 
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newForecast)
-        });
-      } else {
-        await route.fulfill({
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ success: true, data: [] })
-        });
-      }
-    });
+    // Keep mocks explicit to preserve test realism.
 
     // Mock variables API with different possible URLs
     for (const backendUrl of possibleBackendUrls) {
@@ -256,6 +224,40 @@ test.describe('Forecast Definition E2E Tests', () => {
   }
 
   async function setupForecastApiMocks(page: Page, backendUrl: string, userId: string) {
+    // Matches forecastApi.getForecastsWithSummary — backend has no equivalent route yet; without this
+    // mock the list page errors and create-flow timing becomes flaky under load.
+    await page.route(
+      new RegExp(
+        `${backendUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/organizations/[^/]+/forecasts/summary$`,
+      ),
+      async (route) => {
+        if (route.request().method() !== 'GET') {
+          await route.continue();
+          return;
+        }
+        const mockSummary = [
+          {
+            id: 'forecast-test-1',
+            name: 'Test Forecast',
+            forecastStartDate: '2024-01-01',
+            forecastEndDate: '2024-12-31',
+            organizationId: MOCK_ORG.id,
+            userId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            nodeCount: 0,
+            edgeCount: 0,
+            nodeTypes: [] as string[],
+          },
+        ];
+        await route.fulfill({
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mockSummary),
+        });
+      },
+    );
+
     // Mock forecast list endpoint
     await page.route(new RegExp(`${backendUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/forecasts\\?organizationId=.*`), async (route) => {
       const mockForecasts: MockForecast[] = [{
@@ -356,14 +358,22 @@ test.describe('Forecast Definition E2E Tests', () => {
     await page.route(new RegExp(`${backendUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/forecasts$`), async (route, request) => {
       if (request.method() === 'POST') {
         console.log(`Handling forecast creation request to: ${request.url()}`);
-        const requestData = request.postDataJSON();
+        let requestData: Record<string, unknown> = {};
+        try {
+          const parsed = request.postDataJSON() as Record<string, unknown> | null;
+          if (parsed && typeof parsed === 'object') {
+            requestData = parsed;
+          }
+        } catch {
+          // Empty or non-JSON body — use defaults below
+        }
         const newForecastId = `forecast-${Date.now()}`;
         const newForecast: MockForecast = {
           id: newForecastId,
-          name: requestData?.name || 'New Forecast',
-          forecastStartDate: requestData?.forecastStartDate || '2024-01-01',
-          forecastEndDate: requestData?.forecastEndDate || '2024-12-31',
-          organizationId: requestData?.organizationId || MOCK_ORG.id,
+          name: (requestData.name as string) || 'New Forecast',
+          forecastStartDate: (requestData.forecastStartDate as string) || '2024-01-01',
+          forecastEndDate: (requestData.forecastEndDate as string) || '2024-12-31',
+          organizationId: (requestData.organizationId as string) || MOCK_ORG.id,
           userId: userId,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -371,14 +381,13 @@ test.describe('Forecast Definition E2E Tests', () => {
         
         console.log(`Created mock forecast:`, newForecast);
         
-        // Dynamically add routes for the new forecast
-        await setupDynamicForecastRoutes(page, backendUrl, newForecastId, newForecast);
-        
         await route.fulfill({ 
           status: 201, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newForecast)
         });
+
+        await setupDynamicForecastRoutes(page, backendUrl, newForecastId, newForecast);
       } else {
         await route.continue();
       }
@@ -604,9 +613,9 @@ test.describe('Forecast Definition E2E Tests', () => {
     const currentUrl = page.url();
     console.log(`🔍 Current URL after create button click: ${currentUrl}`);
     
-    // Check if we're in a loading state
-    const loadingElement = page.locator('text=Creating...');
-    if (await loadingElement.isVisible({ timeout: 2000 })) {
+    // Check if we're in a loading state (two "Creating..." buttons can exist — avoid strict mode)
+    const loadingElement = page.getByRole('button', { name: 'Creating...' }).first();
+    if (await loadingElement.isVisible({ timeout: 2000 }).catch(() => false)) {
       console.log('🔍 Found loading state, waiting for it to finish...');
       await expect(loadingElement).not.toBeVisible({ timeout: 10000 });
     }

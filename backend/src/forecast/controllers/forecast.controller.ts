@@ -1,5 +1,4 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, Request, Query, Logger } from '@nestjs/common';
-import { Request as ExpressRequest } from 'express';
 import { ForecastService } from '../services/forecast.service';
 import { ForecastNodeService } from '../services/forecast-node.service';
 import { ForecastEdgeService } from '../services/forecast-edge.service';
@@ -9,14 +8,7 @@ import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto } from '.
 import { CreateForecastEdgeDto, ForecastEdgeDto } from '../dto/forecast-edge.dto';
 import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-
-// Define type for authenticated request
-interface RequestWithUser extends ExpressRequest {
-  user: {
-    userId: string;
-    [key: string]: any;
-  };
-}
+import { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
 
 @Controller('forecasts')
 @UseGuards(JwtAuthGuard)
@@ -32,7 +24,7 @@ export class ForecastController {
 
   // Forecast endpoints
   @Post()
-  async create(@Request() req: RequestWithUser, @Body() createForecastDto: CreateForecastDto): Promise<ForecastDto> {
+  async create(@Request() req: AuthenticatedRequest, @Body() createForecastDto: CreateForecastDto): Promise<ForecastDto> {
     this.logger.debug(`ForecastController.create called`);
     this.logger.debug(`Request user object: ${JSON.stringify(req.user)}`);
     
@@ -54,27 +46,27 @@ export class ForecastController {
   }
 
   @Get()
-  async findAll(@Request() req: RequestWithUser, @Query('organizationId') organizationId: string): Promise<ForecastDto[]> {
+  async findAll(@Request() req: AuthenticatedRequest, @Query('organizationId') organizationId: string): Promise<ForecastDto[]> {
     const userId = req.user.userId;
     return this.forecastService.findAll(userId, organizationId, req);
   }
 
   @Get(':id')
-  async findOne(@Request() req: RequestWithUser, @Param('id') id: string): Promise<ForecastDto> {
+  async findOne(@Request() req: AuthenticatedRequest, @Param('id') id: string): Promise<ForecastDto> {
     const userId = req.user.userId;
     return this.forecastService.findOne(id, userId, req);
   }
 
   @Patch(':id')
   @HttpCode(204)
-  async update(@Request() req: RequestWithUser, @Param('id') id: string, @Body() updateForecastDto: UpdateForecastDto): Promise<void> {
+  async update(@Request() req: AuthenticatedRequest, @Param('id') id: string, @Body() updateForecastDto: UpdateForecastDto): Promise<void> {
     const userId = req.user.userId;
     return this.forecastService.update(id, userId, updateForecastDto, req);
   }
 
   @Patch(':id/periods')
   @HttpCode(204)
-  async updatePeriods(@Request() req: RequestWithUser, @Param('id') id: string, @Body() updatePeriodsDto: UpdateForecastPeriodsDto): Promise<void> {
+  async updatePeriods(@Request() req: AuthenticatedRequest, @Param('id') id: string, @Body() updatePeriodsDto: UpdateForecastPeriodsDto): Promise<void> {
     const userId = req.user.userId;
     this.logger.log(`Updating forecast periods for ${id} by user ${userId}`);
     return this.forecastService.updatePeriods(id, userId, updatePeriodsDto, req);
@@ -82,14 +74,14 @@ export class ForecastController {
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Request() req: RequestWithUser, @Param('id') id: string): Promise<void> {
+  async remove(@Request() req: AuthenticatedRequest, @Param('id') id: string): Promise<void> {
     const userId = req.user.userId;
     return this.forecastService.remove(id, userId, req);
   }
 
   @Post(':forecastId/bulk-save')
   async bulkSaveGraph(
-    @Request() req: RequestWithUser,
+    @Request() req: AuthenticatedRequest,
     @Param('forecastId') forecastId: string,
     @Body() bulkSaveDto: BulkSaveGraphDto
   ): Promise<FlattenedForecastWithDetailsDto> {
@@ -103,7 +95,7 @@ export class ForecastController {
   // Node endpoints
   @Post(':forecastId/nodes')
   async createNode(
-    @Request() req: RequestWithUser,
+    @Request() req: AuthenticatedRequest,
     @Param('forecastId') forecastId: string, 
     @Body() createNodeDto: CreateForecastNodeDto
   ): Promise<ForecastNodeDto> {
@@ -117,7 +109,7 @@ export class ForecastController {
   }
 
   @Get(':forecastId/nodes')
-  async findNodes(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string): Promise<ForecastNodeDto[]> {
+  async findNodes(@Request() req: AuthenticatedRequest, @Param('forecastId') forecastId: string): Promise<ForecastNodeDto[]> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
     await this.forecastService.findOne(forecastId, userId, req);
@@ -127,7 +119,7 @@ export class ForecastController {
   }
 
   @Get(':forecastId/nodes/:nodeId')
-  async findNode(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string, @Param('nodeId') nodeId: string): Promise<ForecastNodeDto> {
+  async findNode(@Request() req: AuthenticatedRequest, @Param('forecastId') forecastId: string, @Param('nodeId') nodeId: string): Promise<ForecastNodeDto> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
     await this.forecastService.findOne(forecastId, userId, req);
@@ -139,7 +131,7 @@ export class ForecastController {
   @Patch(':forecastId/nodes/:nodeId')
   @HttpCode(204)
   async updateNode(
-    @Request() req: RequestWithUser,
+    @Request() req: AuthenticatedRequest,
     @Param('forecastId') forecastId: string,
     @Param('nodeId') nodeId: string, 
     @Body() updateNodeDto: UpdateForecastNodeDto
@@ -154,7 +146,7 @@ export class ForecastController {
   @Delete(':forecastId/nodes/:nodeId')
   @HttpCode(204)
   async removeNode(
-    @Request() req: RequestWithUser,
+    @Request() req: AuthenticatedRequest,
     @Param('forecastId') forecastId: string,
     @Param('nodeId') nodeId: string
   ): Promise<void> {
@@ -168,7 +160,7 @@ export class ForecastController {
   // Edge endpoints
   @Post(':forecastId/edges')
   async createEdge(
-    @Request() req: RequestWithUser,
+    @Request() req: AuthenticatedRequest,
     @Param('forecastId') forecastId: string, 
     @Body() createEdgeDto: CreateForecastEdgeDto
   ): Promise<ForecastEdgeDto> {
@@ -182,7 +174,7 @@ export class ForecastController {
   }
 
   @Get(':forecastId/edges')
-  async findEdges(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string): Promise<ForecastEdgeDto[]> {
+  async findEdges(@Request() req: AuthenticatedRequest, @Param('forecastId') forecastId: string): Promise<ForecastEdgeDto[]> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
     await this.forecastService.findOne(forecastId, userId, req);
@@ -192,7 +184,7 @@ export class ForecastController {
   }
 
   @Get(':forecastId/edges/:edgeId')
-  async findEdge(@Request() req: RequestWithUser, @Param('forecastId') forecastId: string, @Param('edgeId') edgeId: string): Promise<ForecastEdgeDto> {
+  async findEdge(@Request() req: AuthenticatedRequest, @Param('forecastId') forecastId: string, @Param('edgeId') edgeId: string): Promise<ForecastEdgeDto> {
     // First check if the forecast belongs to this user
     const userId = req.user.userId;
     await this.forecastService.findOne(forecastId, userId, req);
@@ -204,7 +196,7 @@ export class ForecastController {
   @Delete(':forecastId/edges/:edgeId')
   @HttpCode(204)
   async removeEdge(
-    @Request() req: RequestWithUser,
+    @Request() req: AuthenticatedRequest,
     @Param('forecastId') forecastId: string,
     @Param('edgeId') edgeId: string
   ): Promise<void> {

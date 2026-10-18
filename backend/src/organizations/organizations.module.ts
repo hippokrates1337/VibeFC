@@ -4,9 +4,10 @@ import { OrganizationsService } from './services/organizations.service';
 import { MembersController } from './controllers/members.controller';
 import { MembersService } from './services/members.service';
 import { SupabaseModule } from '../supabase/supabase.module';
+import { ForecastModule } from '../forecast/forecast.module';
 
 @Module({
-  imports: [SupabaseModule],
+  imports: [SupabaseModule, ForecastModule],
   controllers: [OrganizationsController, MembersController],
   providers: [OrganizationsService, MembersService],
   exports: [OrganizationsService, MembersService],

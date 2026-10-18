@@ -4,7 +4,7 @@ import { MembersService } from '../services/members.service';
 import { OrganizationsService } from '../services/organizations.service'; // Needed for potential role checks
 import { INestApplication, ValidationPipe, ClassSerializerInterceptor, NotFoundException, ConflictException, BadRequestException, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import * as request from 'supertest';
+import request = require('supertest');
 import { Request, Response, NextFunction } from 'express'; 
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard'; 

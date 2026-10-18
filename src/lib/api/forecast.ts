@@ -593,7 +593,7 @@ export const forecastApi = {
     });
   },
 
-  // Save the entire forecast graph (nodes and edges) - FEATURE FLAGGED
+  // Save the entire forecast graph (nodes and edges).
   saveForecastGraph: async (
     forecastId: string,
     name: string,
@@ -602,14 +602,7 @@ export const forecastApi = {
     nodes: ForecastNodeClient[],
     edges: ForecastEdgeClient[]
   ): Promise<ApiResponse<FlattenedForecastWithDetails>> => {
-    // Feature flag: Use bulk save by default, fallback to legacy if needed
-    const useBulkSave = process.env.NEXT_PUBLIC_ENABLE_BULK_SAVE !== 'false'; // Default to true
-    
-    if (useBulkSave) {
-      return forecastApi.saveForecastGraphBulk(forecastId, name, startDate, endDate, nodes, edges);
-    } else {
-      return forecastApi.saveForecastGraphLegacy(forecastId, name, startDate, endDate, nodes, edges);
-    }
+    return forecastApi.saveForecastGraphBulk(forecastId, name, startDate, endDate, nodes, edges);
   },
 
   // Add a node to a forecast
