@@ -4,11 +4,13 @@ import { joinBackendUrl } from '@/lib/api/join-backend-url';
 // Use NEXT_PUBLIC_BACKEND_URL to point to the separate backend service
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-// Create Supabase client for authentication
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+const supabase =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
 
 // Define response types
 interface ApiResponse<T> {
@@ -25,6 +27,15 @@ async function fetchWithAuth<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    if (!supabase) {
+      return {
+        error: {
+          message: 'Supabase is not configured for debug calculation API.',
+          statusCode: 500,
+        },
+      };
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session?.access_token) {
