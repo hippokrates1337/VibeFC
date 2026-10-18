@@ -58,7 +58,10 @@ const config = {
   // Exclude Playwright e2e tests from Jest
   testPathIgnorePatterns: [
     "/node_modules/",
-    "/tests/e2e/"
+    "/tests/e2e/",
+    "/backend/dist/",
+    // Nest integration specs live under backend/; run them with `cd backend && npm test` only.
+    "/backend/src/",
   ],
 
   // A list of paths to modules that run some code to configure or set up the testing environment

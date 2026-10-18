@@ -1,8 +1,23 @@
 // Import jest-dom matchers
 import '@testing-library/jest-dom';
+import { Logger } from '@nestjs/common';
 
 // src/setupTests.ts
 // No need to import crypto or encoding polyfills - now handled by jest-globals-setup.js
+
+const isVerboseSetup = process.env.TEST_SETUP_VERBOSE === 'true';
+
+const setupLog = (...args: unknown[]) => {
+  if (isVerboseSetup) {
+    console.log(...args);
+  }
+};
+
+const setupWarn = (...args: unknown[]) => {
+  if (isVerboseSetup) {
+    console.warn(...args);
+  }
+};
 
 // Only try to import 'undici' if required and not running in Jest environment
 // If fetch is already available globally, we don't need undici's fetch
@@ -18,17 +33,17 @@ if (typeof global.fetch === 'undefined') {
     global.Headers = Headers as any;
     global.FormData = FormData as any;
     
-    console.log('Polyfilled fetch APIs from undici');
+    setupLog('Polyfilled fetch APIs from undici');
   } catch (e) {
     // Create minimal fetch implementation if undici isn't available
-    console.warn('Unable to load undici, using minimal fetch polyfill');
+    setupWarn('Unable to load undici, using minimal fetch polyfill');
     
     // Add absolutely minimal implementations to prevent errors
     // These won't actually work, but will prevent "not defined" errors
     
     // @ts-ignore
     global.fetch = async (url: string) => {
-      console.warn('Fetch polyfill called - not actually fetching', url);
+      setupWarn('Fetch polyfill called - not actually fetching', url);
       return {
         ok: false,
         status: 404,
@@ -70,5 +85,14 @@ jest.mock('undici', () => {
 // If you are using Jest with JSDOM environment, you might not need all of these,
 // but for Vitest's default Node.js environment, they are often necessary for MSW v2+. 
 
-// Note: console.log for debug purposes - can be removed once tests work
-console.log('Test setup complete'); 
+// Keep backend test output focused on assertion failures instead of framework logs.
+if (process.env.TEST_SHOW_NEST_LOGS !== 'true') {
+  Logger.overrideLogger(false);
+  jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+  jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+  jest.spyOn(Logger.prototype, 'verbose').mockImplementation(() => undefined);
+}
+
+setupLog('Test setup complete');

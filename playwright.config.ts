@@ -72,10 +72,29 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
-  // webServer: {
-  //   command: 'npm run start',
-  //   url: 'http://127.0.0.1:3000',
-  //   reuseExistingServer: !process.env.CI,
-  // },
+  /* Run required local servers before starting the tests */
+  webServer: [
+    {
+      // Backend API needed by e2e flows (claim-invites, forecasts, variables, etc.).
+      // `nest start` (non-watch) can hit EBUSY unlinking `dist` on OneDrive; watch mode is more stable.
+      command: 'npm run backend:dev',
+      url: 'http://127.0.0.1:3001/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 240_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      // Clean `.next` first: on Windows + OneDrive, a stale/partial `.next` can make `next dev`
+      // crash with EINVAL on readlink during hot-reloader cleanup (see Next issue trackers).
+      command: 'npm run clean && npm run dev',
+      url: 'http://127.0.0.1:3000',
+      reuseExistingServer: !process.env.CI,
+      // Cold `next dev` after `rimraf .next` can exceed 120s when Playwright's readiness probe
+      // hits middleware + first-page compilation on a slow disk.
+      timeout: 240_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
 }); 

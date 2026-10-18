@@ -67,6 +67,9 @@ If you provide the `SUPABASE_SERVICE_ROLE_KEY`, the tests will attempt to create
 ### Basic Test Execution
 
 ```bash
+# Run all E2E tests (same as `npx playwright test`; starts Next via Playwright webServer)
+npm run test:e2e
+
 # Run all E2E tests
 npx playwright test
 
@@ -79,6 +82,16 @@ npx playwright test --headed
 # Run tests with debug output
 npx playwright test --debug
 ```
+
+### Local dev server (Playwright `webServer`)
+
+`playwright.config.ts` starts the app automatically with:
+
+`npm run clean && npm run dev`
+
+- **Why `clean`?** On Windows (especially with OneDrive), a partially synced `.next` folder can make `next dev` crash with `EINVAL: invalid argument, readlink` during startup. Cleaning first avoids that.
+- **Already running dev?** With `CI` unset, Playwright sets `reuseExistingServer: true`, so an existing server on port 3000 is reused when possible.
+- **Override base URL:** set `PLAYWRIGHT_TEST_BASE_URL` (see `playwright.config.ts`).
 
 ### Test-Specific Environment Variables
 

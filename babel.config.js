@@ -27,6 +27,7 @@ module.exports = api => {
       ],
     ],
     plugins: [
+      'babel-plugin-transform-typescript-metadata',
       // Add decorator plugin explicitly for Jest/NestJS compatibility
       ['@babel/plugin-proposal-decorators', { legacy: true }],
     ],

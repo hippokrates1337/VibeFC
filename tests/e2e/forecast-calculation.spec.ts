@@ -1,4 +1,5 @@
 import { test, expect, Page, BrowserContext } from '@playwright/test';
+import { invalidLoginCredentialsLocator } from './helpers/login-error';
 
 // Use environment variables like the working data-intake test
 const TEST_EMAIL = process.env.TEST_USER_EMAIL || 'testuser@dummydomain.org';
@@ -27,7 +28,10 @@ const MOCK_VARIABLES = [
 ];
 
 test.describe('Forecast Calculation E2E Tests', () => {
-  
+  // Same Supabase user + parallel logins can be slow; client-side redirect after login
+  // does not always fire `load`, so avoid running these in parallel.
+  test.describe.configure({ mode: 'serial' });
+
   // Environment validation
   test.beforeAll(async () => {
     console.log('🔍 Forecast Calculation Environment Validation');
@@ -77,12 +81,15 @@ test.describe('Forecast Calculation E2E Tests', () => {
     console.log('Waiting for authentication to complete...');
     
     try {
-      // Wait for either successful navigation OR error message
+      // Wait for either successful navigation OR error message.
+      // Next.js + Supabase often perform a client-side redirect without a full document `load`
+      // event; `waitUntil: 'commit'` matches the URL as soon as navigation is committed.
       await Promise.race([
-        // Option 1: Successful login - redirected away from login page
-        page.waitForURL(url => !url.toString().includes('/login'), { timeout: 15000 }),
-        // Option 2: Login error appears
-        page.locator('div:has-text("Invalid login credentials"), .text-red-300:has-text("Invalid"), .bg-red-900').waitFor({ timeout: 15000 })
+        page.waitForURL(url => !url.toString().includes('/login'), {
+          timeout: 60_000,
+          waitUntil: 'commit',
+        }),
+        invalidLoginCredentialsLocator(page).waitFor({ state: 'visible', timeout: 60_000 }),
       ]);
       
       const currentUrl = page.url();
@@ -90,15 +97,17 @@ test.describe('Forecast Calculation E2E Tests', () => {
       
       // Check if we're still on login page (indicating failure)
       if (currentUrl.includes('/login')) {
-        // Look for error message
-        const errorMessage = await page.locator('.bg-red-900, .text-red-300').textContent().catch(() => 'No error message found');
-        throw new Error(`Login failed. Still on login page. Error: ${errorMessage}`);
+        const errorMessage = await invalidLoginCredentialsLocator(page)
+          .textContent()
+          .catch(() => null);
+        throw new Error(
+          `Login failed. Still on login page. ${errorMessage ? `Message: ${errorMessage}` : 'No inline error text found.'}`,
+        );
       }
       
       console.log('✅ Authentication successful!');
       
-      // Wait for any loading to complete
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       // Wait for the main page to load (could be dashboard or main app)
       await page.waitForSelector('body', { timeout: 10000 });
@@ -171,94 +180,103 @@ test.describe('Forecast Calculation E2E Tests', () => {
     expect(page.url()).toContain('forecast');
   });
 
-  test('should create forecast and execute calculation workflow', async ({ page }) => {
-    // Navigate to forecast definition
+  test('should open new forecast editor and show calculate guardrails (no METRIC / unsaved)', async ({ page }) => {
+    test.setTimeout(180_000);
+
     console.log('Navigating to forecast definition...');
     await page.goto('/forecast-definition');
-    
+
     await page.waitForSelector('h1:has-text("Forecast Definition")', { timeout: 10000 });
     console.log('✅ Forecast definition page loaded');
 
-    // Check if organization is selected first
     const organizationDisplay = page.locator(':has-text("Organization")').first();
     if (await organizationDisplay.isVisible()) {
       console.log('✅ Organization context visible');
     }
 
-    // Look for error messages about organization selection
     const errorToast = page.locator('.toast, [data-testid*="error"], .text-red').first();
-    
-    // Create new forecast using more specific selector
+
     console.log('Creating new forecast...');
-    
-    // Wait for the button to be stable before clicking
     const createButton = page.locator('button').filter({ hasText: 'Create New Forecast' }).first();
     await createButton.waitFor({ state: 'visible', timeout: 10000 });
-    await page.waitForTimeout(1000); // Allow any re-renders to complete
-    
+
     try {
       await createButton.click({ timeout: 10000 });
-    } catch (clickError) {
-      console.log('⚠️ Button click failed, likely due to missing organization or navigation issue');
-      console.log('ℹ️ This is expected in test environment without proper organization setup');
+    } catch {
+      console.log('⚠️ Create New Forecast click failed (e.g. no organization). Staying on list page.');
       expect(page.url()).toContain('forecast-definition');
       return;
     }
-    
-    // Wait for any immediate error messages
-    await page.waitForTimeout(2000);
-    
+
     if (await errorToast.isVisible()) {
       const errorText = await errorToast.textContent();
-      console.log('⚠️ Error creating forecast:', errorText);
-      
+      console.log('⚠️ Error after create click:', errorText);
       if (errorText?.includes('Organization')) {
-        console.log('ℹ️ Organization not selected - this is expected in test environment');
         expect(page.url()).toContain('forecast-definition');
         return;
       }
     }
-    
-    // Check if we're still in loading state
-    const loadingButton = page.locator('button:has-text("Creating...")');
-    if (await loadingButton.isVisible()) {
-      console.log('Waiting for forecast creation to complete...');
-      await loadingButton.waitFor({ state: 'hidden', timeout: 15000 });
+
+    const loadingButton = page.locator('button:has-text("Creating...")').first();
+    if (await loadingButton.isVisible().catch(() => false)) {
+      await loadingButton.waitFor({ state: 'hidden', timeout: 30_000 });
     }
-    
-    // Try to wait for forecast editor to load
+
+    let editorLoaded = false;
     try {
-      console.log('Waiting for forecast editor to load...');
-      await page.waitForURL('**/forecast-definition/**', { timeout: 15000 });
-      console.log('✅ Redirected to forecast editor');
-      
-      // Wait for the editor interface to be ready
-      await page.waitForSelector('canvas, .react-flow, [data-id="forecast-canvas"]', { timeout: 15000 });
-      console.log('✅ Forecast editor canvas loaded');
-      
-      // Look for calculation functionality
-      const calculateButton = page.locator('button:has-text("Calculate"), button:has-text("Run"), [data-testid*="calculate"]').first();
-      if (await calculateButton.isVisible()) {
-        console.log('Attempting calculation...');
-        await calculateButton.click();
-        
-        // Wait for either results or error message
-        await Promise.race([
-          page.waitForSelector('[data-testid*="result"], .result, table', { timeout: 30000 }),
-          page.waitForSelector('.error, [data-testid*="error"], .text-red', { timeout: 30000 })
-        ]).catch(() => {
-          console.log('ℹ️ No immediate calculation results or errors');
-        });
-      }
-      
-      // Verify we're still in the forecast editor
-      expect(page.url()).toContain('forecast-definition');
-      
-    } catch (error) {
-      console.log('ℹ️ Forecast creation may have failed due to missing organization or other setup');
-      // Still verify we're on the forecast page
-      expect(page.url()).toContain('forecast-definition');
+      await page.waitForURL('**/forecast-definition/**', {
+        timeout: 45_000,
+        waitUntil: 'commit',
+      });
+      await page.waitForSelector('canvas, .react-flow, [data-id="forecast-canvas"]', { timeout: 45_000 });
+      editorLoaded = true;
+    } catch (navError) {
+      console.log('❌ Forecast editor navigation/canvas wait failed:', navError);
     }
+
+    if (!editorLoaded) {
+      expect(page.url()).toContain('forecast-definition');
+      return;
+    }
+
+    console.log('✅ Forecast editor loaded; asserting Calculate is disabled without METRIC (and helper copy)');
+
+    const calculateBtn = page.getByRole('button', { name: 'Calculate' });
+    await expect(calculateBtn).toBeVisible({ timeout: 15_000 });
+    await expect(calculateBtn).toBeDisabled();
+
+    await expect(
+      page.getByText('Add at least one METRIC node to calculate', { exact: false })
+    ).toBeVisible();
+
+    // Optional cleanup: delete created forecast when explicitly enabled
+    if (process.env.CLEANUP_TEST_FORECASTS === 'true') {
+      const href = page.url();
+      const idMatch = href.match(/forecast-definition\/([^/?#]+)/);
+      const forecastId = idMatch?.[1];
+      const token = await page.evaluate(() => {
+        try {
+          const key = Object.keys(localStorage).find((k) => k.endsWith('-auth-token'));
+          if (!key) return null;
+          const raw = localStorage.getItem(key);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw) as { access_token?: string };
+          return parsed.access_token ?? null;
+        } catch {
+          return null;
+        }
+      });
+      const backendBase =
+        process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, '') || 'http://localhost:8000';
+      if (forecastId && token) {
+        const res = await page.request.delete(`${backendBase}/forecasts/${forecastId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        console.log(`🧹 Forecast cleanup DELETE ${forecastId} -> ${res.status()}`);
+      }
+    }
+
+    expect(page.url()).toContain('forecast-definition');
   });
 
   test('should handle navigation to forecast definition page', async ({ page }) => {

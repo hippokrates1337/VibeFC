@@ -1,4 +1,5 @@
 import { test, expect, Page, BrowserContext, Route, Request, Locator } from '@playwright/test';
+import { invalidLoginCredentialsLocator } from './helpers/login-error';
 
 /**
  * E2E Test Setup Instructions
@@ -366,11 +367,13 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
     
     try {
       // Wait for either successful navigation away from login page OR error message
+      const authRaceTimeoutMs = 30_000;
       await Promise.race([
-        // Option 1: Successful login - redirected away from login page
-        page.waitForURL(url => !url.toString().includes('/login'), { timeout: 15000 }),
-        // Option 2: Login error appears
-        page.locator('div:has-text("Invalid login credentials"), .text-red-500:has-text("Invalid"), [data-testid="error"]').waitFor({ timeout: 15000 })
+        page.waitForURL(url => !url.toString().includes('/login'), {
+          timeout: authRaceTimeoutMs,
+          waitUntil: 'commit',
+        }),
+        invalidLoginCredentialsLocator(page).waitFor({ state: 'visible', timeout: authRaceTimeoutMs }),
       ]);
       
       const currentUrlAfterAuth = page.url();
@@ -381,8 +384,8 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
         console.log('✅ Login successful - redirected away from login page');
       } else {
         // Still on login page - check for specific error messages
-        const invalidCredentialsError = page.locator('div:has-text("Invalid login credentials")').first();
-        const anyErrorMessage = page.locator('.text-red-500, [data-testid="error"], .error').first();
+        const invalidCredentialsError = invalidLoginCredentialsLocator(page);
+        const anyErrorMessage = page.locator('.text-red-500, .text-red-300, [data-testid="error"], .error').first();
         
         if (await invalidCredentialsError.isVisible()) {
           console.log('❌ Invalid login credentials detected');
@@ -406,10 +409,18 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
       console.log(`⚠️ Authentication timeout. Current URL: ${currentUrlAfterTimeout}`);
       
       if (currentUrlAfterTimeout.includes('/login')) {
-        // Check for any error state after timeout
-        const errorElement = page.locator('.text-red-500, [data-testid="error"], .error').first();
+        const invalidAfterTimeout = await invalidLoginCredentialsLocator(page)
+          .isVisible()
+          .catch(() => false);
+        if (invalidAfterTimeout) {
+          await page.screenshot({ path: 'debug-invalid-credentials.png' });
+          throw new Error(
+            `Authentication failed: Test user ${TEST_EMAIL} credentials are invalid (login banner still visible after wait).`,
+          );
+        }
+        const errorElement = page.locator('.text-red-500, .text-red-300, [data-testid="error"], .error').first();
         const hasError = await errorElement.isVisible().catch(() => false);
-        
+
         if (hasError) {
           const errorText = await errorElement.textContent();
           console.log('❌ Authentication error after timeout:', errorText);
@@ -417,7 +428,9 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
         } else {
           console.log('❌ Authentication timeout without visible error');
           await page.screenshot({ path: 'debug-auth-timeout.png' });
-          throw new Error(`Authentication timeout: Still on login page after 15 seconds. The user ${TEST_EMAIL} may not exist or may have incorrect credentials.`);
+          throw new Error(
+            `Authentication timeout: Still on login page after ${authRaceTimeoutMs / 1000}s. The user ${TEST_EMAIL} may not exist, credentials may be wrong, or auth is unusually slow.`,
+          );
         }
       } else {
         console.log('✅ Authentication may have succeeded after timeout');
@@ -677,6 +690,51 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
       });
     });
 
+    // 6b. Next.js BFF (same-origin) — matches src/lib/store/variables.ts and api-hooks.ts
+    await page.route(`**/api/data-intake/variables/user/${actualUserId}**`, async (route: Route, request: Request) => {
+      if (request.method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mockVariablesResponse),
+      });
+    });
+
+    await page.route('**/api/data-intake/variables', async (route: Route, request: Request) => {
+      const method = request.method();
+      if (method === 'GET') {
+        await route.continue();
+        return;
+      }
+      let body: { variables?: unknown[] } = {};
+      try {
+        body = (request.postDataJSON() as { variables?: unknown[] }) || {};
+      } catch {
+        body = {};
+      }
+      const raw = body.variables || [];
+      const responseVariables = (raw as any[]).map((v: any, index: number) => ({
+        ...v,
+        id: v.id || `imported-var-${index + 1}`,
+        type: (v.type || 'ACTUAL').toString().toUpperCase(),
+        organization_id: v.organization_id || ORG_A_ID,
+        values: v.values || [],
+      }));
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          message: 'Variables imported successfully',
+          importedCount: responseVariables.length,
+          variables: responseVariables,
+        }),
+      });
+    });
+
     // 7. Mock backend forecasts (both URLs)
     await page.route(new RegExp(`${backendUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/forecasts.*`), async (route: Route, request: Request) => {
       const url = request.url();
@@ -698,71 +756,8 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
       });
     });
 
-    // 8. Mock any other common API endpoints that might be needed
-    const commonApiPatterns = [
-      '/api/auth/*',
-      '/api/organizations/*', 
-      '/api/users/*',
-      '/api/memberships/*'
-    ];
-    
-    for (const pattern of commonApiPatterns) {
-      await page.route(new RegExp(`.*${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), async (route: Route, request: Request) => {
-        console.log(`✅ MOCKED: Generic API endpoint ${request.method()} ${pattern}: ${request.url()}`);
-        await route.fulfill({ 
-          status: 200, 
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ success: true, data: [] })
-        });
-      });
-    }
-
-    // 9. Add a catch-all for any remaining unmocked API requests
-    await page.route('**/api/**', async (route: Route, request: Request) => {
-      console.log(`🚨 UNMOCKED API: ${request.method()} ${request.url()}`);
-      // Provide a generic success response to prevent hanging
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true, data: [] })
-      });
-    });
-
-    // 10. Add comprehensive localhost:3001 backend catch-all
-    let apiCallCount = 0;
-    await page.route('**/localhost:3001/**', async (route: Route, request: Request) => {
-      apiCallCount++;
-      const url = request.url();
-      
-      if (apiCallCount % 5 === 1) { // Log every 5th call to reduce spam
-        console.log(`✅ MOCKED: Backend localhost:3001 ${request.method()} ${url} (call #${apiCallCount})`);
-      }
-      
-      // Provide a comprehensive response for any missed backend endpoints
-      const genericBackendResponse = {
-        success: true,
-        data: {
-          variables: [],
-          forecasts: [],
-          organizations: MOCK_ORGS_DETAILS,
-          members: MOCK_MEMBERSHIPS
-        },
-        message: 'Success',
-        total_count: 0,
-        page: 1,
-        per_page: 50
-      };
-      
-      await route.fulfill({
-        status: 200,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Cache-Control': 'max-age=30', // Cache for 30 seconds to reduce repeated calls
-          'X-Total-Count': '0'
-        },
-        body: JSON.stringify(genericBackendResponse)
-      });
-    });
+    // Keep mocks explicit to preserve test realism.
+    // Intentionally no catch-all API route stubs here.
 
     // Navigate to the Data Intake page
     console.log('Navigating to /data-intake with comprehensive API mocks...');
@@ -797,10 +792,12 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
     // WORKAROUND: Force page reload to bypass client-side navigation hydration issue
     console.log('🔄 Forcing page reload to bypass client-side navigation issue...');
     await page.reload({ waitUntil: 'networkidle' });
-    
-    // Wait for initial API calls to settle
-    console.log('Waiting for initial API calls to settle...');
-    await page.waitForTimeout(2000);
+
+    console.log('Waiting for data-intake list UI (loading detached or table/empty visible)...');
+    await page.locator('[data-testid="loading-indicator"]').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
+    await expect(
+      page.locator('[data-testid="data-table"], [data-testid="empty-state"]').first()
+    ).toBeVisible({ timeout: 30_000 });
     
     // Initialize organization store state via localStorage (since organization selector is in layout)
     console.log('Initializing organization store with mock data...');
@@ -1472,9 +1469,11 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
     });
     console.log('🏢 Current organization store state:', JSON.stringify(orgStoreState, null, 2));
 
-    // --- Wait for data to load after organization selection ---
     console.log('Waiting for variables data to load with pre-selected organization...');
-    await page.waitForTimeout(3000);
+    await page.locator('[data-testid="loading-indicator"]').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
+    await expect(
+      page.locator('[data-testid="data-table"], [data-testid="empty-state"]').first()
+    ).toBeVisible({ timeout: 30_000 });
     
     // --- Check Final UI State --- 
     const emptyStateLocator = page.locator('[data-testid="empty-state"]'); 
@@ -1506,10 +1505,10 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
     const hasDataTable = await dataTableLocator.isVisible();
     const hasAnyTable = await anyTableLocator.isVisible();
     const hasDataCards = await dataCardsLocator.count() > 0;
-    const hasRevenueCardLegacy = await revenueCardLocator.isVisible();
-    const hasCostsCardLegacy = await costsCardLocator.isVisible();
-    const hasRevenueCardAlt = await revenueCardAltLocator.isVisible();
-    const hasCostsCardAlt = await costsCardAltLocator.isVisible();
+    const hasRevenueCardLegacy = (await revenueCardLocator.count()) > 0;
+    const hasCostsCardLegacy = (await costsCardLocator.count()) > 0;
+    const hasRevenueCardAlt = (await revenueCardAltLocator.count()) > 0;
+    const hasCostsCardAlt = (await costsCardAltLocator.count()) > 0;
     const hasAnyDataCard = await anyDataCardLocator.count() > 0;
     
     console.log('UI State - Empty state:', hasEmptyState);
@@ -1559,12 +1558,12 @@ test.describe('Data Intake - Initial Load on Organization Selection', () => {
       // Check for at least one of the expected data cards
       if (hasRevenueCardLegacy || hasRevenueCardAlt) {
         const cardToCheck = hasRevenueCardLegacy ? revenueCardLocator : revenueCardAltLocator;
-        await expect(cardToCheck).toBeVisible();
+        await expect(cardToCheck.first()).toBeVisible();
         console.log('✅ Revenue A card found');
       }
       if (hasCostsCardLegacy || hasCostsCardAlt) {
         const cardToCheck = hasCostsCardLegacy ? costsCardLocator : costsCardAltLocator;
-        await expect(cardToCheck).toBeVisible();
+        await expect(cardToCheck.first()).toBeVisible();
         console.log('✅ Costs A card found');
       }
       if (hasAnyDataCard && !hasRevenueCardLegacy && !hasCostsCardLegacy && !hasRevenueCardAlt && !hasCostsCardAlt) {
@@ -1598,38 +1597,10 @@ Test Costs,ACTUAL,2000,2200`;
     console.log('✅ Organization pre-selected via store initialization for CSV upload test');
     console.log(`Expected organization: ${ORG_A_NAME} (${ORG_A_ID})`);
     
-    // Wait a moment for the pre-selected organization to take effect
-    await page.waitForTimeout(1000);
-
-    // --- Setup import API mock ---
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    const importEndpoint = `${backendUrl}/data-intake/variables`;
-    
-    await page.route(importEndpoint, async (route, request) => {
-      if (request.method() === 'POST') {
-        console.log(`✅ MOCKED: POST import variables`);
-        const postData = request.postDataJSON();
-        const responseVariables = (postData.variables || []).map((v: any, index: number) => ({
-          ...v,
-          id: v.id || `imported-var-${index + 1}`,
-          type: v.type?.toUpperCase() || 'ACTUAL',
-          organization_id: v.organization_id || ORG_A_ID,
-          values: v.values || []
-        }));
-        
-        await route.fulfill({
-          status: 200,
-          json: {
-            success: true,
-            message: 'Variables imported successfully',
-            importedCount: responseVariables.length,
-            variables: responseVariables
-          }
-        });
-      } else {
-        await route.continue();
-      }
-    });
+    await page.locator('[data-testid="loading-indicator"]').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
+    await expect(
+      page.locator('[data-testid="data-table"], [data-testid="empty-state"]').first()
+    ).toBeVisible({ timeout: 30_000 });
 
     // --- File Upload ---
     console.log('Looking for upload section...');
@@ -1707,8 +1678,7 @@ Test Costs,ACTUAL,2000,2200`;
     }
     
     console.log('File uploaded, waiting for processing...');
-    await page.waitForTimeout(3000);
-    
+
     // --- Look for modal and confirm import ---
     const applyButton = page.locator('button:has-text("Apply Changes")');
     const isApplyVisible = await applyButton.isVisible();
@@ -1716,7 +1686,7 @@ Test Costs,ACTUAL,2000,2200`;
     if (isApplyVisible) {
       console.log('✅ Found Apply Changes button, clicking...');
       await applyButton.click();
-      await page.waitForTimeout(2000);
+      await page.locator('[data-testid="loading-indicator"]').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
     } else {
       console.log('⚠️ Apply Changes button not found, looking for alternatives...');
       const confirmButtons = page.locator('button').filter({ hasText: /Apply|Confirm|Import|Save/i });
@@ -1725,13 +1695,12 @@ Test Costs,ACTUAL,2000,2200`;
       if (confirmCount > 0) {
         console.log(`Found ${confirmCount} potential confirm buttons, clicking first...`);
         await confirmButtons.first().click();
-        await page.waitForTimeout(2000);
+        await page.locator('[data-testid="loading-indicator"]').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
       }
     }
     
     // --- Verify Results ---
     console.log('🔍 Verifying import results...');
-    await page.waitForTimeout(1000); // Brief wait for UI updates
     
     // Check for data table/grid (primary success indicator)
     const dataTable = page.locator('[data-testid="data-table"], table');
