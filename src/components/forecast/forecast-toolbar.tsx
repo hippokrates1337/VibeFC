@@ -28,7 +28,7 @@ import { useToast } from '@/components/ui/use-toast';
 import NodeConfigPanel from '@/components/forecast/node-config-panel';
 import { GraphValidationDisplay } from './graph-validation-display';
 import { CalculationErrorBoundary } from './calculation-error-boundary';
-import { GraphConverter } from '@/lib/services/forecast-calculation/graph-converter';
+import { validateForecastGraph } from '@/lib/services/forecast-calculation/graph-validation';
 import { 
   Save, 
   Trash2,
@@ -313,8 +313,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
     try {
       // Automatically validate graph before calculation
       console.log(`[ForecastToolbar] Validating graph before unified calculation`);
-      const graphConverter = new GraphConverter();
-      const validation = graphConverter.validateGraph(nodes, edges);
+      const validation = validateForecastGraph(nodes, edges);
       setGraphValidation(validation);
       
       if (!validation.isValid) {
@@ -547,8 +546,7 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
       
       {/* Graph Validation Section */}
       <GraphValidationDisplay onValidate={async () => {
-        const graphConverter = new GraphConverter();
-        const validation = graphConverter.validateGraph(nodes, edges);
+        const validation = validateForecastGraph(nodes, edges);
         setGraphValidation(validation);
       }} />
       

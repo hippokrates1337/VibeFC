@@ -44,15 +44,14 @@ jest.mock('../calculation-error-boundary', () => ({
   CalculationErrorBoundary: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-// Mock the GraphConverter
-jest.mock('@/lib/services/forecast-calculation/graph-converter', () => ({
-  GraphConverter: jest.fn().mockImplementation(() => ({
-    validateGraph: jest.fn().mockReturnValue({
-      isValid: true,
-      errors: [],
-      warnings: [],
-    }),
-  })),
+// Mock the graph validation
+jest.mock('@/lib/services/forecast-calculation/graph-validation', () => ({
+  validateForecastGraph: jest.fn().mockReturnValue({
+    isValid: true,
+    errors: [],
+    warnings: [],
+    issues: [],
+  }),
 }));
 
 describe('ForecastToolbar', () => {

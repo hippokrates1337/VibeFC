@@ -1,5 +1,4 @@
 import type { 
-  HistoricalCalculationRequest,
   UnifiedCalculationResult,
   UnifiedCalculationRequest
 } from '@/types/forecast';
@@ -301,9 +300,6 @@ function transformUnifiedFromDto(dto: UnifiedCalculationResultDto): UnifiedCalcu
  * Forecast calculation API interface
  */
 interface ForecastCalculationApi {
-  calculateForecast(forecastId: string): Promise<ExtendedForecastCalculationResult>;
-  calculateHistoricalValues(forecastId: string, request: HistoricalCalculationRequest): Promise<ExtendedForecastCalculationResult>;
-  getCalculationResults(forecastId: string): Promise<ExtendedForecastCalculationResult | null>;
   getCalculationHistory(forecastId: string): Promise<ExtendedForecastCalculationResult[]>;
   checkCalculationHealth(): Promise<CalculationHealthDto>;
   // NEW: Unified calculation methods for Phase 4
@@ -315,105 +311,6 @@ interface ForecastCalculationApi {
  * Forecast calculation API implementation
  */
 export const forecastCalculationApi: ForecastCalculationApi = {
-  /**
-   * Trigger forecast calculation
-   */
-  async calculateForecast(forecastId: string): Promise<ExtendedForecastCalculationResult> {
-    console.log(`[ForecastCalculationApi] Triggering calculation for forecast ${forecastId}`);
-    
-    const response = await fetchWithAuth<ForecastCalculationResultDto>(
-      `/forecasts/${forecastId}/calculate`,
-      {
-        method: 'POST',
-      }
-    );
-
-    if (response.error) {
-      console.error('[ForecastCalculationApi] Calculation failed:', response.error);
-      throw new Error(`Failed to calculate forecast: ${response.error.message}`);
-    }
-
-    if (!response.data) {
-      throw new Error('No calculation result returned from server');
-    }
-
-    console.log(`[ForecastCalculationApi] Calculation completed for forecast ${forecastId}`);
-    return transformFromDto(response.data);
-  },
-
-  /**
-   * Trigger historical calculation for specific actual period
-   * @deprecated Use calculateUnified with 'historical' calculation type instead. This method will be removed in Phase 8.
-   */
-  async calculateHistoricalValues(forecastId: string, request: HistoricalCalculationRequest): Promise<ExtendedForecastCalculationResult> {
-    console.log(`[ForecastCalculationApi] [DEPRECATED] Triggering historical calculation for forecast ${forecastId} from ${request.actualStartMonth} to ${request.actualEndMonth}`);
-    console.warn('[ForecastCalculationApi] calculateHistoricalValues is deprecated. Use calculateUnified with "historical" calculation type instead.');
-    
-    // Convert MM-YYYY request to legacy format by routing through unified calculation
-    const unifiedRequest: UnifiedCalculationRequest = {
-      calculationTypes: ['historical'],
-      includeIntermediateNodes: true
-    };
-    
-    try {
-      const unifiedResult = await this.calculateUnified(forecastId, unifiedRequest);
-      
-      // Convert unified result back to legacy format for backward compatibility
-      const legacyResult: ExtendedForecastCalculationResult = {
-        forecastId: unifiedResult.forecastId,
-        calculatedAt: unifiedResult.calculatedAt,
-        metrics: [], // Legacy format conversion would be complex, use unified method instead
-        allNodes: [] // Legacy format conversion would be complex, use unified method instead
-      };
-      
-      console.log(`[ForecastCalculationApi] Historical calculation completed via unified method for forecast ${forecastId}`);
-      return legacyResult;
-    } catch (error) {
-      console.error('[ForecastCalculationApi] Historical calculation failed:', error);
-      throw new Error(`Failed to calculate historical values: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  },
-
-  /**
-   * Get latest calculation results
-   */
-  async getCalculationResults(forecastId: string): Promise<ExtendedForecastCalculationResult | null> {
-    console.log(`[ForecastCalculationApi] Fetching latest results for forecast ${forecastId}`);
-    
-    const response = await fetchWithAuth<ForecastCalculationResultDto>(
-      `/forecasts/${forecastId}/calculation-results`,
-      {
-        method: 'GET',
-      }
-    );
-
-    if (response.error) {
-      if (response.error.statusCode === 404) {
-        console.log(`[ForecastCalculationApi] No results found for forecast ${forecastId}`);
-        return null;
-      }
-      console.error('[ForecastCalculationApi] Failed to fetch results:', response.error);
-      throw new Error(`Failed to get calculation results: ${response.error.message}`);
-    }
-
-    if (!response.data) {
-      return null;
-    }
-
-    console.log(`[ForecastCalculationApi] Retrieved results for forecast ${forecastId}`);
-    
-    // DEBUG: Log raw backend response to see date format and values
-    console.log('[DEBUG] Raw backend response sample:', {
-      calculatedAt: response.data.calculatedAt,
-      metricsCount: response.data.metrics?.length,
-      allNodesCount: response.data.allNodes?.length,
-      firstMetricSample: response.data.metrics?.[0]?.values?.[0],
-      firstNodeSample: response.data.allNodes?.[0]?.values?.[0]
-    });
-    
-    return transformFromDto(response.data);
-  },
-
   /**
    * Get calculation history
    */
@@ -559,9 +456,6 @@ export const forecastCalculationApi: ForecastCalculationApi = {
  * Export individual functions for selective imports
  */
 export const {
-  calculateForecast,
-  calculateHistoricalValues,
-  getCalculationResults,
   getCalculationHistory,
   checkCalculationHealth,
   // NEW: Phase 4 unified calculation methods

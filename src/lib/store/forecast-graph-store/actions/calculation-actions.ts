@@ -1,5 +1,5 @@
 import { logger } from '@/lib/utils/logger';
-import { GraphConverter } from '@/lib/services/forecast-calculation/graph-converter';
+import { validateForecastGraph } from '@/lib/services/forecast-calculation/graph-validation';
 import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
 import { forecastApi } from '@/lib/api/forecast';
 import type { 
@@ -251,9 +251,8 @@ export const createCalculationActions = (set: (partial: any) => void, get: () =>
     try {
       set({ isValidatingGraph: true });
       
-      // Use GraphConverter directly for immediate UI validation
-      const graphConverter = new GraphConverter();
-      const validation = graphConverter.validateGraph(state.nodes, state.edges);
+      // Same validation the backend calculation runs (packages/forecast-engine)
+      const validation = validateForecastGraph(state.nodes, state.edges);
       
       set({ graphValidation: validation, isValidatingGraph: false });
       return validation;

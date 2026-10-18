@@ -16,7 +16,8 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@vibefc/forecast-engine": ["./packages/forecast-engine/src"]
     },
     "plugins": [
       {
