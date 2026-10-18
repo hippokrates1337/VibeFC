@@ -19,9 +19,7 @@
     "test:e2e": "playwright test",
     "backend:dev": "cd backend && npm run start:dev",
     "backend:build": "cd backend && npm run build",
-    "types:build": "cd packages/shared-types && npm run build",
-    "prisma:generate": "cd backend && npx prisma generate",
-    "setup-env": "node setup-env.js"
+    "types:build": "cd packages/shared-types && npm run build"
   },
   "dependencies": {
     "@babel/plugin-proposal-decorators": "^7.27.1",

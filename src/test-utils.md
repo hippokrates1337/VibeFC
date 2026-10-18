@@ -7,8 +7,6 @@ This project uses custom test utilities that wrap React Testing Library with err
 ## Files
 
 - `src/test-utils.tsx` - Custom render functions with error boundary support
-- `update-test-imports.ps1` - PowerShell script to update test imports
-- `update-test-imports.js` - Node.js script to update test imports
 
 ## Usage
 
@@ -37,26 +35,6 @@ The error boundary provider test uses `renderWithoutErrorBoundary` to avoid wrap
 ```typescript
 import { renderWithoutErrorBoundary as render, screen } from '@/test-utils';
 ```
-
-## Migration Scripts
-
-### PowerShell Script
-
-```powershell
-.\update-test-imports.ps1
-```
-
-### Node.js Script
-
-```bash
-node update-test-imports.js
-```
-
-Both scripts will:
-1. Find all test files that import from `@testing-library/react`
-2. Skip files already using `@/test-utils`
-3. Skip the error boundary provider test
-4. Update import statements to use `@/test-utils`
 
 ## Benefits
 
