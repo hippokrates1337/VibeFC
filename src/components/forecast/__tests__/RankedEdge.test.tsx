@@ -2,11 +2,29 @@ import { render, screen } from '@/test-utils';
 import RankedEdge from '../edges/RankedEdge';
 import '@testing-library/jest-dom';
 import { EdgeProps } from 'reactflow';
-import { useForecastNodes } from '@/lib/store/forecast-graph-store';
 
-// Mock the forecast store
-jest.mock('@/lib/store/forecast-graph-store');
-const mockUseForecastNodes = useForecastNodes as jest.MockedFunction<typeof useForecastNodes>;
+jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
+  useForecastGraph: jest.fn(),
+}));
+
+const { useForecastGraph } = jest.requireMock('@/lib/store/forecast-graph-store/hooks') as {
+  useForecastGraph: jest.Mock;
+};
+
+const baseGraphReturn = () => ({
+  forecastId: '',
+  forecastName: '',
+  forecastStartDate: '',
+  forecastEndDate: '',
+  organizationId: '',
+  organizationForecasts: [],
+  isDirty: false,
+  lastEditedNodePosition: null,
+  selectedNodeId: null,
+  configPanelOpen: false,
+  isLoading: false,
+  error: null,
+});
 
 // Mock ReactFlow's getBezierPath and EdgeLabelRenderer
 jest.mock('reactflow', () => ({
@@ -40,16 +58,18 @@ const renderRankedEdge = (props: EdgeProps) => {
 
 describe('RankedEdge', () => {
   beforeEach(() => {
-    // Reset mocks
     jest.clearAllMocks();
   });
 
   it('renders basic edge without rank marker for non-operator targets', () => {
-    // Mock nodes with a non-operator target
-    mockUseForecastNodes.mockReturnValue([
+    useForecastGraph.mockReturnValue({
+      ...baseGraphReturn(),
+      nodes: [
       { id: 'source-node', type: 'DATA', data: { name: 'Source', variableId: 'var1', offsetMonths: 0 }, position: { x: 0, y: 0 } },
       { id: 'target-node', type: 'CONSTANT', data: { name: 'Target Constant', value: 10 }, position: { x: 100, y: 100 } },
-    ]);
+      ],
+      edges: [],
+    });
 
     renderRankedEdge(createEdgeProps());
 
@@ -59,8 +79,9 @@ describe('RankedEdge', () => {
   });
 
   it('renders rank marker for operator target with inputOrder', () => {
-    // Mock nodes with an operator target that has inputOrder
-    mockUseForecastNodes.mockReturnValue([
+    useForecastGraph.mockReturnValue({
+      ...baseGraphReturn(),
+      nodes: [
       { id: 'source-node', type: 'DATA', data: { name: 'Source', variableId: 'var1', offsetMonths: 0 }, position: { x: 0, y: 0 } },
       { 
         id: 'target-node', 
@@ -71,7 +92,9 @@ describe('RankedEdge', () => {
         }, 
         position: { x: 100, y: 100 } 
       },
-    ]);
+      ],
+      edges: [],
+    });
 
     renderRankedEdge(createEdgeProps());
 
@@ -82,8 +105,9 @@ describe('RankedEdge', () => {
   });
 
   it('renders rank marker with correct rank for first input', () => {
-    // Mock nodes with an operator target where source is first in inputOrder
-    mockUseForecastNodes.mockReturnValue([
+    useForecastGraph.mockReturnValue({
+      ...baseGraphReturn(),
+      nodes: [
       { id: 'source-node', type: 'DATA', data: { name: 'Source', variableId: 'var1', offsetMonths: 0 }, position: { x: 0, y: 0 } },
       { 
         id: 'target-node', 
@@ -94,7 +118,9 @@ describe('RankedEdge', () => {
         }, 
         position: { x: 100, y: 100 } 
       },
-    ]);
+      ],
+      edges: [],
+    });
 
     renderRankedEdge(createEdgeProps());
 
@@ -103,8 +129,9 @@ describe('RankedEdge', () => {
   });
 
   it('does not render rank marker when source not in inputOrder', () => {
-    // Mock nodes with an operator target but source not in inputOrder
-    mockUseForecastNodes.mockReturnValue([
+    useForecastGraph.mockReturnValue({
+      ...baseGraphReturn(),
+      nodes: [
       { id: 'source-node', type: 'DATA', data: { name: 'Source', variableId: 'var1', offsetMonths: 0 }, position: { x: 0, y: 0 } },
       { 
         id: 'target-node', 
@@ -115,7 +142,9 @@ describe('RankedEdge', () => {
         }, 
         position: { x: 100, y: 100 } 
       },
-    ]);
+      ],
+      edges: [],
+    });
 
     renderRankedEdge(createEdgeProps());
 
@@ -125,8 +154,9 @@ describe('RankedEdge', () => {
   });
 
   it('applies selected styling when edge is selected', () => {
-    // Mock nodes with an operator target
-    mockUseForecastNodes.mockReturnValue([
+    useForecastGraph.mockReturnValue({
+      ...baseGraphReturn(),
+      nodes: [
       { id: 'source-node', type: 'DATA', data: { name: 'Source', variableId: 'var1', offsetMonths: 0 }, position: { x: 0, y: 0 } },
       { 
         id: 'target-node', 
@@ -137,7 +167,9 @@ describe('RankedEdge', () => {
         }, 
         position: { x: 100, y: 100 } 
       },
-    ]);
+      ],
+      edges: [],
+    });
 
     renderRankedEdge(createEdgeProps({ selected: true }));
 
@@ -150,8 +182,9 @@ describe('RankedEdge', () => {
   });
 
   it('handles operator target with empty inputOrder', () => {
-    // Mock nodes with an operator target but empty inputOrder
-    mockUseForecastNodes.mockReturnValue([
+    useForecastGraph.mockReturnValue({
+      ...baseGraphReturn(),
+      nodes: [
       { id: 'source-node', type: 'DATA', data: { name: 'Source', variableId: 'var1', offsetMonths: 0 }, position: { x: 0, y: 0 } },
       { 
         id: 'target-node', 
@@ -162,7 +195,9 @@ describe('RankedEdge', () => {
         }, 
         position: { x: 100, y: 100 } 
       },
-    ]);
+      ],
+      edges: [],
+    });
 
     renderRankedEdge(createEdgeProps());
 

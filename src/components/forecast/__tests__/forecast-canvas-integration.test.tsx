@@ -1,11 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@/test-utils';
+import { render, screen, waitFor } from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import ForecastCanvas from '../forecast-canvas';
-import { useForecastGraphStore } from '@/lib/store/forecast-graph-store';
-
-// Import mocked hooks
-const { useForecastNodes, useForecastEdges } = jest.requireMock('@/lib/store/forecast-graph-store');
 
 // Mock React Flow with more realistic behavior
 jest.mock('reactflow', () => {
@@ -152,20 +148,19 @@ jest.mock('reactflow', () => {
   };
 });
 
-// Mock the store
 const mockDeleteNode = jest.fn();
 const mockDeleteEdge = jest.fn();
 const mockOnNodesChange = jest.fn();
 const mockOnEdgesChange = jest.fn();
 
-jest.mock('@/lib/store/forecast-graph-store', () => ({
-  useForecastGraphStore: jest.fn(),
-  useForecastNodes: jest.fn(),
-  useForecastEdges: jest.fn(),
-  useDeleteNode: () => mockDeleteNode,
-  useDeleteEdge: () => mockDeleteEdge,
-  useOpenConfigPanelForNode: () => jest.fn()
+jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
+  useForecastGraph: jest.fn(),
+  useForecastGraphActions: jest.fn(),
 }));
+
+const { useForecastGraph, useForecastGraphActions } = jest.requireMock(
+  '@/lib/store/forecast-graph-store/hooks'
+) as { useForecastGraph: jest.Mock; useForecastGraphActions: jest.Mock };
 
 // Mock node types
 jest.mock('../node-types', () => ({
@@ -192,13 +187,22 @@ describe('ForecastCanvas Integration Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Mock the individual hooks
-    useForecastNodes.mockReturnValue(mockStore.nodes);
-    useForecastEdges.mockReturnValue(mockStore.edges);
-    
-    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => selector(mockStore));
-    
+
+    useForecastGraph.mockReturnValue({
+      nodes: mockStore.nodes,
+      edges: mockStore.edges,
+      configPanelOpen: false,
+    });
+    useForecastGraphActions.mockReturnValue({
+      deleteNode: mockDeleteNode,
+      deleteEdge: mockDeleteEdge,
+      openConfigPanelForNode: jest.fn(),
+      onNodesChange: mockOnNodesChange,
+      onEdgesChange: mockOnEdgesChange,
+      addEdge: mockStore.addEdge,
+      setSelectedNodeId: mockStore.setSelectedNodeId,
+    });
+
     // Clear selection state before each test
     const { __testUtils } = require('reactflow');
     __testUtils.clearSelection();
@@ -333,8 +337,21 @@ describe('ForecastCanvas Integration Tests', () => {
       ]
     };
     
-    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => selector(multiSelectStore));
-    
+    useForecastGraph.mockReturnValue({
+      nodes: multiSelectStore.nodes,
+      edges: multiSelectStore.edges,
+      configPanelOpen: false,
+    });
+    useForecastGraphActions.mockReturnValue({
+      deleteNode: mockDeleteNode,
+      deleteEdge: mockDeleteEdge,
+      openConfigPanelForNode: jest.fn(),
+      onNodesChange: multiSelectStore.onNodesChange,
+      onEdgesChange: multiSelectStore.onEdgesChange,
+      addEdge: multiSelectStore.addEdge,
+      setSelectedNodeId: multiSelectStore.setSelectedNodeId,
+    });
+
     const { rerender } = render(<ForecastCanvas />);
     
     // Manually set multiple selected nodes (simulating multi-select)
