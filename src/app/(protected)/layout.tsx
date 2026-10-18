@@ -12,6 +12,7 @@ import {
   useFetchVariables 
 } from '@/lib/store/variables';
 import { computeProtectedLayoutLoadingState } from './layout-loading-state';
+import { isDebugToolsEnabled } from '@/lib/config/feature-flags';
 
 export default function ProtectedLayout({
   children,
@@ -103,9 +104,11 @@ export default function ProtectedLayout({
               <Link href="/forecast-display" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
                 Forecast Display
               </Link>
-              <Link href="/debug-calc" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
-                Debug Calc
-              </Link>
+              {isDebugToolsEnabled() && (
+                <Link href="/debug-calc" className="text-sm font-medium text-slate-300 hover:text-slate-100 transition-colors">
+                  Debug Calc
+                </Link>
+              )}
             </nav>
           </div>
           
