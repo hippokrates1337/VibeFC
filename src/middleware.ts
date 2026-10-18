@@ -13,18 +13,6 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Check if we're in a redirect loop by checking the redirect count
-  const redirectCount = parseInt(req.cookies.get('redirect_count')?.value || '0');
-  if (redirectCount > 5) {
-    // Reset the counter and break the loop
-    logger.warn('middleware.redirect-loop-prevented', {
-      path: req.nextUrl.pathname,
-    });
-    const response = NextResponse.next();
-    response.cookies.set('redirect_count', '0', { path: '/' });
-    return response;
-  }
-
   // Define public routes (removed /landing)
   const publicRoutes = ['/login', '/signup', '/auth/callback', '/forgot-password'];
   // Check if the current path starts with any of the public routes
@@ -93,17 +81,14 @@ export async function middleware(req: NextRequest) {
     isPublicRoute,
     pathname: req.nextUrl.pathname,
   });
+  // The policy cannot loop: unauthenticated users land on a public route and
+  // authenticated users on '/', which is not public. So no redirect counter is needed
+  // (a client-controlled counter cookie previously allowed skipping this check).
   if (redirectEvaluation.type === 'redirect' && redirectEvaluation.destination) {
-    const response = NextResponse.redirect(new URL(redirectEvaluation.destination, req.url));
-    if (redirectEvaluation.incrementRedirectCount) {
-      response.cookies.set('redirect_count', String(redirectCount + 1), { path: '/' });
-    }
-    return response;
+    return NextResponse.redirect(new URL(redirectEvaluation.destination, req.url));
   }
 
-  const normalResponse = NextResponse.next();
-  normalResponse.cookies.set('redirect_count', '0', { path: '/' });
-  return normalResponse;
+  return res;
 }
 
 export const config = {

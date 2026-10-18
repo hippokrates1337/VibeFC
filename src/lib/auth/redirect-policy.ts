@@ -7,7 +7,6 @@ export interface AuthRedirectEvaluationInput {
 export interface AuthRedirectEvaluationResult {
   type: 'next' | 'redirect';
   destination?: string;
-  incrementRedirectCount?: boolean;
 }
 
 export const evaluateAuthRedirect = ({
@@ -16,19 +15,11 @@ export const evaluateAuthRedirect = ({
   pathname,
 }: AuthRedirectEvaluationInput): AuthRedirectEvaluationResult => {
   if (!isAuthenticated && !isPublicRoute && pathname !== '/login') {
-    return {
-      type: 'redirect',
-      destination: '/login',
-      incrementRedirectCount: true,
-    };
+    return { type: 'redirect', destination: '/login' };
   }
 
   if (isAuthenticated && isPublicRoute) {
-    return {
-      type: 'redirect',
-      destination: '/',
-      incrementRedirectCount: true,
-    };
+    return { type: 'redirect', destination: '/' };
   }
 
   return { type: 'next' };

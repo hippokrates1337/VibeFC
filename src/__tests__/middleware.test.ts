@@ -11,7 +11,6 @@ describe('evaluateAuthRedirect', () => {
     expect(result).toEqual({
       type: 'redirect',
       destination: '/login',
-      incrementRedirectCount: true,
     });
   });
 
@@ -25,7 +24,6 @@ describe('evaluateAuthRedirect', () => {
     expect(result).toEqual({
       type: 'redirect',
       destination: '/',
-      incrementRedirectCount: true,
     });
   });
 
