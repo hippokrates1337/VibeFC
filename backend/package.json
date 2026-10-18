@@ -69,7 +69,7 @@
     "moduleNameMapper": {
       "^@vibefc/forecast-engine$": "<rootDir>/../../packages/forecast-engine/src"
     },
-    "testRegex": ".*\\.spec\\.ts$",
+    "testRegex": ".*\\.(spec|test)\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

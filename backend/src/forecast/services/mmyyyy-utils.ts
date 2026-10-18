@@ -1,4 +1,13 @@
-import type { MMYYYYUtils } from './types';
+/** MM-YYYY utility functions */
+export interface MMYYYYUtils {
+  addMonths(month: string, monthsToAdd: number): string;
+  subtractMonths(month: string, monthsToSubtract: number): string;
+  compareMonths(month1: string, month2: string): number; // -1, 0, 1
+  isValidMMYYYY(month: string): boolean;
+  getMonthsBetween(startMonth: string, endMonth: string): string[];
+  dateToMMYYYY(date: Date): string;
+  mmyyyyToFirstOfMonth(month: string): Date;
+}
 
 /**
  * Utility functions for MM-YYYY date string manipulation
