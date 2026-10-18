@@ -1,4 +1,11 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Build against the engine's compiled output (node_modules/@vibefc/forecast-engine/dist,
+    // made by the prebuild/prestart scripts) so dist/ keeps its layout and runs in plain node.
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
-} 
+}

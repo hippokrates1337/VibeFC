@@ -14,6 +14,7 @@ import { CalculationEngineCoreModule } from './services/calculation-engine/calcu
 import { VariableDataService } from './services/calculation-engine/variable-data-service';
 import { MMYYYYUtilsService } from './services/calculation-engine/mmyyyy-utils';
 import { CalculationAdapter } from './services/calculation-engine/adapters/calculation-adapter';
+import { ForecastEngineService } from './services/forecast-engine.service';
 // import { GraphConverter } from './services/calculation-engine/graph-converter'; // TODO: Add back when needed
 
 @Module({
@@ -34,6 +35,7 @@ import { CalculationAdapter } from './services/calculation-engine/adapters/calcu
     VariableDataService,
     MMYYYYUtilsService,
     CalculationAdapter,
+    ForecastEngineService,
     // GraphConverter, // TODO: Add back when needed
   ],
   exports: [

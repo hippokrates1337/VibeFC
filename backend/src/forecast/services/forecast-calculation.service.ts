@@ -11,6 +11,7 @@ import { GraphConverter } from './calculation-engine/graph-converter';
 import { VariableDataService } from './calculation-engine/variable-data-service';
 import { CalculationEngineCore } from './calculation-engine/calculation-engine-core';
 import { CalculationAdapter } from './calculation-engine/adapters/calculation-adapter';
+import { ForecastEngineService } from './forecast-engine.service';
 import type { 
   ExtendedForecastCalculationResult,
   Variable,
@@ -37,7 +38,8 @@ export class ForecastCalculationService {
     private readonly forecastNodeService: ForecastNodeService,
     private readonly forecastEdgeService: ForecastEdgeService,
     private readonly newEngine: CalculationEngineCore,
-    private readonly adapter: CalculationAdapter
+    private readonly adapter: CalculationAdapter,
+    private readonly forecastEngine: ForecastEngineService
   ) {}
 
   /**
@@ -566,8 +568,33 @@ export class ForecastCalculationService {
       variables: variables.map(v => this.convertVariableToEngineFormat(v))
     };
 
-    // 5. Execute calculation with new engine
-    const result = await this.newEngine.calculate(newRequest);
+    // 5. Execute calculation. FORECAST_ENGINE selects the engine during the switch-over:
+    // 'legacy' (tree engine), 'dag' (packages/forecast-engine) or 'shadow' (both; returns
+    // legacy and logs where the DAG engine differs).
+    const engineMode = process.env.FORECAST_ENGINE ?? 'legacy';
+    const runDag = () =>
+      this.forecastEngine.run({
+        nodes,
+        edges,
+        variables,
+        periods: periodInfo,
+        calculationTypes: newRequest.calculationTypes,
+      }).nodeResults;
+    let result: import('./calculation-engine/types/calculation-types').CalculationResult;
+    if (engineMode === 'dag') {
+      result = {
+        forecastId: '',
+        calculatedAt: new Date(),
+        calculationTypes: newRequest.calculationTypes,
+        periodInfo,
+        nodeResults: runDag().map((node) => ({ ...node, nodeType: node.nodeType as any })),
+      };
+    } else {
+      result = await this.newEngine.calculate(newRequest);
+      if (engineMode === 'shadow') {
+        this.logEngineDifferences(forecastId, result.nodeResults, runDag);
+      }
+    }
 
     // 6. Convert result back to DTO format
     const unifiedResult: UnifiedCalculationResultDto = {
@@ -620,6 +647,36 @@ export class ForecastCalculationService {
       id: storedResult.id,
     };
     return finalResult;
+  }
+
+  /** Shadow mode: compare the DAG engine's values with the legacy result and log the differences. */
+  private logEngineDifferences(
+    forecastId: string,
+    legacy: import('./calculation-engine/types/calculation-types').NodeResult[],
+    runDag: () => UnifiedNodeResultDto[]
+  ): void {
+    try {
+      const dag = new Map(runDag().map((node) => [node.nodeId, node]));
+      const differences: string[] = [];
+      for (const node of legacy) {
+        for (const value of node.values) {
+          const other = dag.get(node.nodeId)?.values.find((v) => v.month === value.month);
+          for (const type of ['historical', 'forecast', 'budget'] as const) {
+            const a = value[type];
+            const b = other ? other[type] : null;
+            const same = a === b || (a !== null && b !== null && Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a)));
+            if (!same) differences.push(`${node.nodeId} ${value.month} ${type}: legacy=${a} dag=${b}`);
+          }
+        }
+      }
+      if (differences.length === 0) {
+        this.logger.log(`[ForecastEngine shadow] forecast ${forecastId}: identical`);
+      } else {
+        this.logger.warn(`[ForecastEngine shadow] forecast ${forecastId}: ${differences.length} differences, first: ${differences.slice(0, 10).join('; ')}`);
+      }
+    } catch (error) {
+      this.logger.warn(`[ForecastEngine shadow] forecast ${forecastId}: DAG engine failed: ${error instanceof Error ? error.message : error}`);
+    }
   }
 
   /**

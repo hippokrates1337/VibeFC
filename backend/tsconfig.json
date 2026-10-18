@@ -19,7 +19,8 @@
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@vibefc/forecast-engine": ["../packages/forecast-engine/src"]
     }
   },
   "include": ["src/**/*"],

@@ -49,8 +49,18 @@ export function random(seed: number): Random {
 const BASE = 2024 * 12; // January 2024
 const VARIABLE_TYPES = ['ACTUAL', 'BUDGET', 'INPUT', 'UNKNOWN'] as const;
 
-export function generateCase(seed: number): CalculateInput {
+export interface GenerateOptions {
+  /**
+   * Only graphs the old tree engine accepted (used by the backend parity run): every
+   * metric has exactly one input, SEEDs name their metric, no Metric -> SEED edges, and
+   * the actual window ends before the forecast window starts, both at least 2 months long.
+   */
+  readonly legacyCompatible?: boolean;
+}
+
+export function generateCase(seed: number, options: GenerateOptions = {}): CalculateInput {
   const r = random(seed);
+  const legacy = options.legacyCompatible === true;
 
   const variables: EngineVariable[] = [];
   const variableCount = r.int(1, 4);
@@ -79,7 +89,13 @@ export function generateCase(seed: number): CalculateInput {
     const earlier = nodes.map((n) => n.id);
     const kinds: string[] = ['CONSTANT', 'DATA', 'METRIC', 'SEED'];
     if (earlier.length > 0) kinds.push('OPERATOR', 'OPERATOR', 'OFFSET', 'METRIC');
-    const kind = i === nodeCount - 1 && metrics.length === 0 ? 'METRIC' : r.pick(kinds);
+    let kind = i === nodeCount - 1 && metrics.length === 0 ? 'METRIC' : r.pick(kinds);
+    if (legacy && kind === 'METRIC' && earlier.length === 0) kind = 'CONSTANT';
+    if (legacy && i === nodeCount - 1 && metrics.length === 0 && earlier.length === 0) {
+      nodes.push({ id: `${id}c`, type: 'CONSTANT', data: { name: `${id}c`, value: r.int(-2, 5) } });
+      earlier.push(`${id}c`);
+      kind = 'METRIC';
+    }
 
     switch (kind) {
       case 'CONSTANT':
@@ -113,15 +129,16 @@ export function generateCase(seed: number): CalculateInput {
           },
         });
         metrics.push(id);
-        if (earlier.length > 0 && r.chance(0.85)) addEdge(r.pick(earlier), id);
+        if (earlier.length > 0 && (legacy || r.chance(0.85))) addEdge(r.pick(earlier), id);
         break;
       }
       case 'OFFSET': {
         // Either a lower node at lag 0..3, or any metric so far at lag >= 1 (possibly a recurrence later).
-        const source = earlier.length > 0 && r.chance(0.6) ? r.pick(earlier) : null;
+        const source = earlier.length > 0 && (legacy || r.chance(0.6)) ? r.pick(earlier) : null;
         nodes.push({ id, type: 'OPERATOR', data: { op: 'offset', offsetMonths: r.int(source ? 0 : 1, 3), inputOrder: [] } });
         if (source) {
           addEdge(source, id);
+          if (legacy) (nodes[nodes.length - 1].data as Record<string, unknown>).inputOrder = [source]; // as the canvas keeps it
         } else {
           pendingSeeds.push(`offset:${id}`);
         }
@@ -149,9 +166,9 @@ export function generateCase(seed: number): CalculateInput {
       addEdge(metricId, offsetId);
     } else {
       const node = nodes.find((n) => n.id === pending)!;
-      if (r.chance(0.5)) {
+      if (legacy || r.chance(0.5)) {
         (node.data as Record<string, unknown>).sourceMetricId = metricId;
-        if (r.chance(0.3)) addEdge(metricId, pending); // canvas-style edge, same metric
+        if (!legacy && r.chance(0.3)) addEdge(metricId, pending); // canvas-style edge, same metric
       } else {
         addEdge(metricId, pending);
       }
@@ -159,9 +176,10 @@ export function generateCase(seed: number): CalculateInput {
   }
 
   const actualStart = BASE + r.int(0, 6);
-  const actual: Window = { start: actualStart, end: actualStart + r.int(0, 5) };
-  const forecastStart = actual.end + r.int(-1, 4); // overlap, adjacent or gap
-  const forecast: Window = { start: forecastStart, end: forecastStart + r.int(0, 6) };
+  let actual: Window = { start: actualStart, end: actualStart + r.int(0, 5) };
+  if (legacy && actual.end === actual.start) actual = { start: actual.start, end: actual.start + 1 };
+  const forecastStart = actual.end + (legacy ? r.int(1, 4) : r.int(-1, 4)); // overlap, adjacent or gap
+  const forecast: Window = { start: forecastStart, end: forecastStart + (legacy ? r.int(1, 6) : r.int(0, 6)) };
 
   const types = r.shuffle(['historical', 'forecast', 'budget'] as const).slice(0, r.int(1, 3));
   return { nodes, edges, variables, windows: { actual, forecast }, calculationTypes: types };
