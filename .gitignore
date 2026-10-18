@@ -11,6 +11,7 @@ mcp.json
 # Build output
 /.next/
 backend/dist/
+packages/*/dist/
 *.tsbuildinfo
 
 # Test output

@@ -62,6 +62,8 @@ const config = {
     "/backend/dist/",
     // Nest integration specs live under backend/; run them with `cd backend && npm test` only.
     "/backend/src/",
+    // packages/forecast-engine has its own config (run it with `npm run test:engine`).
+    "/packages/",
   ],
 
   // A list of paths to modules that run some code to configure or set up the testing environment
@@ -75,6 +77,7 @@ const config = {
     // https://jestjs.io/docs/webpack#handling-static-assets
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$/': '<rootDir>/__mocks__/fileMock.js',
     // Handle path aliases from tsconfig.json
+    "^@vibefc/forecast-engine$": "<rootDir>/packages/forecast-engine/src",
     "^@/(.*)$": "<rootDir>/src/$1"
   },
 
