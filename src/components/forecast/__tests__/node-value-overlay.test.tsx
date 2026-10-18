@@ -6,7 +6,7 @@ import type { NodeVisualizationValue } from '@/types/forecast';
 describe('NodeValueOverlay Component', () => {
   const createMockValue = (value: number, type: 'forecast' | 'calculated' = 'forecast'): NodeVisualizationValue => ({
     nodeId: 'test-node-1',
-    month: new Date(2025, 1, 1),
+    month: '02-2025',
     value,
     valueType: type,
     formattedValue: value.toLocaleString()
