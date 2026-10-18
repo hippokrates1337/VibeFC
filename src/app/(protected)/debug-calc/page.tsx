@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useOrganizationStore } from '@/lib/store/organization';
 import { 
   useForecastGraph,
-  useForecastGraphActions
+  useForecastGraphActions,
+  useOrganizationForecastsLoader
 } from '@/lib/store/forecast-graph-store/hooks';
 import { useDebug, useDebugActions, useDebugComputed } from '@/lib/store/forecast-graph-store/hooks/use-debug';
 import { 
@@ -33,8 +34,9 @@ import {
 import { format } from 'date-fns';
 import { Forecast } from '@/lib/api/forecast';
 import { forecastApi, mapForecastToClientFormat } from '@/lib/api/forecast';
-import { createDefaultDebugRequest, formatExecutionTime } from '@/lib/api/debug-calculation';
+import { formatExecutionTime } from '@/lib/api/debug-calculation';
 import type { DebugLevel, CalculationType } from '@/types/debug';
+import { logger } from '@/lib/utils/logger';
 import { CalculationTreeVisualization } from '@/components/forecast/calculation-tree-visualization';
 import { StepExecutionLog } from '@/components/forecast/step-execution-log';
 import { NodeDebugDetails } from '@/components/forecast/node-debug-details';
@@ -436,23 +438,10 @@ export default function DebugCalcPage() {
   
   const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
   
-  // Debug organization state
-  console.log('[DebugPage] Current organization:', currentOrganization?.id, currentOrganization?.name);
-  
   // Get forecasts from store
   const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
-  const {
-    loadForecast,
-    loadOrganizationForecasts,
-    setLoading: setForecastLoading,
-    setError: setForecastError,
-  } = useForecastGraphActions();
-  
-  // Debug logging for forecasts
-  console.log('[DebugPage] Available forecasts count:', forecasts.length);
-  if (forecasts.length > 0) {
-    console.log('[DebugPage] First forecast sample:', forecasts[0]);
-  }
+  const { loadForecast } = useForecastGraphActions();
+  useOrganizationForecastsLoader(currentOrganization?.id);
   
   // Get debug state and actions
   const debug = useDebug();
@@ -463,10 +452,6 @@ export default function DebugCalcPage() {
   const selectedForecast = selectedForecastId 
     ? forecasts.find((f: any) => f.id === selectedForecastId) 
     : null;
-    
-  // Debug logging for selected forecast
-  console.log('[DebugPage] Selected forecast ID:', selectedForecastId);
-  console.log('[DebugPage] Selected forecast found:', !!selectedForecast);
 
   // Helper to map forecast fields to camelCase for UI
   const getForecastMetadataFromApi = (forecast: any) => {
@@ -482,72 +467,14 @@ export default function DebugCalcPage() {
   };
 
   const selectedForecastMeta = getForecastMetadataFromApi(selectedForecast);
-  
-  // Debug logging for key states
-  console.log('[DebugPage] Key states:', {
-    hasSelectedForecast: !!selectedForecast,
-    isForecastLoaded,
-    hasSelectedMeta: !!selectedForecastMeta,
-    isDebugging: debug.isDebugging,
-    hasDebugResults: !!debug.debugResults,
-    debugError: debug.debugError
-  });
-
-  // Load organization forecasts (same pattern as forecast-definition page)
-  useEffect(() => {
-    const fetchForecasts = async () => {
-      if (!currentOrganization?.id) {
-        loadOrganizationForecasts([]);
-        return;
-      }
-
-      if (forecasts.length > 0 || isForecastListLoading) {
-        return;
-      }
-
-      try {
-        setForecastLoading(true);
-        setForecastError(null);
-
-        console.log('[DebugPage] Loading organization forecasts for:', currentOrganization.id);
-        const { data, error } = await forecastApi.getForecasts(currentOrganization.id);
-
-        if (error) {
-          console.error('[DebugPage] Failed to fetch organization forecasts:', error.message);
-          setForecastError(error.message);
-          loadOrganizationForecasts([]);
-          return;
-        }
-
-        loadOrganizationForecasts(data ?? []);
-      } catch (err) {
-        console.error('[DebugPage] Failed to load organization forecasts:', err);
-        setForecastError(err instanceof Error ? err.message : 'Failed to fetch forecasts');
-        loadOrganizationForecasts([]);
-      } finally {
-        setForecastLoading(false);
-      }
-    };
-
-    fetchForecasts();
-  }, [
-    currentOrganization?.id,
-    forecasts.length,
-    isForecastListLoading,
-    loadOrganizationForecasts,
-    setForecastLoading,
-    setForecastError,
-  ]);
 
   // Load forecast when selection changes
   useEffect(() => {
     const fetchAndLoadForecast = async () => {
       if (selectedForecastMeta && !isForecastLoaded) {
         try {
-          console.log('[DebugPage] Loading forecast:', selectedForecastMeta.id);
           const response = await forecastApi.getForecast(selectedForecastMeta.id);
           if (response.error || !response.data) {
-            console.error('[DebugPage] Failed to load forecast:', response.error);
             throw new Error(response.error?.message || 'Failed to load forecast details.');
           }
           const clientData = mapForecastToClientFormat(response.data);
@@ -556,9 +483,11 @@ export default function DebugCalcPage() {
 
           // Clear any previous debug data when switching forecasts
           debugActions.clearDebugData();
-          console.log('[DebugPage] Forecast loaded successfully');
         } catch (err) {
-          console.error('[DebugPage] Error loading forecast:', err);
+          logger.error('debug.forecast-load.failed', {
+            forecastId: selectedForecastMeta.id,
+            reason: err instanceof Error ? err.message : 'unknown',
+          });
         }
       } else if (!selectedForecastMeta) {
         setIsForecastLoaded(false);
@@ -578,7 +507,9 @@ export default function DebugCalcPage() {
     try {
       await debugActions.triggerDebugCalculation(config);
     } catch (error) {
-      console.error('Debug calculation failed:', error);
+      logger.error('debug.calculation.failed', {
+        reason: error instanceof Error ? error.message : 'unknown',
+      });
     }
   };
 

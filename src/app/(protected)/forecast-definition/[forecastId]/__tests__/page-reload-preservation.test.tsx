@@ -46,23 +46,17 @@ jest.mock('@/lib/api/forecast', () => ({
   mapForecastToClientFormat: jest.fn(),
 }));
 
-// Mock the stores - Need to provide both the main store and all individual hooks
+jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
+  useForecastGraph: jest.fn(),
+  useForecastGraphActions: jest.fn(),
+  useCalculations: jest.fn(),
+  useVisualization: jest.fn(),
+  useVisualizationActions: jest.fn(),
+  useForecastMonths: jest.fn(),
+}));
+
 jest.mock('@/lib/store/forecast-graph-store', () => ({
   useForecastGraphStore: jest.fn(),
-  useForecastNodes: jest.fn(),
-  useForecastEdges: jest.fn(),
-  useForecastMetadata: jest.fn(),
-  useIsForecastDirty: jest.fn(),
-  useLoadForecast: jest.fn(),
-  useForecastOrganizationId: jest.fn(),
-  useForecastError: jest.fn(),
-  useSelectedVisualizationMonth: jest.fn(),
-  useSetSelectedVisualizationMonth: jest.fn(),
-  useShowVisualizationSlider: jest.fn(),
-  useSetShowVisualizationSlider: jest.fn(),
-  useForecastMonths: jest.fn(),
-  useCalculationResults: jest.fn(),
-  useUpdateVisualizationMonthForPeriodChange: jest.fn(),
 }));
 
 jest.mock('@/lib/store/organization', () => ({
@@ -263,6 +257,15 @@ describe('ForecastEditorPage - Reload Preservation', () => {
     push: jest.fn(),
   };
 
+  const {
+    useForecastGraph,
+    useForecastGraphActions,
+    useCalculations,
+    useVisualization,
+    useVisualizationActions,
+    useForecastMonths,
+  } = jest.requireMock('@/lib/store/forecast-graph-store/hooks') as Record<string, jest.Mock>;
+
   const mockStoreState = {
     forecastId: 'test-forecast-id',
     forecastName: 'Test Forecast',
@@ -290,78 +293,80 @@ describe('ForecastEditorPage - Reload Preservation', () => {
   const mockSetError = jest.fn();
 
   beforeEach(() => {
-    // Reset mock calls but keep the same function instances
     mockLoadForecast.mockClear();
     mockSetDirty.mockClear();
     mockSetError.mockClear();
-    
+
     (useParams as jest.Mock).mockReturnValue({ forecastId: 'test-forecast-id' });
     (useRouter as jest.Mock).mockReturnValue(mockRouter);
     (useOrganizationStore as unknown as jest.Mock).mockReturnValue({ currentOrganization: { id: 'test-org-id' } });
-    
-    // Set up the main store mock - this is used for direct calls like useForecastGraphStore(state => state.setDirty)
-    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector) => {
+
+    const storeSlice = {
+      _hasHydrated: true,
+      ...mockStoreState,
+      setDirty: mockSetDirty,
+      setError: mockSetError,
+    };
+
+    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector: unknown) => {
       if (typeof selector === 'function') {
-        const state = {
-          ...mockStoreState,
-          setDirty: mockSetDirty,
-          setError: mockSetError,
-        };
-        return selector(state);
+        return (selector as (s: typeof storeSlice) => unknown)(storeSlice);
       }
-      return mockStoreState;
+      return storeSlice;
     });
 
-    // Set up getState method for store
-    (useForecastGraphStore as any).getState = jest.fn().mockReturnValue({
-      ...mockStoreState,
+    const storeMock = useForecastGraphStore as unknown as {
+      getState: jest.Mock;
+      persist: { rehydrate: jest.Mock };
+    };
+    storeMock.getState = jest.fn(() => storeSlice);
+    storeMock.persist = { rehydrate: jest.fn() };
+
+    useForecastGraph.mockReturnValue({
+      isDirty: mockStoreState.isDirty,
+      nodes: mockStoreState.nodes,
+      edges: mockStoreState.edges,
+      organizationId: mockStoreState.organizationId,
+      error: mockStoreState.error,
+      forecastName: mockStoreState.forecastName,
+      forecastStartDate: mockStoreState.forecastStartDate,
+      forecastEndDate: mockStoreState.forecastEndDate,
+      forecastId: mockStoreState.forecastId,
+    });
+
+    useForecastGraphActions.mockReturnValue({
+      loadForecast: mockLoadForecast,
       setDirty: mockSetDirty,
       setError: mockSetError,
     });
 
-    // Set up individual hook mocks - these are imported and used directly
-    const { 
-      useForecastNodes, 
-      useForecastEdges, 
-      useForecastMetadata, 
-      useIsForecastDirty,
-      useLoadForecast,
-      useForecastOrganizationId,
-      useForecastError,
-      // Add the visualization hooks
-      useSelectedVisualizationMonth,
-      useSetSelectedVisualizationMonth,
-      useShowVisualizationSlider,
-      useSetShowVisualizationSlider,
-      useForecastMonths,
-      useCalculationResults,
-      useUpdateVisualizationMonthForPeriodChange
-    } = require('@/lib/store/forecast-graph-store');
-
-    (useForecastNodes as jest.Mock).mockReturnValue(mockStoreState.nodes);
-    (useForecastEdges as jest.Mock).mockReturnValue(mockStoreState.edges);
-    (useForecastMetadata as jest.Mock).mockReturnValue({
-      name: mockStoreState.forecastName,
-      startDate: mockStoreState.forecastStartDate,
-      endDate: mockStoreState.forecastEndDate,
+    useVisualization.mockReturnValue({
+      selectedVisualizationMonth: null,
+      showVisualizationSlider: false,
+      forecastStartDate: mockStoreState.forecastStartDate,
+      forecastEndDate: mockStoreState.forecastEndDate,
     });
-    (useIsForecastDirty as jest.Mock).mockReturnValue(mockStoreState.isDirty);
-    (useLoadForecast as jest.Mock).mockReturnValue(mockLoadForecast);
-    (useForecastOrganizationId as jest.Mock).mockReturnValue(mockStoreState.organizationId);
-    (useForecastError as jest.Mock).mockReturnValue(mockStoreState.error);
 
-    // Mock the visualization hooks
-    (useSelectedVisualizationMonth as jest.Mock).mockReturnValue(null);
-    (useSetSelectedVisualizationMonth as jest.Mock).mockReturnValue(jest.fn());
-    (useShowVisualizationSlider as jest.Mock).mockReturnValue(false);
-    (useSetShowVisualizationSlider as jest.Mock).mockReturnValue(jest.fn());
-    (useForecastMonths as jest.Mock).mockReturnValue([]);
-    (useCalculationResults as jest.Mock).mockReturnValue(null);
-    (useUpdateVisualizationMonthForPeriodChange as jest.Mock).mockReturnValue(jest.fn());
+    useVisualizationActions.mockReturnValue({
+      setSelectedVisualizationMonth: jest.fn(),
+      setShowVisualizationSlider: jest.fn(),
+      updateVisualizationMonthForPeriodChange: jest.fn(),
+    });
 
-    // Mock mapForecastToClientFormat
+    useForecastMonths.mockReturnValue([]);
+
+    useCalculations.mockReturnValue({
+      calculationResults: null,
+      isCalculating: false,
+      calculationError: null,
+      lastCalculatedAt: null,
+      forecastPeriods: [],
+      graphValidation: null,
+      isValidatingGraph: false,
+    });
+
     const { mapForecastToClientFormat } = require('@/lib/api/forecast');
-    (mapForecastToClientFormat as jest.Mock).mockImplementation((data) => data);
+    (mapForecastToClientFormat as jest.Mock).mockImplementation((data: unknown) => data);
   });
 
   it('should preserve unsaved changes when page reloads', async () => {
@@ -395,23 +400,35 @@ describe('ForecastEditorPage - Reload Preservation', () => {
   it('should reload fresh data when no unsaved changes exist', async () => {
     const mockGetForecast = forecastApi.getForecast as jest.Mock;
     
-    // Mock store state with no unsaved changes
     const cleanStoreState = {
+      _hasHydrated: true,
       ...mockStoreState,
       isDirty: false,
-      nodes: [],
+      nodes: [] as typeof mockStoreState.nodes,
+      setDirty: mockSetDirty,
+      setError: mockSetError,
     };
 
-    // Update all the mocks for clean state
-    (useForecastGraphStore as any).getState = jest.fn().mockReturnValue(cleanStoreState);
-    
-    const { 
-      useForecastNodes, 
-      useIsForecastDirty,
-    } = require('@/lib/store/forecast-graph-store');
-    
-    (useForecastNodes as jest.Mock).mockReturnValue(cleanStoreState.nodes);
-    (useIsForecastDirty as jest.Mock).mockReturnValue(cleanStoreState.isDirty);
+    const storeMock = useForecastGraphStore as unknown as { getState: jest.Mock };
+    storeMock.getState = jest.fn(() => cleanStoreState);
+    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector: unknown) => {
+      if (typeof selector === 'function') {
+        return (selector as (s: typeof cleanStoreState) => unknown)(cleanStoreState);
+      }
+      return cleanStoreState;
+    });
+
+    useForecastGraph.mockReturnValue({
+      isDirty: cleanStoreState.isDirty,
+      nodes: cleanStoreState.nodes,
+      edges: cleanStoreState.edges,
+      organizationId: cleanStoreState.organizationId,
+      error: cleanStoreState.error,
+      forecastName: cleanStoreState.forecastName,
+      forecastStartDate: cleanStoreState.forecastStartDate,
+      forecastEndDate: cleanStoreState.forecastEndDate,
+      forecastId: cleanStoreState.forecastId,
+    });
 
     mockGetForecast.mockResolvedValue({
       data: {
@@ -437,13 +454,34 @@ describe('ForecastEditorPage - Reload Preservation', () => {
   it('should reload fresh data when different forecast ID', async () => {
     const mockGetForecast = forecastApi.getForecast as jest.Mock;
     
-    // Mock store state with different forecast ID
     const differentForecastState = {
+      _hasHydrated: true,
       ...mockStoreState,
       forecastId: 'different-forecast-id',
+      setDirty: mockSetDirty,
+      setError: mockSetError,
     };
 
-    (useForecastGraphStore as any).getState = jest.fn().mockReturnValue(differentForecastState);
+    const diffStoreMock = useForecastGraphStore as unknown as { getState: jest.Mock };
+    diffStoreMock.getState = jest.fn(() => differentForecastState);
+    (useForecastGraphStore as unknown as jest.Mock).mockImplementation((selector: unknown) => {
+      if (typeof selector === 'function') {
+        return (selector as (s: typeof differentForecastState) => unknown)(differentForecastState);
+      }
+      return differentForecastState;
+    });
+
+    useForecastGraph.mockReturnValue({
+      isDirty: differentForecastState.isDirty,
+      nodes: differentForecastState.nodes,
+      edges: differentForecastState.edges,
+      organizationId: differentForecastState.organizationId,
+      error: differentForecastState.error,
+      forecastName: differentForecastState.forecastName,
+      forecastStartDate: differentForecastState.forecastStartDate,
+      forecastEndDate: differentForecastState.forecastEndDate,
+      forecastId: differentForecastState.forecastId,
+    });
 
     mockGetForecast.mockResolvedValue({
       data: {
@@ -543,9 +581,17 @@ describe('ForecastEditorPage - Reload Preservation', () => {
   });
 
   it('should show error state when store has error', async () => {
-    // Mock store hooks to return error state
-    const { useForecastError } = require('@/lib/store/forecast-graph-store');
-    (useForecastError as jest.Mock).mockReturnValue('Test error message');
+    useForecastGraph.mockReturnValue({
+      isDirty: mockStoreState.isDirty,
+      nodes: mockStoreState.nodes,
+      edges: mockStoreState.edges,
+      organizationId: mockStoreState.organizationId,
+      error: 'Test error message',
+      forecastName: mockStoreState.forecastName,
+      forecastStartDate: mockStoreState.forecastStartDate,
+      forecastEndDate: mockStoreState.forecastEndDate,
+      forecastId: mockStoreState.forecastId,
+    });
 
     render(<ForecastEditorPage />);
 
