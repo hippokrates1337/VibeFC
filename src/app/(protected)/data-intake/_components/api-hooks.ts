@@ -49,9 +49,11 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       replaceId: d.replaceId! 
     }))
     
-    logger.log('Variables to be added locally:', variablesToAdd.length)
-    logger.log('Variables to be updated:', variablesToUpdate.length)
-    logger.log('Decision actions:', decisions.map(d => d.action))
+    logger.info('variables.import.decisions-prepared', {
+      addCount: variablesToAdd.length,
+      updateCount: variablesToUpdate.length,
+      skipCount: decisions.filter((decision) => decision.action === 'skip').length,
+    })
     
     // Map of frontend variable IDs to their original variable objects
     const frontendVariableMap = new Map<string, Variable>()
@@ -106,8 +108,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         }
         
         const importUrl = `/api/data-intake/variables`;
-        logger.log('Sending payload to Next.js API:', importUrl);
-        logger.log('Payload:', JSON.stringify(apiPayload, null, 2));
+        logger.info('variables.import.request.start', {
+          endpoint: importUrl,
+          variableCount: apiPayload.variables.length,
+        });
         
         const response = await fetch(importUrl, {
           method: 'POST',
@@ -115,9 +119,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           body: JSON.stringify(apiPayload)
         })
         
-        logger.log('API response status:', response.status)
+        logger.info('variables.import.request.completed', {
+          status: response.status,
+        });
         const responseData = await response.json()
-        logger.log('API response data:', responseData)
         
         if (!response.ok) {
           throw new Error(responseData.message || 'Failed to save variables to the server')
@@ -125,13 +130,9 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         
         // Check if the response contains created variables with backend IDs
         if (responseData.variables && Array.isArray(responseData.variables)) {
-          logger.log('Received variables from backend:', responseData.variables)
-          
-          // We no longer need to map IDs since the same ID is used in both frontend and backend
-          // Just log for debugging purposes
-          responseData.variables.forEach((variable: any) => {
-            logger.log(`Variable with ID ${variable.id} successfully saved`)
-          })
+          logger.debug('variables.import.response.variables', {
+            savedCount: responseData.variables.length,
+          });
         }
         
         setApiStatus({
@@ -184,8 +185,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         }
         
                  const updateUrl = `/api/data-intake/variables`;
-         logger.log('Sending update payload to Next.js API:', updateUrl);
-        logger.log('Update Payload:', JSON.stringify(updatePayload, null, 2));
+        logger.info('variables.bulk-update.request.start', {
+          endpoint: updateUrl,
+          variableCount: updatePayload.variables.length,
+        });
         
         const response = await fetch(updateUrl, {
           method: 'PUT',
@@ -193,15 +196,18 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
           body: JSON.stringify(updatePayload)
         })
         
-        logger.log('Update API response status:', response.status)
+        logger.info('variables.bulk-update.request.completed', {
+          status: response.status,
+        });
         const responseData = await response.json()
-        logger.log('Update API response data:', responseData)
         
         if (!response.ok) {
           throw new Error(responseData.message || 'Failed to update variables on the server')
         }
         
-        logger.log('Variables updated successfully in backend:', responseData.variables?.length || 0)
+        logger.debug('variables.bulk-update.response.variables', {
+          updatedCount: responseData.variables?.length || 0,
+        })
         
         setApiStatus({
           loading: false,
@@ -223,7 +229,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
 
     // Fetch variables again after successful operations to ensure sync
     if ((variablesToAdd.length > 0 || variablesToUpdate.length > 0) && user && session?.access_token) {
-      logger.log('[handleImportVariables] Operations successful, refetching variables...');
+      logger.debug('variables.import.refetch.start');
       await fetchVariables(user.id, session.access_token);
     } else if (variablesToAdd.length > 0 || variablesToUpdate.length > 0) {
       logger.warn('[handleImportVariables] Cannot refetch variables: missing user or token.');
@@ -247,10 +253,9 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       
       const headers = getAuthHeaders()
 
-      // Debug logging
-      logger.log('==== DELETE OPERATION START ====')
-      logger.log('Variable ID to delete:', variableId)
-      logger.log('Current variables in store:', variables.map(v => ({ id: v.id, name: v.name })))
+      logger.info('variables.delete.request.start', {
+        variableId,
+      });
       
       // Find the variable to get the backend ID if it exists
       const variableToDelete = variables.find(v => v.id === variableId)
@@ -261,7 +266,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       // Call Next.js API route which will forward to backend
       const deleteUrl = `/api/data-intake/variables`;
       const payload = { ids: [variableId], organizationId: organizationId }
-      logger.log('Calling Next.js API endpoint:', deleteUrl, 'with payload:', payload)
+      logger.debug('variables.delete.request.payload', {
+        endpoint: deleteUrl,
+        idCount: payload.ids.length,
+      });
       
       // Call backend API to delete the variable
       const response = await fetch(deleteUrl, {
@@ -270,16 +278,15 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         body: JSON.stringify(payload)
       })
       
-      logger.log('API Response Status:', response.status, response.statusText)
+      logger.info('variables.delete.request.completed', {
+        status: response.status,
+      });
       
       if (!response.ok) {
         // Try to parse as JSON, but handle cases where it might be HTML or other formats
         const contentType = response.headers.get('content-type')
-        logger.log('Response content type:', contentType)
-        
         if (contentType && contentType.includes('application/json')) {
           const errorData = await response.json()
-          logger.log('Error data:', errorData)
           throw new Error(errorData.message || `Failed to delete variable: ${response.status} ${response.statusText}`)
         } else {
           throw new Error(`Failed to delete variable: ${response.status} ${response.statusText}`)
@@ -289,26 +296,22 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         try {
           const responseText = await response.text()
           if (responseText) {
-            logger.log('Response text:', responseText)
             const responseData = JSON.parse(responseText)
-            logger.log('Response data:', responseData)
             
             // If the backend tells us the variable doesn't exist there, we can still remove it locally
             if (responseData.message === "No variables found to delete" && responseData.count === 0) {
-              logger.log('Variable not found in backend but proceeding with local deletion')
+              logger.warn('variables.delete.backend-not-found', { variableId })
             }
-          } else {
-            logger.log('Empty response body')
           }
         } catch (e) {
-          logger.log('Could not parse response:', e)
+          logger.warn('variables.delete.response-parse-failed', {
+            reason: e instanceof Error ? e.message : 'unknown',
+          })
         }
       }
       
       // Remove the variable locally only after successful API call
       const updatedVariables = variables.filter(variable => variable.id !== variableId)
-      logger.log('Updating local state, removing variable with ID:', variableId)
-      logger.log('Updated variables count:', updatedVariables.length)
       setVariables(updatedVariables)
       
       setApiStatus({
@@ -319,7 +322,6 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       
       resetSuccessStatus()
       
-      logger.log('==== DELETE OPERATION COMPLETE ====')
     } catch (error) {
       logger.error('Error deleting variable:', error)
       setApiStatus({
@@ -327,7 +329,6 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         error: error instanceof Error ? error.message : 'Failed to delete variable from server',
         success: false
       })
-      logger.log('==== DELETE OPERATION FAILED ====')
     }
   }, [variables, setVariables, resetSuccessStatus, session, getAuthHeaders])
 
@@ -361,9 +362,9 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
 
     try {
       const headers = getAuthHeaders()
-      logger.log('==== UPDATE OPERATION START ====')
-      logger.log('Variable ID to update:', variableId)
-      logger.log('Update data:', updateData)
+      logger.info('variables.update.request.start', {
+        variableId,
+      });
       
       // Find the variable to update
       const variableToUpdate = variables.find(v => v.id === variableId)
@@ -394,8 +395,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       }
       
       const updateUrl = `/api/data-intake/variables`;
-      logger.log('Sending payload to Next.js API:', updateUrl);
-      logger.log('Payload:', JSON.stringify(payload, null, 2));
+      logger.debug('variables.update.request.payload', {
+        endpoint: updateUrl,
+        variableCount: payload.variables.length,
+      });
       
       const response = await fetch(updateUrl, {
         method: 'PUT',
@@ -403,9 +406,10 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         body: JSON.stringify(payload)
       })
       
-      logger.log('API response status:', response.status)
+      logger.info('variables.update.request.completed', {
+        status: response.status,
+      });
       const responseData = await response.json()
-      logger.log('API response data:', responseData)
       
       if (!response.ok) {
         throw new Error(responseData.message || 'Failed to update variable on the server')
@@ -447,7 +451,6 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       
       resetSuccessStatus()
       
-      logger.log('==== UPDATE OPERATION COMPLETE ====')
     } catch (error) {
       logger.error('Error updating variable:', error)
       setApiStatus({
@@ -455,7 +458,6 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         error: error instanceof Error ? error.message : 'Failed to update variable on server',
         success: false
       })
-      logger.log('==== UPDATE OPERATION FAILED ====')
     }
   }, [variables, setVariables, resetSuccessStatus, session, user, getAuthHeaders])
 

@@ -1,136 +1,71 @@
 import { NextResponse } from 'next/server';
+import {
+  getBackendBaseUrl,
+  getForwardHeaders,
+  parseBackendJson,
+} from '../../_lib/proxy-utils';
 
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  console.log('==== DELETE API HANDLER START ====');
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = getBackendBaseUrl();
     const { id } = params;
-    
-    console.log('Delete request received for variable ID:', id);
-    
+
     if (!id) {
-      console.log('Missing variable ID, returning 400');
       return NextResponse.json(
         { message: 'Variable ID is required' },
         { status: 400 }
       );
     }
-    
-    // Check if the ID is a valid UUID v4
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const isValidUuid = uuidRegex.test(id);
-    console.log(`ID validation: ${id} is ${isValidUuid ? 'a valid' : 'NOT a valid'} UUID v4`);
-    
-    if (!isValidUuid) {
-      console.warn(`Variable ID ${id} is not a valid UUID v4 format`);
-      // Continue anyway, but log the warning
-    }
-    
-    // Parse the request body to get organizationId
-    let organizationId;
+
+    let organizationId: string | undefined;
     try {
       const requestData = await request.json();
       organizationId = requestData.organizationId;
-      console.log('Received organizationId from request:', organizationId);
-      
+
       if (!organizationId) {
-        console.error('Missing organizationId in request body');
         return NextResponse.json(
           { message: 'organizationId is required in request body' },
           { status: 400 }
         );
       }
-    } catch (bodyError) {
-      console.error('Failed to parse request body:', bodyError);
+    } catch {
       return NextResponse.json(
         { message: 'Invalid request body format. Expected JSON with organizationId.' },
         { status: 400 }
       );
     }
-    
-    // Forward Authorization header if present
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-    const forwardHeaders: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (authHeader) {
-      forwardHeaders['Authorization'] = authHeader;
-    }
-    
-    // Forward delete request to backend
-    try {
-      // The backend expects a body with ids array and organizationId
-      const requestPayload = { 
-        ids: [id],
-        organizationId 
-      };
-      console.log('Sending delete request to backend:', JSON.stringify(requestPayload));
-      console.log('Backend URL:', `${backendUrl}/data-intake/variables`);
-      
-      const response = await fetch(`${backendUrl}/data-intake/variables`, {
-        method: 'DELETE',
-        headers: forwardHeaders,
-        body: JSON.stringify(requestPayload)
-      });
-      
-      console.log(`Delete response status: ${response.status} ${response.statusText}`);
-      
-      // Check if response is empty (which is common for DELETE requests)
-      const contentType = response.headers.get('content-type');
-      let data = null;
-      
-      if (contentType && contentType.includes('application/json')) {
-        const responseText = await response.text();
-        console.log('Response text:', responseText);
-        
-        if (responseText) {
-          try {
-            data = JSON.parse(responseText);
-            console.log('Parsed response data:', JSON.stringify(data));
-          } catch (e) {
-            console.error('Failed to parse response JSON:', e);
-            return NextResponse.json(
-              { message: 'Failed to parse backend response' },
-              { status: 500 }
-            );
-          }
-        }
-      } else {
-        console.log('Response has non-JSON content type:', contentType);
-      }
-      
-      if (!response.ok) {
-        return NextResponse.json(
-          { message: data?.message || 'Backend request failed' },
-          { status: response.status }
-        );
-      }
-      
-      // Return success response
-      console.log('Successfully deleted variable, returning response to client');
+
+    const response = await fetch(`${backendUrl}/data-intake/variables`, {
+      method: 'DELETE',
+      headers: getForwardHeaders(request),
+      body: JSON.stringify({ ids: [id], organizationId }),
+    });
+    const { data, parseError } = await parseBackendJson<{ message?: string }>(response, {
+      message: response.ok ? 'Variable deleted successfully' : 'Backend request failed',
+    });
+
+    if (parseError && !response.ok) {
       return NextResponse.json(
-        data || { message: 'Variable deleted successfully' }
-      );
-    } catch (fetchError) {
-      console.error('Fetch error during delete operation:', fetchError);
-      return NextResponse.json(
-        { 
-          message: fetchError instanceof Error ? fetchError.message : 'Backend connection error',
-          details: "Could not connect to the backend server. Please ensure it's running."
-        },
-        { status: 502 }
+        { message: 'Failed to parse backend response' },
+        { status: 500 }
       );
     }
-  } catch (error) {
-    console.error('Unhandled error in DELETE handler:', error);
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { message: data.message || 'Backend request failed' },
+        { status: response.status }
+      );
+    }
+
+    return NextResponse.json(data, { status: response.status });
+  } catch {
     return NextResponse.json(
       { message: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    console.log('==== DELETE API HANDLER END ====');
   }
 } 

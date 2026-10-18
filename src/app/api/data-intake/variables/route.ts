@@ -1,17 +1,59 @@
 import { NextResponse } from 'next/server';
+import {
+  getBackendBaseUrl,
+  getForwardHeaders,
+  parseBackendJson,
+} from './_lib/proxy-utils';
 
 export async function GET(request: Request) {
   try {
-    // Extract userId from the URL search params, if provided
     const url = new URL(request.url);
-    const userId = url.searchParams.get('userId') || 'frontend-user';
-    
-    console.log(`GET /api/data-intake/variables - Redirecting to user endpoint`);
-    
-    // Redirect to the new user-specific endpoint
-    return NextResponse.redirect(new URL(`/api/data-intake/variables/user/${userId}`, request.url));
+    const userId = url.searchParams.get('userId');
+    if (!userId) {
+      return NextResponse.json(
+        { message: 'Query parameter userId is required', variables: [] },
+        { status: 400 }
+      );
+    }
+
+    const backendUrl = getBackendBaseUrl();
+    const response = await fetch(`${backendUrl}/data-intake/variables/${userId}`, {
+      method: 'GET',
+      headers: getForwardHeaders(request, false),
+      cache: 'no-store',
+    });
+    const { data, parseError } = await parseBackendJson<{ message?: string; variables?: unknown[] }>(response, {
+      message: 'No data returned from backend',
+      variables: [],
+    });
+
+    if (parseError) {
+      return NextResponse.json(
+        { message: 'Failed to parse backend response', variables: [] },
+        { status: 500 }
+      );
+    }
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { message: data.message || 'Backend request failed', variables: [] },
+        { status: response.status }
+      );
+    }
+
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error in GET handler:', error);
+    if (error instanceof Error) {
+      return NextResponse.json(
+        {
+          message: error.message,
+          details: "Could not connect to the backend server. Please ensure it's running.",
+          variables: [],
+        },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json(
       { message: 'Internal server error', variables: [] },
       { status: 500 }
@@ -21,60 +63,45 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = getBackendBaseUrl();
     const body = await request.json();
-    
-    // Forward Authorization header if present
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-    const forwardHeaders: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (authHeader) {
-      forwardHeaders['Authorization'] = authHeader;
-    }
-    
-    console.log('POST /api/data-intake/variables received:', JSON.stringify(body));
-    
-    // Forward to backend
-    try {
-      const response = await fetch(`${backendUrl}/data-intake/variables`, {
-        method: 'POST',
-        headers: forwardHeaders,
-        body: JSON.stringify(body),
-      });
-      
-      const responseText = await response.text();
-      console.log('Backend response:', responseText);
-      
-      let data;
-      
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        return NextResponse.json(
-          { message: 'Failed to parse backend response' },
-          { status: 500 }
-        );
-      }
-      
-      if (!response.ok) {
-        return NextResponse.json(
-          { message: data.message || 'Backend request failed' },
-          { status: response.status }
-        );
-      }
-      
-      return NextResponse.json(data);
-    } catch (fetchError) {
+
+    const response = await fetch(`${backendUrl}/data-intake/variables`, {
+      method: 'POST',
+      headers: getForwardHeaders(request),
+      body: JSON.stringify(body),
+    });
+
+    const { data, parseError } = await parseBackendJson<{ message?: string }>(response, {
+      message: response.ok ? 'Variables saved successfully' : 'Backend request failed',
+    });
+
+    if (parseError) {
       return NextResponse.json(
-        { 
-          message: fetchError instanceof Error ? fetchError.message : 'Backend connection error',
-          details: "Could not connect to the backend server. Please ensure it's running."
+        { message: 'Failed to parse backend response' },
+        { status: 500 }
+      );
+    }
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { message: data.message || 'Backend request failed' },
+        { status: response.status }
+      );
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json(
+        {
+          message: error.message,
+          details: "Could not connect to the backend server. Please ensure it's running.",
         },
         { status: 502 }
       );
     }
-  } catch (error) {
+
     return NextResponse.json(
       { message: 'Internal server error' },
       { status: 500 }
@@ -83,119 +110,65 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  console.log('==== PUT API HANDLER START ====');
   try {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = getBackendBaseUrl();
     const body = await request.json();
-    
-    // Forward Authorization header if present
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-    const forwardHeaders: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (authHeader) {
-      forwardHeaders['Authorization'] = authHeader;
-    }
-    
-    console.log('PUT /api/data-intake/variables received:', JSON.stringify(body));
-    
+
     if (!body.variables || !Array.isArray(body.variables) || body.variables.length === 0) {
-      console.log('Invalid request body, missing variables array');
       return NextResponse.json(
         { message: 'Request must include a non-empty variables array' },
         { status: 400 }
       );
     }
-    
-    // Forward to backend
-    try {
-      console.log('Forwarding update request to backend:', JSON.stringify(body));
-      console.log('Backend URL:', `${backendUrl}/data-intake/variables`);
-      
-      const response = await fetch(`${backendUrl}/data-intake/variables`, {
-        method: 'PUT',
-        headers: forwardHeaders,
-        body: JSON.stringify(body),
-      });
-      
-      console.log(`Update response status: ${response.status} ${response.statusText}`);
-      
-      const responseText = await response.text();
-      console.log('Backend response:', responseText);
-      
-      let data;
-      
-      try {
-        // Attempt to parse, default to success message if responseText is empty
-        data = responseText ? JSON.parse(responseText) : { message: 'Update successful' };
-      } catch (e) {
-        console.error('Failed to parse response JSON:', e);
-        // If the original fetch was OK (e.g., 200) but parsing failed,
-        // still return the original success status but indicate parsing issue or use default.
-        if (response.ok) {
-          // Return original success status with a default success message
-          return NextResponse.json(
-            { message: 'Update successful' }, // Or provide more specific msg
-            { status: response.status } // Use original status (e.g., 200)
-          );
-        } else {
-          // If the original fetch failed AND parsing failed, return 500
-          return NextResponse.json(
-            { message: 'Failed to parse backend error response' },
-            { status: 500 }
-          );
-        }
-      }
-      
-      if (!response.ok) {
-        return NextResponse.json(
-          { message: data.message || 'Backend request failed' },
-          { status: response.status }
-        );
-      }
-      
-      console.log('Successfully updated variables, returning response to client');
-      return NextResponse.json(data);
-    } catch (fetchError) {
-      console.error('Fetch error during update operation:', fetchError);
+
+    const response = await fetch(`${backendUrl}/data-intake/variables`, {
+      method: 'PUT',
+      headers: getForwardHeaders(request),
+      body: JSON.stringify(body),
+    });
+    const { data, parseError } = await parseBackendJson<{ message?: string }>(response, {
+      message: response.ok ? 'Update successful' : 'Backend request failed',
+    });
+
+    if (parseError && !response.ok) {
       return NextResponse.json(
-        { 
-          message: fetchError instanceof Error ? fetchError.message : 'Backend connection error',
-          details: "Could not connect to the backend server. Please ensure it's running."
+        { message: 'Failed to parse backend error response' },
+        { status: 500 }
+      );
+    }
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { message: data.message || 'Backend request failed' },
+        { status: response.status }
+      );
+    }
+
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json(
+        {
+          message: error.message,
+          details: "Could not connect to the backend server. Please ensure it's running.",
         },
         { status: 502 }
       );
     }
-  } catch (error) {
-    console.error('Unhandled error in PUT handler:', error);
+
     return NextResponse.json(
       { message: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    console.log('==== PUT API HANDLER END ====');
   }
 }
 
 export async function DELETE(request: Request) {
-  console.log('==== DELETE API HANDLER START ====');
   try {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const backendUrl = getBackendBaseUrl();
     const body = await request.json();
-    
-    // Forward Authorization header if present
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-    const forwardHeaders: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (authHeader) {
-      forwardHeaders['Authorization'] = authHeader;
-    }
-    
-    console.log('DELETE /api/data-intake/variables received:', JSON.stringify(body));
-    
+
     if (!body.ids || !Array.isArray(body.ids) || body.ids.length === 0) {
-      console.log('Invalid request body, missing ids array');
       return NextResponse.json(
         { message: 'Request must include a non-empty ids array' },
         { status: 400 }
@@ -203,79 +176,51 @@ export async function DELETE(request: Request) {
     }
 
     if (!body.organizationId) {
-      console.log('Invalid request body, missing organizationId');
       return NextResponse.json(
         { message: 'Request must include organizationId' },
         { status: 400 }
       );
     }
-    
-    // Forward to backend
-    try {
-      console.log('Forwarding delete request to backend:', JSON.stringify(body));
-      console.log('Backend URL:', `${backendUrl}/data-intake/variables`);
-      
-      const response = await fetch(`${backendUrl}/data-intake/variables`, {
-        method: 'DELETE',
-        headers: forwardHeaders,
-        body: JSON.stringify(body),
-      });
-      
-      console.log(`Delete response status: ${response.status} ${response.statusText}`);
-      
-      const responseText = await response.text();
-      console.log('Backend response:', responseText);
-      
-      let data;
-      
-      try {
-        // Attempt to parse, default to success message if responseText is empty
-        data = responseText ? JSON.parse(responseText) : { message: 'Delete successful', count: body.ids.length };
-      } catch (e) {
-        console.error('Failed to parse response JSON:', e);
-        // If the original fetch was OK (e.g., 200) but parsing failed,
-        // still return the original success status but indicate parsing issue or use default.
-        if (response.ok) {
-          // Return original success status with a default success message
-          return NextResponse.json(
-            { message: 'Delete successful', count: body.ids.length }, 
-            { status: response.status }
-          );
-        } else {
-          // If the original fetch failed AND parsing failed, return 500
-          return NextResponse.json(
-            { message: 'Failed to parse backend error response' },
-            { status: 500 }
-          );
-        }
-      }
-      
-      if (!response.ok) {
-        return NextResponse.json(
-          { message: data.message || 'Backend request failed' },
-          { status: response.status }
-        );
-      }
-      
-      console.log('Successfully deleted variables, returning response to client');
-      return NextResponse.json(data);
-    } catch (fetchError) {
-      console.error('Fetch error during delete operation:', fetchError);
+
+    const response = await fetch(`${backendUrl}/data-intake/variables`, {
+      method: 'DELETE',
+      headers: getForwardHeaders(request),
+      body: JSON.stringify(body),
+    });
+    const { data, parseError } = await parseBackendJson<{ message?: string; count?: number }>(response, {
+      message: response.ok ? 'Delete successful' : 'Backend request failed',
+      count: body.ids.length,
+    });
+
+    if (parseError && !response.ok) {
       return NextResponse.json(
-        { 
-          message: fetchError instanceof Error ? fetchError.message : 'Backend connection error',
-          details: "Could not connect to the backend server. Please ensure it's running."
+        { message: 'Failed to parse backend error response' },
+        { status: 500 }
+      );
+    }
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { message: data.message || 'Backend request failed' },
+        { status: response.status }
+      );
+    }
+
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json(
+        {
+          message: error.message,
+          details: "Could not connect to the backend server. Please ensure it's running.",
         },
         { status: 502 }
       );
     }
-  } catch (error) {
-    console.error('Unhandled error in DELETE handler:', error);
+
     return NextResponse.json(
       { message: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    console.log('==== DELETE API HANDLER END ====');
   }
 } 
