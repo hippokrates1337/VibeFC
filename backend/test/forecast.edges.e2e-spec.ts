@@ -20,6 +20,7 @@ describe('Forecast Edge Operations (RLS Focused)', () => {
   let aliceEdgeTestForecastId: string;
   let sourceNodeId: string;
   let targetNodeId: string;
+  let createdEdgeId: string;
 
   beforeAll(async () => {
     await globalBeforeAll(); // Initialize global state (users, org, app)
@@ -47,7 +48,7 @@ describe('Forecast Edge Operations (RLS Focused)', () => {
     const sourceNodeDto: CreateForecastNodeDto = {
       forecastId: aliceEdgeTestForecastId,
       kind: ForecastNodeKind.CONSTANT,
-      attributes: { value: 1 },
+      attributes: { name: 'Edge Source', value: 1 },
       position: { x: 0, y: 0 },
     };
     response = await request(app.getHttpServer())
@@ -62,7 +63,7 @@ describe('Forecast Edge Operations (RLS Focused)', () => {
     const targetNodeDto: CreateForecastNodeDto = {
       forecastId: aliceEdgeTestForecastId,
       kind: ForecastNodeKind.CONSTANT,
-      attributes: { value: 2 },
+      attributes: { name: 'Edge Target', value: 2 },
       position: { x: 100, y: 0 },
     };
     response = await request(app.getHttpServer())
@@ -96,6 +97,7 @@ describe('Forecast Edge Operations (RLS Focused)', () => {
         .expect(201);
       
       expect(response.body).toHaveProperty('id');
+      createdEdgeId = response.body.id;
       expect(response.body.forecastId).toBe(aliceEdgeTestForecastId);
       expect(response.body.sourceNodeId).toBe(sourceNodeId);
       expect(response.body.targetNodeId).toBe(targetNodeId);
@@ -157,27 +159,7 @@ describe('Forecast Edge Operations (RLS Focused)', () => {
     });
   });
 
-  // Placeholder for Edge Reading, Deletion tests (if they were in the original file)
-  // Example structure for Edge Reading:
-  /*
   describe('Edge Reading (GET /forecasts/:forecastId/edges, GET /forecasts/:forecastId/edges/:edgeId)', () => {
-    let createdEdgeId: string;
-
-    beforeEach(async () => {
-      // Create an edge for reading tests
-      const edgeDto: CreateForecastEdgeDto = {
-        forecastId: aliceEdgeTestForecastId,
-        sourceNodeId: sourceNodeId,
-        targetNodeId: targetNodeId,
-      };
-      const res = await request(app.getHttpServer())
-        .post(`/forecasts/${aliceEdgeTestForecastId}/edges`)
-        .set('Authorization', `Bearer ${aliceAuthToken}`)
-        .send(edgeDto)
-        .expect(201);
-      createdEdgeId = res.body.id;
-    });
-
     it('Alice should be able to list all edges for her forecast', async () => {
       const res = await request(app.getHttpServer())
         .get(`/forecasts/${aliceEdgeTestForecastId}/edges`)
@@ -188,19 +170,32 @@ describe('Forecast Edge Operations (RLS Focused)', () => {
       expect(foundEdge).toBeDefined();
     });
 
-    // Add more edge reading tests (specific edge, by Charlie, non-existent, etc.)
-  });
-  */
+    it('Alice should be able to fetch an edge by id', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/forecasts/${aliceEdgeTestForecastId}/edges/${createdEdgeId}`)
+        .set('Authorization', `Bearer ${aliceAuthToken}`)
+        .expect(200);
 
-  // Example structure for Edge Deletion:
-  /*
+      expect(res.body.id).toBe(createdEdgeId);
+      expect(res.body.sourceNodeId).toBe(sourceNodeId);
+      expect(res.body.targetNodeId).toBe(targetNodeId);
+    });
+
+    it('Charlie should get 404 when reading Alice edge', async () => {
+      await request(app.getHttpServer())
+        .get(`/forecasts/${aliceEdgeTestForecastId}/edges/${createdEdgeId}`)
+        .set('Authorization', `Bearer ${charlieAuthToken}`)
+        .expect(404);
+    });
+  });
+
   describe('Edge Deletion (DELETE /forecasts/:forecastId/edges/:edgeId)', () => {
     it('Alice should be able to delete her edge', async () => {
-      // Create an edge specifically for this deletion test
+      // Create an additional edge for this deletion test
       const edgeDto: CreateForecastEdgeDto = {
         forecastId: aliceEdgeTestForecastId,
         sourceNodeId: sourceNodeId,
-        targetNodeId: targetNodeId, // Or another target if needed to avoid conflicts with other tests
+        targetNodeId: targetNodeId,
       };
       const res = await request(app.getHttpServer())
         .post(`/forecasts/${aliceEdgeTestForecastId}/edges`)
@@ -221,7 +216,11 @@ describe('Forecast Edge Operations (RLS Focused)', () => {
         .expect(404);
     });
 
-    // Add more edge deletion tests (by Charlie, non-existent, etc.)
+    it('Charlie should get 404 when deleting Alice edge', async () => {
+      await request(app.getHttpServer())
+        .delete(`/forecasts/${aliceEdgeTestForecastId}/edges/${createdEdgeId}`)
+        .set('Authorization', `Bearer ${charlieAuthToken}`)
+        .expect(404);
+    });
   });
-  */
 }); 
