@@ -5,36 +5,44 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { OrganizationRole } from '../dto/member.dto';
-import { Request } from 'express';
-
-// Extend Express Request to include user property
-interface RequestWithUser extends Request {
-  user: {
-    id: string;
-    [key: string]: any;
-  };
-}
+import { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
+import { ForecastService } from '../../forecast/services/forecast.service';
+import { ForecastDto } from '../../forecast/dto/forecast.dto';
 
 @Controller('organizations')
 @UseGuards(JwtAuthGuard)
 export class OrganizationsController {
-  constructor(private readonly organizationsService: OrganizationsService) {}
+  constructor(
+    private readonly organizationsService: OrganizationsService,
+    private readonly forecastService: ForecastService,
+  ) {}
 
   @Post()
-  async create(@NestRequest() req: RequestWithUser, @Body() createOrganizationDto: CreateOrganizationDto): Promise<OrganizationDto> {
-    return this.organizationsService.create(req.user.id, createOrganizationDto, req);
+  async create(@NestRequest() req: AuthenticatedRequest, @Body() createOrganizationDto: CreateOrganizationDto): Promise<OrganizationDto> {
+    return this.organizationsService.create(req.user.userId, createOrganizationDto, req);
   }
 
   @Get()
-  async findAll(@NestRequest() req: RequestWithUser): Promise<OrganizationDto[]> {
-    return this.organizationsService.findAll(req.user.id, req);
+  async findAll(@NestRequest() req: AuthenticatedRequest): Promise<OrganizationDto[]> {
+    return this.organizationsService.findAll(req.user.userId, req);
+  }
+
+  /** Matches frontend `GET /organizations/:orgId/forecasts/summary` (forecast graph list). */
+  @Get(':orgId/forecasts/summary')
+  @UseGuards(RolesGuard)
+  @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
+  async listForecastSummaries(
+    @Param('orgId') orgId: string,
+    @NestRequest() req: AuthenticatedRequest,
+  ): Promise<Array<ForecastDto & { nodeCount: number; edgeCount: number; nodeTypes: string[] }>> {
+    return this.forecastService.findSummariesByOrganization(req.user.userId, orgId, req);
   }
 
   @Get(':orgId')
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
-  async findOne(@Param('orgId') orgId: string, @NestRequest() req: RequestWithUser): Promise<OrganizationDto> {
-    return this.organizationsService.findOne(orgId, req.user.id, req);
+  async findOne(@Param('orgId') orgId: string, @NestRequest() req: AuthenticatedRequest): Promise<OrganizationDto> {
+    return this.organizationsService.findOne(orgId, req.user.userId, req);
   }
 
   @Put(':orgId')
@@ -44,7 +52,7 @@ export class OrganizationsController {
   async update(
     @Param('orgId') orgId: string,
     @Body() updateOrganizationDto: UpdateOrganizationDto,
-    @NestRequest() req: RequestWithUser
+    @NestRequest() req: AuthenticatedRequest
   ): Promise<void> {
     return this.organizationsService.update(orgId, updateOrganizationDto, req);
   }
@@ -53,7 +61,7 @@ export class OrganizationsController {
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('orgId') orgId: string, @NestRequest() req: RequestWithUser): Promise<void> {
+  async remove(@Param('orgId') orgId: string, @NestRequest() req: AuthenticatedRequest): Promise<void> {
     return this.organizationsService.remove(orgId, req);
   }
 } 

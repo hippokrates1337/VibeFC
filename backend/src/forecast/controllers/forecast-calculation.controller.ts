@@ -14,6 +14,8 @@ import {
   DebugCalculationTreeDto,
   CalculationTreeRequestDto
 } from '../dto/debug-calculation.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthenticatedRequest, AuthenticatedUser } from '../../common/interfaces/authenticated-request.interface';
 
 /**
  * Controller for forecast calculation endpoints
@@ -41,16 +43,17 @@ export class ForecastCalculationController {
   async calculateUnified(
     @Param('forecastId') forecastId: string,
     @Body() body: UnifiedCalculationRequestDto,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: AuthenticatedRequest
   ): Promise<UnifiedCalculationResultDto> {
     try {
-      this.logger.log(`[ForecastCalculationController] [Unified] Calculate unified for forecast ${forecastId} requested by user ${req.user.id}`);
+      this.logger.log(`[ForecastCalculationController] [Unified] requestId=${req.requestId ?? 'n/a'} calculate unified for forecast ${forecastId} requested by user ${user.userId}`);
       this.logger.log(`[ForecastCalculationController] [Unified] Calculation types: [${body.calculationTypes.join(', ')}]`);
       this.logger.log(`[ForecastCalculationController] [Unified] Include intermediate nodes: ${body.includeIntermediateNodes}`);
       
       const result = await this.forecastCalculationService.calculateForecastWithPeriods(
         forecastId,
-        req.user.id,
+        user.userId,
         req,
         body
       );
@@ -74,14 +77,15 @@ export class ForecastCalculationController {
   @Get(':forecastId/calculation-results-unified')
   async getUnifiedCalculationResults(
     @Param('forecastId') forecastId: string,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: AuthenticatedRequest
   ): Promise<UnifiedCalculationResultDto | null> {
     try {
-      this.logger.log(`[ForecastCalculationController] [Unified] Get unified calculation results for forecast ${forecastId} requested by user ${req.user.id}`);
+      this.logger.log(`[ForecastCalculationController] [Unified] requestId=${req.requestId ?? 'n/a'} get unified results for forecast ${forecastId} requested by user ${user.userId}`);
       
       const result = await this.forecastCalculationService.getLatestUnifiedCalculationResults(
         forecastId,
-        req.user.id,
+        user.userId,
         req
       );
 
@@ -109,14 +113,15 @@ export class ForecastCalculationController {
   @Get(':forecastId/calculation-results/history')
   async getCalculationHistory(
     @Param('forecastId') forecastId: string,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: AuthenticatedRequest
   ): Promise<ForecastCalculationResultDto[]> {
     try {
-      this.logger.log(`[ForecastCalculationController] Get calculation history for forecast ${forecastId} requested by user ${req.user.id}`);
+      this.logger.log(`[ForecastCalculationController] requestId=${req.requestId ?? 'n/a'} get history for forecast ${forecastId} requested by user ${user.userId}`);
       
       const results = await this.forecastCalculationService.getCalculationHistory(
         forecastId,
-        req.user.id,
+        user.userId,
         req
       );
 
@@ -158,10 +163,11 @@ export class ForecastCalculationController {
   async calculateWithDebug(
     @Param('forecastId') forecastId: string,
     @Body() body: DebugCalculationRequestDto,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: AuthenticatedRequest
   ): Promise<DebugCalculationResultDto> {
     try {
-      this.logger.log(`[ForecastCalculationController] [Debug] Debug calculation for forecast ${forecastId} requested by user ${req.user.id}`);
+      this.logger.log(`[ForecastCalculationController] [Debug] requestId=${req.requestId ?? 'n/a'} debug calculation for forecast ${forecastId} requested by user ${user.userId}`);
       this.logger.log(`[ForecastCalculationController] [Debug] Debug level: ${body.debugLevel || 'basic'}`);
       this.logger.log(`[ForecastCalculationController] [Debug] Calculation types: [${body.calculationTypes.join(', ')}]`);
       this.logger.log(`[ForecastCalculationController] [Debug] Include intermediate nodes: ${body.includeIntermediateNodes}`);
@@ -169,7 +175,7 @@ export class ForecastCalculationController {
       
       const result = await this.debugCalculationService.calculateWithDebug(
         forecastId,
-        req.user.id,
+        user.userId,
         req,
         body
       );
@@ -195,12 +201,13 @@ export class ForecastCalculationController {
   @Get(':forecastId/debug/calculation-tree')
   async getCalculationTree(
     @Param('forecastId') forecastId: string,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser,
+    @Request() req: AuthenticatedRequest
   ): Promise<DebugCalculationTreeDto> {
     try {
-      this.logger.log(`[ForecastCalculationController] [Debug] Get calculation tree for forecast ${forecastId} requested by user ${req.user.id}`);
+      this.logger.log(`[ForecastCalculationController] [Debug] requestId=${req.requestId ?? 'n/a'} get calculation tree for forecast ${forecastId} requested by user ${user.userId}`);
       
-      const result = await this.debugCalculationService.getCalculationTree(forecastId, req.user.id, req);
+      const result = await this.debugCalculationService.getCalculationTree(forecastId, user.userId, req);
 
       this.logger.log(`[ForecastCalculationController] [Debug] Calculation tree retrieved for forecast ${forecastId}`);
       this.logger.log(`[ForecastCalculationController] [Debug] Tree contains ${result.totalNodes} nodes across ${result.trees.length} metric trees`);
@@ -222,10 +229,10 @@ export class ForecastCalculationController {
   @Get(':forecastId/debug/calculation-steps')
   async getCalculationSteps(
     @Param('forecastId') forecastId: string,
-    @Request() req: any
+    @CurrentUser() user: AuthenticatedUser
   ): Promise<any[]> {
     try {
-      this.logger.log(`[ForecastCalculationController] [Debug] Get calculation steps for forecast ${forecastId} requested by user ${req.user.id}`);
+      this.logger.log(`[ForecastCalculationController] [Debug] Get calculation steps for forecast ${forecastId} requested by user ${user.userId}`);
       
       const result = await this.debugCalculationService.getCalculationSteps(forecastId);
 

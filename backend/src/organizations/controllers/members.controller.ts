@@ -5,15 +5,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { OrganizationRole } from '../dto/member.dto';
-import { Request } from 'express';
-
-// Extend Express Request to include user property
-interface RequestWithUser extends Request {
-  user: {
-    id: string;
-    [key: string]: any;
-  };
-}
+import { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
 
 @Controller('organizations/:orgId/members')
 @UseGuards(JwtAuthGuard)
@@ -23,7 +15,7 @@ export class MembersController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
-  async findAll(@Param('orgId') orgId: string, @NestRequest() req: RequestWithUser) {
+  async findAll(@Param('orgId') orgId: string, @NestRequest() req: AuthenticatedRequest) {
     return this.membersService.findAllInOrganization(orgId, req);
   }
 
@@ -34,7 +26,7 @@ export class MembersController {
   async addMember(
     @Param('orgId') orgId: string,
     @Body() inviteMemberDto: InviteMemberDto,
-    @NestRequest() req: RequestWithUser
+    @NestRequest() req: AuthenticatedRequest
   ): Promise<AddMemberResponseDto> {
     return this.membersService.addMember(orgId, inviteMemberDto, req);
   }
@@ -47,7 +39,7 @@ export class MembersController {
     @Param('orgId') orgId: string,
     @Param('userId') userId: string,
     @Body() updateRoleDto: UpdateMemberRoleDto,
-    @NestRequest() req: RequestWithUser
+    @NestRequest() req: AuthenticatedRequest
   ): Promise<void> {
     return this.membersService.updateMemberRole(orgId, userId, updateRoleDto, req);
   }
@@ -59,7 +51,7 @@ export class MembersController {
   async removeMember(
     @Param('orgId') orgId: string,
     @Param('userId') userId: string,
-    @NestRequest() req: RequestWithUser
+    @NestRequest() req: AuthenticatedRequest
   ): Promise<void> {
     return this.membersService.removeMember(orgId, userId, req);
   }

@@ -1,14 +1,7 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { SupabaseOptimizedService } from '../supabase/supabase-optimized.service';
 import { Request } from 'express';
-
-interface RequestWithUser extends Request {
-  user: {
-    id: string;
-    userId: string;
-    email?: string;
-  };
-}
+import { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
 
 /**
  * Promotes pending organization_invitations into organization_members
@@ -27,8 +20,8 @@ export class InvitesClaimService {
       return { claimed: 0 };
     }
 
-    const req = request as RequestWithUser;
-    const userId = req.user?.userId ?? req.user?.id;
+    const req = request as AuthenticatedRequest;
+    const userId = req.user?.userId;
     const rawEmail = req.user?.email;
     if (!userId || !rawEmail) {
       return { claimed: 0 };

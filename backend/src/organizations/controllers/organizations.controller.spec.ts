@@ -12,14 +12,15 @@ import {
   ForbiddenException
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import * as request from 'supertest';
+import request = require('supertest');
 import { Request, Response, NextFunction } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { CreateOrganizationDto, UpdateOrganizationDto } from '../dto/organization.dto';
 import { OrganizationRole } from '../dto/member.dto';
+import { ForecastService } from '../../forecast/services/forecast.service';
 
-const mockUser = { id: 'user-jwt-123' };
+const mockUser = { userId: 'user-jwt-123' };
 
 // Mock implementations for dependencies
 const mockOrganizationsService = {
@@ -35,6 +36,10 @@ const mockMembersService = {
   findMembers: jest.fn(),
   updateMemberRole: jest.fn(),
   removeMember: jest.fn(),
+};
+
+const mockForecastService = {
+  findSummariesByOrganization: jest.fn(),
 };
 
 // Properly mock guards to throw appropriate exceptions when access is denied
@@ -61,8 +66,9 @@ describe('OrganizationsController (Integration)', () => {
      controllers: [OrganizationsController],
       providers: [
         { provide: OrganizationsService, useValue: mockOrganizationsService },
-        { provide: MembersService, useValue: mockMembersService }, 
-        Reflector, 
+        { provide: MembersService, useValue: mockMembersService },
+        { provide: ForecastService, useValue: mockForecastService },
+        Reflector,
       ],
     })
     .overrideGuard(JwtAuthGuard)
@@ -128,7 +134,7 @@ describe('OrganizationsController (Integration)', () => {
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockOrganizationsService.findAll).toHaveBeenCalledWith(mockUser.id, expect.any(Object));
+      expect(mockOrganizationsService.findAll).toHaveBeenCalledWith(mockUser.userId, expect.any(Object));
     });
 
     it('should return 401 if JWT guard denies', async () => {
@@ -168,7 +174,7 @@ describe('OrganizationsController (Integration)', () => {
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
       // The controller has RolesGuard on this endpoint
       expect(mockRolesGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockOrganizationsService.findOne).toHaveBeenCalledWith(orgId, mockUser.id, expect.any(Object));
+      expect(mockOrganizationsService.findOne).toHaveBeenCalledWith(orgId, mockUser.userId, expect.any(Object));
     });
 
     it('should return 401 if JWT guard denies', async () => {
@@ -214,7 +220,7 @@ describe('OrganizationsController (Integration)', () => {
   // --- POST /organizations ---
   describe('POST /organizations', () => {
     const createDto: CreateOrganizationDto = { name: 'New Org' };
-    const createdOrg = { id: 'new-org-456', ...createDto, owner_id: mockUser.id, created_at: new Date() };
+    const createdOrg = { id: 'new-org-456', ...createDto, owner_id: mockUser.userId, created_at: new Date() };
 
     it('should create a new organization (201 Created)', async () => {
       mockOrganizationsService.create.mockResolvedValue(createdOrg);
@@ -229,7 +235,7 @@ describe('OrganizationsController (Integration)', () => {
         });
 
       expect(mockJwtAuthGuard.canActivate).toHaveBeenCalledTimes(1);
-      expect(mockOrganizationsService.create).toHaveBeenCalledWith(mockUser.id, createDto, expect.any(Object));
+      expect(mockOrganizationsService.create).toHaveBeenCalledWith(mockUser.userId, createDto, expect.any(Object));
     });
 
     it('should return 400 for invalid data', async () => {
