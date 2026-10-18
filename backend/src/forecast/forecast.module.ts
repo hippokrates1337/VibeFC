@@ -11,8 +11,6 @@ import { SupabaseModule } from '../supabase/supabase.module';
 import { DataIntakeModule } from '../data-intake/data-intake.module';
 import { CommonModule } from '../common/common.module';
 import { CalculationEngineCoreModule } from './services/calculation-engine/calculation-engine-core.module';
-import { CalculationEngine } from './services/calculation-engine/calculation-engine';
-import { CalculationEngineCore } from './services/calculation-engine/calculation-engine-core';
 import { VariableDataService } from './services/calculation-engine/variable-data-service';
 import { MMYYYYUtilsService } from './services/calculation-engine/mmyyyy-utils';
 import { CalculationAdapter } from './services/calculation-engine/adapters/calculation-adapter';
@@ -37,19 +35,6 @@ import { CalculationAdapter } from './services/calculation-engine/adapters/calcu
     MMYYYYUtilsService,
     CalculationAdapter,
     // GraphConverter, // TODO: Add back when needed
-    // Configure CalculationEngine with proper DI
-    {
-      provide: CalculationEngine,
-      useFactory: (coreEngine, adapter, useNewEngine) => {
-        return new CalculationEngine(coreEngine, adapter, useNewEngine);
-      },
-      inject: [CalculationEngineCore, CalculationAdapter, 'USE_NEW_CALCULATION_ENGINE']
-    },
-    // Feature flag for new calculation engine
-    {
-      provide: 'USE_NEW_CALCULATION_ENGINE',
-      useValue: process.env.USE_NEW_CALCULATION_ENGINE === 'true' || true // Enable new engine by default
-    }
   ],
   exports: [
     ForecastService,

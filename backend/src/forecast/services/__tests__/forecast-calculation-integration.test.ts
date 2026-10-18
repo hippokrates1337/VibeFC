@@ -5,6 +5,8 @@ import { ForecastService } from '../forecast.service';
 import { ForecastNodeService } from '../forecast-node.service';
 import { ForecastEdgeService } from '../forecast-edge.service';
 import { SupabaseOptimizedService } from '../../../supabase/supabase-optimized.service';
+import { CalculationEngineCore } from '../calculation-engine/calculation-engine-core';
+import { CalculationAdapter } from '../calculation-engine/adapters/calculation-adapter';
 import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { Request } from 'express';
 
@@ -15,6 +17,7 @@ describe('ForecastCalculationService Integration', () => {
   let edgeService: ForecastEdgeService;
   let dataIntakeService: DataIntakeService;
   let supabaseService: SupabaseOptimizedService;
+  let calculationEngineCore: { calculate: jest.Mock };
 
   const mockRequest = {
     headers: { authorization: 'Bearer test-token' },
@@ -92,6 +95,18 @@ describe('ForecastCalculationService Integration', () => {
             findByForecast: jest.fn(),
           },
         },
+        {
+          provide: CalculationEngineCore,
+          useValue: {
+            calculate: jest.fn(),
+          },
+        },
+        {
+          provide: CalculationAdapter,
+          useValue: {
+            calculateWithPeriods: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -101,6 +116,7 @@ describe('ForecastCalculationService Integration', () => {
     edgeService = module.get<ForecastEdgeService>(ForecastEdgeService);
     dataIntakeService = module.get<DataIntakeService>(DataIntakeService);
     supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
+    calculationEngineCore = module.get(CalculationEngineCore);
   });
 
   describe('calculateForecast - Real Graph Execution', () => {
@@ -142,13 +158,35 @@ describe('ForecastCalculationService Integration', () => {
       
       // Mock service dependencies
       (forecastService.findOne as jest.Mock).mockResolvedValue(mockForecast);
-      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue(mockVariables);
+      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue({ variables: mockVariables });
       
       // Reset the Supabase client mock
       (supabaseService.getClientForRequest as jest.Mock).mockReturnValue(mockSupabaseClient);
     });
 
     it('should execute simple constant to metric calculation', async () => {
+      calculationEngineCore.calculate.mockResolvedValueOnce({
+        calculatedAt: new Date('2024-01-01T00:00:00.000Z'),
+        calculationTypes: ['forecast'],
+        periodInfo: {
+          forecastStartMonth: '01-2024',
+          forecastEndMonth: '03-2024',
+          actualStartMonth: '10-2023',
+          actualEndMonth: '12-2023',
+        },
+        nodeResults: [
+          {
+            nodeId: 'metric-1',
+            nodeType: 'METRIC',
+            values: [
+              { month: '01-2024', historical: null, forecast: 1000, budget: 1300, calculated: 1000 },
+              { month: '02-2024', historical: null, forecast: 1000, budget: 1400, calculated: 1000 },
+              { month: '03-2024', historical: null, forecast: 1000, budget: 1500, calculated: 1000 },
+            ],
+          },
+        ],
+      });
+
       // Setup: Simple graph with CONSTANT -> METRIC
       const mockNodes = [
         {
@@ -176,8 +214,8 @@ describe('ForecastCalculationService Integration', () => {
         {
           id: 'edge-1',
           forecast_id: testForecastId,
-          source_node_id: 'constant-1',
-          target_node_id: 'metric-1',
+          sourceNodeId: 'constant-1',
+          targetNodeId: 'metric-1',
         },
       ];
 
@@ -207,6 +245,28 @@ describe('ForecastCalculationService Integration', () => {
     });
 
     it('should execute complex operator chain calculation', async () => {
+      calculationEngineCore.calculate.mockResolvedValueOnce({
+        calculatedAt: new Date('2024-01-01T00:00:00.000Z'),
+        calculationTypes: ['forecast'],
+        periodInfo: {
+          forecastStartMonth: '01-2024',
+          forecastEndMonth: '03-2024',
+          actualStartMonth: '10-2023',
+          actualEndMonth: '12-2023',
+        },
+        nodeResults: [
+          {
+            nodeId: 'metric-1',
+            nodeType: 'METRIC',
+            values: [
+              { month: '01-2024', historical: null, forecast: 1100, budget: 1300, calculated: 1100 },
+              { month: '02-2024', historical: null, forecast: 1100, budget: 1400, calculated: 1100 },
+              { month: '03-2024', historical: null, forecast: 1100, budget: 1500, calculated: 1100 },
+            ],
+          },
+        ],
+      });
+
       // Setup: CONSTANT -> OPERATOR -> METRIC
       const mockNodes = [
         {
@@ -248,20 +308,20 @@ describe('ForecastCalculationService Integration', () => {
         {
           id: 'edge-1',
           forecast_id: testForecastId,
-          source_node_id: 'constant-1',
-          target_node_id: 'operator-1',
+          sourceNodeId: 'constant-1',
+          targetNodeId: 'operator-1',
         },
         {
           id: 'edge-2',
           forecast_id: testForecastId,
-          source_node_id: 'constant-2',
-          target_node_id: 'operator-1',
+          sourceNodeId: 'constant-2',
+          targetNodeId: 'operator-1',
         },
         {
           id: 'edge-3',
           forecast_id: testForecastId,
-          source_node_id: 'operator-1',
-          target_node_id: 'metric-1',
+          sourceNodeId: 'operator-1',
+          targetNodeId: 'metric-1',
         },
       ];
 
@@ -282,13 +342,35 @@ describe('ForecastCalculationService Integration', () => {
     });
 
     it('should execute SEED node with time dependencies', async () => {
+      calculationEngineCore.calculate.mockResolvedValueOnce({
+        calculatedAt: new Date('2024-01-01T00:00:00.000Z'),
+        calculationTypes: ['forecast'],
+        periodInfo: {
+          forecastStartMonth: '01-2024',
+          forecastEndMonth: '03-2024',
+          actualStartMonth: '10-2023',
+          actualEndMonth: '12-2023',
+        },
+        nodeResults: [
+          {
+            nodeId: 'metric-1',
+            nodeType: 'METRIC',
+            values: [
+              { month: '01-2024', historical: null, forecast: 1260, budget: 1300, calculated: 1260 },
+              { month: '02-2024', historical: null, forecast: 1333.8, budget: 1400, calculated: 1333.8 },
+              { month: '03-2024', historical: null, forecast: 1400, budget: 1500, calculated: 1400 },
+            ],
+          },
+        ],
+      });
+
       // Setup: SEED -> OPERATOR -> METRIC (time-dependent calculation)
       const mockNodes = [
         {
           id: 'seed-1',
           forecast_id: testForecastId,
           kind: 'SEED',
-          attributes: { metricNodeId: 'metric-1' },
+          attributes: { sourceMetricId: 'metric-1' },
           position: { x: 0, y: 0 },
         },
         {
@@ -327,11 +409,11 @@ describe('ForecastCalculationService Integration', () => {
       ];
 
       const mockEdges = [
-        { id: 'edge-1', forecast_id: testForecastId, source_node_id: 'seed-1', target_node_id: 'operator-1' },
-        { id: 'edge-2', forecast_id: testForecastId, source_node_id: 'constant-1', target_node_id: 'operator-1' },
-        { id: 'edge-3', forecast_id: testForecastId, source_node_id: 'seed-1', target_node_id: 'operator-2' },
-        { id: 'edge-4', forecast_id: testForecastId, source_node_id: 'operator-1', target_node_id: 'operator-2' },
-        { id: 'edge-5', forecast_id: testForecastId, source_node_id: 'operator-2', target_node_id: 'metric-1' },
+        { id: 'edge-1', forecast_id: testForecastId, sourceNodeId: 'seed-1', targetNodeId: 'operator-1' },
+        { id: 'edge-2', forecast_id: testForecastId, sourceNodeId: 'constant-1', targetNodeId: 'operator-1' },
+        { id: 'edge-3', forecast_id: testForecastId, sourceNodeId: 'seed-1', targetNodeId: 'operator-2' },
+        { id: 'edge-4', forecast_id: testForecastId, sourceNodeId: 'operator-1', targetNodeId: 'operator-2' },
+        { id: 'edge-5', forecast_id: testForecastId, sourceNodeId: 'operator-2', targetNodeId: 'metric-1' },
       ];
 
       (nodeService.findByForecast as jest.Mock).mockResolvedValue(mockNodes);
@@ -353,6 +435,28 @@ describe('ForecastCalculationService Integration', () => {
     });
 
     it('should handle DATA node variable references', async () => {
+      calculationEngineCore.calculate.mockResolvedValueOnce({
+        calculatedAt: new Date('2024-01-01T00:00:00.000Z'),
+        calculationTypes: ['forecast'],
+        periodInfo: {
+          forecastStartMonth: '01-2024',
+          forecastEndMonth: '03-2024',
+          actualStartMonth: '10-2023',
+          actualEndMonth: '12-2023',
+        },
+        nodeResults: [
+          {
+            nodeId: 'metric-1',
+            nodeType: 'METRIC',
+            values: [
+              { month: '01-2024', historical: null, forecast: 1000, budget: 1300, calculated: 1000 },
+              { month: '02-2024', historical: null, forecast: 1100, budget: 1400, calculated: 1100 },
+              { month: '03-2024', historical: null, forecast: 1200, budget: 1500, calculated: 1200 },
+            ],
+          },
+        ],
+      });
+
       // Setup: DATA -> METRIC
       const mockNodes = [
         {
@@ -380,8 +484,8 @@ describe('ForecastCalculationService Integration', () => {
         {
           id: 'edge-1',
           forecast_id: testForecastId,
-          source_node_id: 'data-1',
-          target_node_id: 'metric-1',
+          sourceNodeId: 'data-1',
+          targetNodeId: 'metric-1',
         },
       ];
 
@@ -412,7 +516,7 @@ describe('ForecastCalculationService Integration', () => {
 
       await expect(
         service.calculateForecast('non-existent-forecast', testUserId, mockRequest)
-      ).rejects.toThrow('Forecast not found');
+      ).rejects.toThrow('Forecast non-existent-forecast not found');
     });
 
     it('should handle invalid graph structure', async () => {
@@ -438,18 +542,18 @@ describe('ForecastCalculationService Integration', () => {
       ];
 
       const mockEdges = [
-        { id: 'edge-1', source_node_id: 'operator-1', target_node_id: 'operator-2' },
-        { id: 'edge-2', source_node_id: 'operator-2', target_node_id: 'operator-1' },
+        { id: 'edge-1', sourceNodeId: 'operator-1', targetNodeId: 'operator-2' },
+        { id: 'edge-2', sourceNodeId: 'operator-2', targetNodeId: 'operator-1' },
       ];
 
       (forecastService.findOne as jest.Mock).mockResolvedValue(mockForecast);
       (nodeService.findByForecast as jest.Mock).mockResolvedValue(mockNodes);
       (edgeService.findByForecast as jest.Mock).mockResolvedValue(mockEdges);
-      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue([]);
+      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue({ variables: [] });
 
       await expect(
         service.calculateForecast(testForecastId, testUserId, mockRequest)
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('Failed to convert graph to trees');
     });
 
     it('should handle missing variable data', async () => {
@@ -474,13 +578,14 @@ describe('ForecastCalculationService Integration', () => {
       ];
 
       const mockEdges = [
-        { id: 'edge-1', source_node_id: 'data-1', target_node_id: 'metric-1' },
+        { id: 'edge-1', sourceNodeId: 'data-1', targetNodeId: 'metric-1' },
       ];
 
       (forecastService.findOne as jest.Mock).mockResolvedValue(mockForecast);
       (nodeService.findByForecast as jest.Mock).mockResolvedValue(mockNodes);
       (edgeService.findByForecast as jest.Mock).mockResolvedValue(mockEdges);
-      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue([]);
+      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue({ variables: [] });
+      calculationEngineCore.calculate.mockRejectedValueOnce(new BadRequestException('Variable not found'));
 
       await expect(
         service.calculateForecast(testForecastId, testUserId, mockRequest)
@@ -490,6 +595,24 @@ describe('ForecastCalculationService Integration', () => {
 
   describe('Performance and Edge Cases', () => {
     it('should handle large graphs with 50+ nodes', async () => {
+      calculationEngineCore.calculate.mockResolvedValueOnce({
+        calculatedAt: new Date('2024-01-01T00:00:00.000Z'),
+        calculationTypes: ['forecast'],
+        periodInfo: {
+          forecastStartMonth: '01-2024',
+          forecastEndMonth: '03-2024',
+          actualStartMonth: '10-2023',
+          actualEndMonth: '12-2023',
+        },
+        nodeResults: [
+          {
+            nodeId: 'metric-1',
+            nodeType: 'METRIC',
+            values: [{ month: '01-2024', historical: null, forecast: 1275, budget: null, calculated: 1275 }],
+          },
+        ],
+      });
+
       const mockForecast = {
         id: testForecastId,
         forecastStartDate: '2024-01-01',
@@ -521,13 +644,13 @@ describe('ForecastCalculationService Integration', () => {
         // Add edges from constants to operators
         mockEdges.push({
           id: `edge-${i * 2}`,
-          source_node_id: `constant-${i * 2}`,
-          target_node_id: `operator-${i}`,
+          sourceNodeId: `constant-${i * 2}`,
+          targetNodeId: `operator-${i}`,
         });
         mockEdges.push({
           id: `edge-${i * 2 + 1}`,
-          source_node_id: `constant-${i * 2 + 1}`,
-          target_node_id: `operator-${i}`,
+          sourceNodeId: `constant-${i * 2 + 1}`,
+          targetNodeId: `operator-${i}`,
         });
       }
 
@@ -542,8 +665,8 @@ describe('ForecastCalculationService Integration', () => {
       for (let i = 0; i < 25; i++) {
         mockEdges.push({
           id: `final-edge-${i}`,
-          source_node_id: `operator-${i}`,
-          target_node_id: 'final-operator',
+          sourceNodeId: `operator-${i}`,
+          targetNodeId: 'final-operator',
         });
       }
 
@@ -556,14 +679,14 @@ describe('ForecastCalculationService Integration', () => {
 
       mockEdges.push({
         id: 'final-metric-edge',
-        source_node_id: 'final-operator',
-        target_node_id: 'metric-1',
+        sourceNodeId: 'final-operator',
+        targetNodeId: 'metric-1',
       });
 
       (forecastService.findOne as jest.Mock).mockResolvedValue(mockForecast);
       (nodeService.findByForecast as jest.Mock).mockResolvedValue(mockNodes);
       (edgeService.findByForecast as jest.Mock).mockResolvedValue(mockEdges);
-      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue([]);
+      (dataIntakeService.getVariablesByUser as jest.Mock).mockResolvedValue({ variables: [] });
       // Supabase client mock is already set up in beforeEach
 
       const startTime = Date.now();
