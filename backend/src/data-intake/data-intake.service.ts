@@ -33,57 +33,39 @@ export class DataIntakeService {
     
     try {
       const client = this.supabase.getClientForRequest(request);
-      const savedVariables = [];
-      
-      for (const variable of variables) {
-        try {
-          // Extract required fields
-          const id = variable.id; // Use the provided ID from the client
-          const name = variable.name || 'Unnamed Variable';
-          const type = variable.type || VariableType.UNKNOWN;
-          const userId = variable.user_id; // Read user_id from DTO
-          const organizationId = variable.organization_id; // Read organization_id from DTO
-          
-          // Validate required fields
-          if (!userId || !organizationId) {
-            this.logger.error(`Missing userId (${userId}) or organizationId (${organizationId}) for variable ${name}`);
-            throw new Error(`User ID and Organization ID are required for variable ${name}`);
-          }
-          
-          // Validate type
-          const validType = Object.values(VariableType).includes(type as VariableType) 
-            ? type 
-            : VariableType.UNKNOWN;
-          
-          // Validate and normalize values array
-          const normalizedValues = this.normalizeTimeSeriesValues(variable.values, name);
-          
-          // Create variable using Supabase
-          const { data, error } = await client
-            .from('variables')
-            .insert({
-              id, // Use the client-provided ID
-              name,
-              type: validType,
-              values: normalizedValues,
-              user_id: userId,
-              organization_id: organizationId, // Add organization_id to insert
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-          
-          if (error) {
-            this.logger.error(`Failed to save variable ${name}: ${error.message}`);
-            throw new Error(`Failed to save variable: ${error.message}`);
-          }
-          
-          savedVariables.push(data);
-        } catch (varError) {
-          this.logger.error(`Error processing variable: ${varError.message}`);
-          throw varError; // Re-throw to be caught by the outer try/catch
+      const now = new Date().toISOString();
+      const payload = variables.map((variable) => {
+        const name = variable.name || 'Unnamed Variable';
+        const userId = variable.user_id;
+        const organizationId = variable.organization_id;
+        if (!userId || !organizationId) {
+          throw new Error(`User ID and Organization ID are required for variable ${name}`);
         }
+
+        const validType = Object.values(VariableType).includes(variable.type as VariableType)
+          ? variable.type
+          : VariableType.UNKNOWN;
+
+        return {
+          id: variable.id,
+          name,
+          type: validType,
+          values: this.normalizeTimeSeriesValues(variable.values, name),
+          user_id: userId,
+          organization_id: organizationId,
+          created_at: now,
+          updated_at: now,
+        };
+      });
+
+      const { data: savedVariables, error } = await client
+        .from('variables')
+        .insert(payload)
+        .select();
+
+      if (error) {
+        this.logger.error(`Failed to save variables batch: ${error.message}`);
+        throw new Error(`Failed to save variables: ${error.message}`);
       }
       
       this.logger.log(`Successfully added ${savedVariables.length} variables`);
@@ -182,66 +164,61 @@ export class DataIntakeService {
       const client = this.supabase.getClientForRequest(request);
       this.logger.log(`Updating ${variables.length} variables`);
       
-      const updatedVariables = [];
-      
+      const variableIds = variables.map((variable) => variable.id);
+      const { data: existingRows, error: existingError } = await client
+        .from('variables')
+        .select('*')
+        .in('id', variableIds);
+
+      if (existingError) {
+        throw new Error(`Failed to verify existing variables: ${existingError.message}`);
+      }
+
+      const existingById = new Map((existingRows || []).map((row) => [row.id, row]));
       for (const variable of variables) {
-        try {
-          // First check if the variable exists
-          const { data: existingData, error: existingError } = await client
-            .from('variables')
-            .select('*')
-            .eq('id', variable.id)
-            .single();
-          
-          if (existingError || !existingData) {
-            this.logger.warn(`Variable with ID ${variable.id} not found`);
-            throw new NotFoundException(`Variable with ID ${variable.id} not found`);
-          }
-          
-          // Prepare update object with only the fields that are provided
+        if (!existingById.has(variable.id)) {
+          this.logger.warn(`Variable with ID ${variable.id} not found`);
+          throw new NotFoundException(`Variable with ID ${variable.id} not found`);
+        }
+      }
+
+      const updateResults = await Promise.all(
+        variables.map(async (variable) => {
+          const existingData = existingById.get(variable.id);
           const updateObj: Partial<VariableEntity> = {
             updated_at: new Date().toISOString(),
           };
-          
+
           if (variable.name !== undefined) {
             updateObj.name = variable.name;
           }
-          
           if (variable.type !== undefined) {
             updateObj.type = variable.type;
           }
-          
           if (variable.values !== undefined) {
             updateObj.values = this.normalizeTimeSeriesValues(variable.values, variable.name || existingData.name);
           }
-          
-          // Update the variable
+
           const { data: updatedData, error: updateError } = await client
             .from('variables')
             .update(updateObj)
             .eq('id', variable.id)
             .select()
             .single();
-          
+
           if (updateError) {
-            this.logger.error(`Failed to update variable ${variable.id}: ${updateError.message}`);
-            throw new Error(`Failed to update variable: ${updateError.message}`);
+            throw new Error(`Failed to update variable ${variable.id}: ${updateError.message}`);
           }
-          
-          updatedVariables.push(updatedData);
-          this.logger.log(`Successfully updated variable ${variable.id}`);
-        } catch (varError) {
-          this.logger.error(`Error updating variable ${variable.id}: ${varError.message}`);
-          throw varError;
-        }
-      }
+          return updatedData;
+        })
+      );
       
-      this.logger.log(`Successfully updated ${updatedVariables.length} variables`);
+      this.logger.log(`Successfully updated ${updateResults.length} variables`);
       
       return {
         message: 'Variables updated successfully',
-        count: updatedVariables.length,
-        variables: updatedVariables,
+        count: updateResults.length,
+        variables: updateResults,
       };
     } catch (error) {
       this.logger.error(`Error updating variables: ${error.message}`);
@@ -270,48 +247,37 @@ export class DataIntakeService {
     try {
       const client = this.supabase.getClientForRequest(request);
       this.logger.log(`Deleting ${ids.length} variables for user ${requestingUserId} in org ${requestingOrgId}`);
-      
-      const deletedIds = [];
-      
+
+      const { data: existingRows, error: existingError } = await client
+        .from('variables')
+        .select('id, organization_id, name')
+        .in('id', ids);
+
+      if (existingError) {
+        throw new Error(`Failed to verify variables before deletion: ${existingError.message}`);
+      }
+
+      const existingById = new Map((existingRows || []).map((row) => [row.id, row]));
       for (const variableId of ids) {
-        try {
-          // First verify the variable exists and belongs to the user's organization
-          const { data: existingData, error: existingError } = await client
-            .from('variables')
-            .select('id, organization_id, name')
-            .eq('id', variableId)
-            .single();
-          
-          if (existingError || !existingData) {
-            this.logger.warn(`Variable with ID ${variableId} not found`);
-            throw new NotFoundException(`Variable with ID ${variableId} not found`);
-          }
-          
-          // Check if the variable belongs to the requesting user's organization
-          if (existingData.organization_id !== requestingOrgId) {
-            this.logger.warn(`User ${requestingUserId} attempted to delete variable ${variableId} from different organization`);
-            throw new Error(`Access denied: Variable does not belong to your organization`);
-          }
-          
-          // Delete the variable
-          const { error: deleteError } = await client
-            .from('variables')
-            .delete()
-            .eq('id', variableId);
-          
-          if (deleteError) {
-            this.logger.error(`Failed to delete variable ${variableId}: ${deleteError.message}`);
-            throw new Error(`Failed to delete variable: ${deleteError.message}`);
-          }
-          
-          deletedIds.push(variableId);
-          this.logger.log(`Successfully deleted variable ${variableId} (${existingData.name})`);
-          
-        } catch (varError) {
-          this.logger.error(`Error deleting variable ${variableId}: ${varError.message}`);
-          throw varError;
+        const existingData = existingById.get(variableId);
+        if (!existingData) {
+          throw new NotFoundException(`Variable with ID ${variableId} not found`);
+        }
+        if (existingData.organization_id !== requestingOrgId) {
+          throw new Error(`Access denied: Variable does not belong to your organization`);
         }
       }
+
+      const { error: deleteError } = await client
+        .from('variables')
+        .delete()
+        .in('id', ids);
+
+      if (deleteError) {
+        throw new Error(`Failed to delete variables: ${deleteError.message}`);
+      }
+
+      const deletedIds = ids;
       
       this.logger.log(`Successfully deleted ${deletedIds.length} variables`);
       

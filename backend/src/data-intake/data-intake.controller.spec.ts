@@ -1,8 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataIntakeController } from './data-intake.controller';
 import { DataIntakeService } from './data-intake.service';
-import { SupabaseService } from '../supabase/supabase.service'; // Although service is mocked, module might need it
-import { ConfigService } from '@nestjs/config'; // Module might need it
 import { 
   INestApplication, 
   ValidationPipe, 
@@ -13,7 +11,7 @@ import {
   HttpStatus
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import * as request from 'supertest';
+import request = require('supertest');
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AddVariablesDto } from './dto/add-variables.dto';
 import { UpdateVariablesDto } from './dto/update-variables.dto';
