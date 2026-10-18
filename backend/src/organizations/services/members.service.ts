@@ -5,6 +5,7 @@ import {
   BadRequestException,
   NotFoundException,
   UnprocessableEntityException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -19,6 +20,8 @@ import { Request } from 'express';
 
 @Injectable()
 export class MembersService {
+  private readonly logger = new Logger(MembersService.name);
+
   constructor(
     private readonly supabaseService: SupabaseOptimizedService,
     private readonly configService: ConfigService,
@@ -48,6 +51,7 @@ export class MembersService {
     dto: InviteMemberDto,
     request: Request,
   ): Promise<AddMemberResponseDto> {
+    this.logger.log(`Attempting member add: org=${organizationId} email=${dto.email.trim().toLowerCase()} role=${dto.role}`);
     const client = this.supabaseService.getClientForRequest(request);
     const normalizedEmail = dto.email.trim().toLowerCase();
 
@@ -63,6 +67,7 @@ export class MembersService {
 
     if (profile?.id) {
       await this.insertOrganizationMemberIfNeeded(client, organizationId, profile.id as string, dto.role);
+      this.logger.log(`Member add completed via existing profile: org=${organizationId} user=${profile.id}`);
       return { outcome: 'member_added' };
     }
 
@@ -118,6 +123,7 @@ export class MembersService {
       throw new InternalServerErrorException(`Failed to send invitation email: ${msg}`);
     }
 
+    this.logger.log(`Invitation email queued: org=${organizationId} email=${normalizedEmail} role=${dto.role}`);
     return { outcome: 'invite_email_sent' };
   }
 
@@ -182,6 +188,7 @@ export class MembersService {
     dto: UpdateMemberRoleDto,
     request: Request,
   ): Promise<void> {
+    this.logger.log(`Updating member role: org=${organizationId} user=${userId} role=${dto.role}`);
     const client = this.supabaseService.getClientForRequest(request);
 
     const { data: existingMember, error: memberCheckError } = await client
@@ -224,9 +231,12 @@ export class MembersService {
     if (updateError) {
       throw new InternalServerErrorException(`Failed to update member role: ${updateError.message}`);
     }
+
+    this.logger.log(`Member role updated: org=${organizationId} user=${userId} role=${dto.role}`);
   }
 
   async removeMember(organizationId: string, userId: string, request: Request): Promise<void> {
+    this.logger.log(`Removing member: org=${organizationId} user=${userId}`);
     const client = this.supabaseService.getClientForRequest(request);
 
     const { data: existingMember, error: memberCheckError } = await client
@@ -269,5 +279,7 @@ export class MembersService {
     if (deleteError) {
       throw new InternalServerErrorException(`Failed to remove member: ${deleteError.message}`);
     }
+
+    this.logger.log(`Member removed: org=${organizationId} user=${userId}`);
   }
 }
