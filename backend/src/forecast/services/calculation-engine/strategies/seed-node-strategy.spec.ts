@@ -75,6 +75,8 @@ describe('SeedNodeStrategy', () => {
     const cache = makeCache();
     const context: CalculationContext = {
       variables: [],
+      variableLookup: new Map(),
+      variableMonthValueLookup: new Map(),
       periods: {
         forecastMonths: ['04-2026', '05-2026'],
         actualMonths: ['03-2026', '04-2026'],
@@ -108,6 +110,8 @@ describe('SeedNodeStrategy', () => {
     const cache = makeCache();
     const context: CalculationContext = {
       variables: [],
+      variableLookup: new Map(),
+      variableMonthValueLookup: new Map(),
       periods: {
         forecastMonths: ['04-2026'],
         actualMonths: ['03-2026'],
@@ -150,6 +154,8 @@ describe('SeedNodeStrategy', () => {
     const cache = makeCache();
     const context: CalculationContext = {
       variables: [],
+      variableLookup: new Map(),
+      variableMonthValueLookup: new Map(),
       periods: {
         forecastMonths: ['03-2026', '04-2026'],
         actualMonths: ['03-2026', '04-2026'],

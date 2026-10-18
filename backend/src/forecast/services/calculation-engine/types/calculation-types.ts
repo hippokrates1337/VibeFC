@@ -84,6 +84,8 @@ export interface CalculationTreeNode {
 
 export interface CalculationContext {
   readonly variables: Variable[];
+  readonly variableLookup: Map<string, Variable>;
+  readonly variableMonthValueLookup: Map<string, Map<string, number | null>>;
   readonly periods: PeriodConfiguration;
   readonly cache: CalculationCache;
   readonly nodeResults: Map<string, NodeResult>;
