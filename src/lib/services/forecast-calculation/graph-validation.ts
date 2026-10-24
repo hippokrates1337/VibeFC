@@ -45,3 +45,68 @@ export function checkForecastConnection(
 ): Issue[] {
   return checkConnection(toClientNodes(nodes), toClientEdges(edges), connection);
 }
+
+/**
+ * `^` needs exactly two inputs, so its first input on its own is an INVALID_INPUT_COUNT
+ * error. The canvas adds edges one at a time, so it must not reject that first input.
+ */
+function isOperandStillMissing(
+  issue: Issue,
+  nodes: readonly CanvasNode[],
+  edges: readonly CanvasEdge[],
+  target: string
+): boolean {
+  if (issue.code !== 'INVALID_INPUT_COUNT' || issue.nodeIds.length !== 1 || issue.nodeIds[0] !== target) {
+    return false;
+  }
+  const node = nodes.find((n) => n.id === target);
+  const op = node && node.data !== null && typeof node.data === 'object' ? (node.data as { op?: unknown }).op : undefined;
+  if (node?.type !== 'OPERATOR' || op !== '^') {
+    return false;
+  }
+  return edges.filter((edge) => edge.target === target).length + 1 < 2;
+}
+
+/**
+ * Why the canvas refuses a new edge, or null when it may be drawn: the first error
+ * `checkForecastConnection` reports, except an operand that is merely still missing.
+ */
+export function getConnectionRejection(
+  nodes: readonly CanvasNode[],
+  edges: readonly CanvasEdge[],
+  connection: { source: string; target: string }
+): string | null {
+  const errors = checkForecastConnection(nodes, edges, connection).filter(
+    (issue) => !isOperandStillMissing(issue, nodes, edges, connection.target)
+  );
+  return errors.length > 0 ? errors[0].message : null;
+}
+
+/** Issue codes that describe a loop; the canvas highlights their nodes and the edges along `path`. */
+const LOOP_ISSUE_CODES: readonly Issue['code'][] = ['CYCLE', 'UNGROUNDED_RECURRENCE'];
+
+export interface LoopHighlights {
+  readonly nodeIds: ReadonlySet<string>;
+  readonly edgeIds: ReadonlySet<string>;
+}
+
+/** Nodes and edges involved in CYCLE / UNGROUNDED_RECURRENCE issues. */
+export function getLoopHighlights(
+  issues: readonly Issue[] | undefined,
+  edges: readonly CanvasEdge[]
+): LoopHighlights {
+  const nodeIds = new Set<string>();
+  const edgeIds = new Set<string>();
+  (issues ?? [])
+    .filter((issue) => LOOP_ISSUE_CODES.indexOf(issue.code) >= 0)
+    .forEach((issue) => {
+      issue.nodeIds.forEach((id) => nodeIds.add(id));
+      const path = issue.path ?? [];
+      for (let i = 0; i + 1 < path.length; i++) {
+        edges
+          .filter((edge) => edge.source === path[i] && edge.target === path[i + 1])
+          .forEach((edge) => edgeIds.add(edge.id));
+      }
+    });
+  return { nodeIds, edgeIds };
+}

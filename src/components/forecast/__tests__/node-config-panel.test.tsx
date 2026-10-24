@@ -318,6 +318,56 @@ describe('NodeConfigPanel', () => {
     });
   });
 
+  it('shows "Treat missing data as 0" unchecked for a DATA node without the flag', () => {
+    render(
+      React.createElement(NodeConfigPanel, { open: true, onOpenChange: jest.fn() })
+    );
+
+    expect(screen.getByRole('checkbox', { name: 'Treat missing data as 0' })).not.toBeChecked();
+  });
+
+  it('stores missingAsZero in the DATA node attributes when the checkbox is toggled', async () => {
+    render(
+      React.createElement(NodeConfigPanel, { open: true, onOpenChange: jest.fn() })
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Treat missing data as 0' });
+    await user.click(checkbox);
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith('test-node', { missingAsZero: true });
+    expect(checkbox).toBeChecked();
+
+    await user.click(checkbox);
+
+    expect(mockUpdateNodeData).toHaveBeenLastCalledWith('test-node', { missingAsZero: false });
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it('shows the checkbox checked when the DATA node has missingAsZero set', () => {
+    graphState = buildGraphState({
+      nodes: [{ ...defaultDataNode, data: { ...defaultDataNode.data, missingAsZero: true } }]
+    });
+
+    render(
+      React.createElement(NodeConfigPanel, { open: true, onOpenChange: jest.fn() })
+    );
+
+    expect(screen.getByRole('checkbox', { name: 'Treat missing data as 0' })).toBeChecked();
+  });
+
+  it('offers "Treat missing data as 0" only on DATA nodes', () => {
+    graphState = buildGraphState({
+      selectedNodeId: 'const-node',
+      nodes: [{ id: 'const-node', type: 'CONSTANT', data: { name: 'c', value: 1 }, position: { x: 0, y: 0 } }]
+    });
+
+    render(
+      React.createElement(NodeConfigPanel, { open: true, onOpenChange: jest.fn() })
+    );
+
+    expect(screen.queryByRole('checkbox', { name: 'Treat missing data as 0' })).not.toBeInTheDocument();
+  });
+
   it('renders nothing when no node is selected', () => {
     graphState = buildGraphState({
       selectedNodeId: null,

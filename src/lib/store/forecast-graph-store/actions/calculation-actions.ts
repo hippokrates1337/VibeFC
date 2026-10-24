@@ -1,5 +1,5 @@
 import { logger } from '@/lib/utils/logger';
-import { validateForecastGraph } from '@/lib/services/forecast-calculation/graph-validation';
+import { validateForecastGraph, type ForecastGraphValidation } from '@/lib/services/forecast-calculation/graph-validation';
 import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
 import { forecastApi } from '@/lib/api/forecast';
 import type { 
@@ -261,14 +261,15 @@ export const createCalculationActions = (set: (partial: any) => void, get: () =>
       const errorResult = {
         isValid: false,
         errors: [`Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
-        warnings: []
+        warnings: [],
+        issues: []
       };
       set({ graphValidation: errorResult, isValidatingGraph: false });
       return errorResult;
     }
   },
 
-  setGraphValidation: (validation: any) => {
+  setGraphValidation: (validation: ForecastGraphValidation) => {
     logger.log('[ForecastGraphStore] setGraphValidation called with:', validation);
     set({ graphValidation: validation });
   },

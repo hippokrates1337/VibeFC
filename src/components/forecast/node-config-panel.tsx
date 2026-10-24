@@ -31,6 +31,7 @@ import { useVariableStore, Variable } from '@/lib/store/variables';
 import { X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toggle } from '@/components/ui/toggle';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   formatConstantNodeValue,
   parseConstantNodeValueInput
@@ -324,6 +325,14 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     }
   };
 
+  /** Saved at once (no debounce): a checkbox has no intermediate states to coalesce. */
+  const handleMissingAsZeroChange = (checked: boolean) => {
+    setLocalFormData((prev) => ({ ...prev, missingAsZero: checked }));
+    if (selectedNode) {
+      updateNodeData(selectedNode.id, { missingAsZero: checked });
+    }
+  };
+
   const handleOperatorOffsetMonthsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const t = e.target.value.replace(/\D/g, '');
     setOperatorOffsetMonthsText(t);
@@ -428,6 +437,23 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             onBlur={handleDataOffsetMonthsBlur}
             className="bg-slate-700 border-slate-600 text-slate-200"
           />
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="missingAsZero"
+              checked={localFormData.missingAsZero === true}
+              onCheckedChange={(checked) => handleMissingAsZeroChange(checked === true)}
+              className="border-slate-400"
+            />
+            <label htmlFor="missingAsZero" className="text-sm font-medium text-slate-300">
+              Treat missing data as 0
+            </label>
+          </div>
+          <p className="text-xs text-slate-500">
+            Off: months without data stay empty, and so do the results that depend on them.
+          </p>
         </div>
       </>
     );
