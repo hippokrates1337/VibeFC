@@ -1,4 +1,4 @@
-import { MMYYYYUtilsService } from '../calculation-engine/mmyyyy-utils';
+import { MMYYYYUtilsService } from '../mmyyyy-utils';
 
 describe('MMYYYYUtilsService', () => {
   let service: MMYYYYUtilsService;

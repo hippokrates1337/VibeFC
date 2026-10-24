@@ -4,9 +4,14 @@
   "description": "Backend for VibeFC application",
   "main": "dist/main.js",
   "scripts": {
+    "build:engine": "npm run build --prefix ../packages/forecast-engine",
+    "prebuild": "npm run build:engine",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
+    "prestart": "npm run build:engine",
+    "prestart:dev": "npm run build:engine",
+    "prestart:debug": "npm run build:engine",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
@@ -61,7 +66,10 @@
       "ts"
     ],
     "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
+    "moduleNameMapper": {
+      "^@vibefc/forecast-engine$": "<rootDir>/../../packages/forecast-engine/src"
+    },
+    "testRegex": ".*\\.(spec|test)\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

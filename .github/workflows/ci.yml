@@ -30,8 +30,22 @@ jobs:
       - name: Typecheck backend
         run: npx tsc --noEmit --incremental false -p backend/tsconfig.json
 
+      - name: Typecheck forecast engine
+        run: npx tsc --noEmit --incremental false -p packages/forecast-engine/tsconfig.json
+
       - name: Unit tests frontend
         run: npx jest --ci --coverage=false
 
       - name: Unit tests backend
         run: npm test -w backend -- --ci
+
+      # The engine must not depend on the machine's time zone.
+      - name: Unit tests forecast engine (UTC)
+        run: npx jest -c packages/forecast-engine/jest.config.js --ci
+        env:
+          TZ: UTC
+
+      - name: Unit tests forecast engine (Europe/Berlin)
+        run: npx jest -c packages/forecast-engine/jest.config.js --ci
+        env:
+          TZ: Europe/Berlin

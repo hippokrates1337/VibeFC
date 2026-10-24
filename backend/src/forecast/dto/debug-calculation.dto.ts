@@ -22,6 +22,10 @@ export class DebugCalculationStepDto {
   @IsEnum(CalculationTypeDto)
   readonly calculationType: CalculationTypeDto;
 
+  @IsOptional()
+  @IsString()
+  readonly phase?: 'window' | 'past'; // 'past': base-case value before the period starts
+
   @IsArray()
   readonly inputs: any[]; // Input values for this calculation step
 

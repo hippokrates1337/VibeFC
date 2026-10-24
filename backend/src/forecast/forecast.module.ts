@@ -6,23 +6,17 @@ import { ForecastNodeService } from './services/forecast-node.service';
 import { ForecastEdgeService } from './services/forecast-edge.service';
 import { ForecastCalculationService } from './services/forecast-calculation.service';
 import { DebugCalculationService } from './services/debug-calculation.service';
-import { DebugCollectorModule } from './debug-collector.module';
 import { SupabaseModule } from '../supabase/supabase.module';
 import { DataIntakeModule } from '../data-intake/data-intake.module';
 import { CommonModule } from '../common/common.module';
-import { CalculationEngineCoreModule } from './services/calculation-engine/calculation-engine-core.module';
-import { VariableDataService } from './services/calculation-engine/variable-data-service';
-import { MMYYYYUtilsService } from './services/calculation-engine/mmyyyy-utils';
-import { CalculationAdapter } from './services/calculation-engine/adapters/calculation-adapter';
-// import { GraphConverter } from './services/calculation-engine/graph-converter'; // TODO: Add back when needed
+import { MMYYYYUtilsService } from './services/mmyyyy-utils';
+import { ForecastEngineService } from './services/forecast-engine.service';
 
 @Module({
   imports: [
     SupabaseModule, 
     DataIntakeModule, 
-    CommonModule,
-    DebugCollectorModule,
-    CalculationEngineCoreModule
+    CommonModule
   ],
   controllers: [ForecastController, ForecastCalculationController],
   providers: [
@@ -31,10 +25,8 @@ import { CalculationAdapter } from './services/calculation-engine/adapters/calcu
     ForecastEdgeService,
     ForecastCalculationService,
     DebugCalculationService,
-    VariableDataService,
     MMYYYYUtilsService,
-    CalculationAdapter,
-    // GraphConverter, // TODO: Add back when needed
+    ForecastEngineService,
   ],
   exports: [
     ForecastService,

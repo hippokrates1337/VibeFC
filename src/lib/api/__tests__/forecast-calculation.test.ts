@@ -26,228 +26,6 @@ describe('ForecastCalculationApi', () => {
     process.env.NEXT_PUBLIC_BACKEND_URL = mockBackendUrl;
   });
 
-  describe('calculateForecast', () => {
-    it('should successfully trigger forecast calculation', async () => {
-      const forecastId = 'test-forecast-id';
-      const mockResponseData = {
-        id: 'result-id',
-        forecastId: 'test-forecast-id',
-        calculatedAt: '2024-01-15T10:30:00Z',
-        metrics: [
-          {
-            metricNodeId: 'metric-1',
-            values: [
-              {
-                date: '2024-01-01T00:00:00Z',
-                forecast: 1000,
-                budget: 1100,
-                historical: 950,
-              },
-              {
-                date: '2024-02-01T00:00:00Z',
-                forecast: 1050,
-                budget: 1150,
-                historical: 1000,
-              },
-            ],
-          },
-        ],
-      };
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
-      } as Response);
-
-      const result = await forecastCalculationApi.calculateForecast(forecastId);
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${mockBackendUrl}/forecasts/${forecastId}/calculate`,
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.any(Headers),
-        })
-      );
-
-      // Verify headers separately
-      const actualCall = mockFetch.mock.calls[0];
-      const headers = actualCall[1]?.headers as Headers;
-      expect(headers.get('Content-Type')).toBe('application/json');
-      expect(headers.get('Authorization')).toBe('Bearer test-token');
-
-      expect(result).toEqual({
-        forecastId: 'test-forecast-id',
-        calculatedAt: new Date('2024-01-15T10:30:00Z'),
-        metrics: [
-          {
-            metricNodeId: 'metric-1',
-            values: [
-              {
-                date: new Date('2024-01-01T00:00:00Z'),
-                forecast: 1000,
-                budget: 1100,
-                historical: 950,
-              },
-              {
-                date: new Date('2024-02-01T00:00:00Z'),
-                forecast: 1050,
-                budget: 1150,
-                historical: 1000,
-              },
-            ],
-          },
-        ],
-      });
-    });
-
-    it('should handle calculation failure with error message', async () => {
-      const forecastId = 'test-forecast-id';
-
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 400,
-        text: () => Promise.resolve(JSON.stringify({ message: 'Graph validation failed: Missing required nodes' })),
-      } as Response);
-
-      await expect(
-        forecastCalculationApi.calculateForecast(forecastId)
-      ).rejects.toThrow('Failed to calculate forecast: Graph validation failed: Missing required nodes');
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${mockBackendUrl}/forecasts/${forecastId}/calculate`,
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.any(Headers),
-        })
-      );
-    });
-
-    it('should handle no data returned from server', async () => {
-      const forecastId = 'test-forecast-id';
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(''),
-      } as Response);
-
-      await expect(
-        forecastCalculationApi.calculateForecast(forecastId)
-      ).rejects.toThrow('No calculation result returned from server');
-    });
-
-    it('should handle network or server errors', async () => {
-      const forecastId = 'test-forecast-id';
-
-      mockFetch.mockRejectedValue(new Error('Network error'));
-
-      await expect(
-        forecastCalculationApi.calculateForecast(forecastId)
-      ).rejects.toThrow('Network error');
-    });
-  });
-
-  describe('getCalculationResults', () => {
-    it('should successfully retrieve latest calculation results', async () => {
-      const forecastId = 'test-forecast-id';
-      const mockResponseData = {
-        id: 'result-id',
-        forecastId: 'test-forecast-id',
-        calculatedAt: '2024-01-15T10:30:00Z',
-        metrics: [
-          {
-            metricNodeId: 'metric-1',
-            values: [
-              {
-                date: '2024-01-01T00:00:00Z',
-                forecast: 1000,
-                budget: 1100,
-                historical: 950,
-              },
-            ],
-          },
-        ],
-      };
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
-      } as Response);
-
-      const result = await forecastCalculationApi.getCalculationResults(forecastId);
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${mockBackendUrl}/forecasts/${forecastId}/calculation-results`,
-        expect.objectContaining({
-          method: 'GET',
-          headers: expect.any(Headers),
-        })
-      );
-
-      expect(result).toEqual({
-        forecastId: 'test-forecast-id',
-        calculatedAt: new Date('2024-01-15T10:30:00Z'),
-        metrics: [
-          {
-            metricNodeId: 'metric-1',
-            values: [
-              {
-                date: new Date('2024-01-01T00:00:00Z'),
-                forecast: 1000,
-                budget: 1100,
-                historical: 950,
-              },
-            ],
-          },
-        ],
-      });
-    });
-
-    it('should return null when no calculation results exist', async () => {
-      const forecastId = 'test-forecast-id';
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(''),
-      } as Response);
-
-      const result = await forecastCalculationApi.getCalculationResults(forecastId);
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when forecast not found (404)', async () => {
-      const forecastId = 'test-forecast-id';
-
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 404,
-        text: () => Promise.resolve(JSON.stringify({ message: 'Forecast not found' })),
-      } as Response);
-
-      const result = await forecastCalculationApi.getCalculationResults(forecastId);
-
-      expect(result).toBeNull();
-    });
-
-    it('should throw error for non-404 API errors', async () => {
-      const forecastId = 'test-forecast-id';
-
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: () => Promise.resolve(JSON.stringify({ message: 'Internal server error' })),
-      } as Response);
-
-      await expect(
-        forecastCalculationApi.getCalculationResults(forecastId)
-      ).rejects.toThrow('Failed to get calculation results: Internal server error');
-    });
-  });
-
   describe('getCalculationHistory', () => {
     it('should successfully retrieve calculation history', async () => {
       const forecastId = 'test-forecast-id';
@@ -425,10 +203,10 @@ describe('ForecastCalculationApi', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
+        text: () => Promise.resolve(JSON.stringify([mockResponseData])),
       } as Response);
 
-      const result = await forecastCalculationApi.calculateForecast(forecastId);
+      const [result] = await forecastCalculationApi.getCalculationHistory(forecastId);
 
       // Verify precise date transformation
       expect(result.calculatedAt).toEqual(new Date('2024-01-15T10:30:00.123Z'));
@@ -459,10 +237,10 @@ describe('ForecastCalculationApi', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
+        text: () => Promise.resolve(JSON.stringify([mockResponseData])),
       } as Response);
 
-      const result = await forecastCalculationApi.calculateForecast(forecastId);
+      const [result] = await forecastCalculationApi.getCalculationHistory(forecastId);
 
       // Invalid dates should be converted to Invalid Date objects
       expect(result.calculatedAt.toString()).toBe('Invalid Date');
@@ -483,10 +261,10 @@ describe('ForecastCalculationApi', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
+        text: () => Promise.resolve(JSON.stringify([mockResponseData])),
       } as Response);
 
-      const result = await forecastCalculationApi.calculateForecast(forecastId);
+      const [result] = await forecastCalculationApi.getCalculationHistory(forecastId);
 
       expect(result.metrics).toEqual([]);
     });
@@ -508,10 +286,10 @@ describe('ForecastCalculationApi', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
+        text: () => Promise.resolve(JSON.stringify([mockResponseData])),
       } as Response);
 
-      const result = await forecastCalculationApi.calculateForecast(forecastId);
+      const [result] = await forecastCalculationApi.getCalculationHistory(forecastId);
 
       expect(result.metrics[0].values).toEqual([]);
     });
@@ -540,10 +318,10 @@ describe('ForecastCalculationApi', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
+        text: () => Promise.resolve(JSON.stringify([mockResponseData])),
       } as Response);
 
-      const result = await forecastCalculationApi.calculateForecast(forecastId);
+      const [result] = await forecastCalculationApi.getCalculationHistory(forecastId);
 
       expect(result.metrics[0].values[0].forecast).toBeNull();
       expect(result.metrics[0].values[0].budget).toBeUndefined();
@@ -570,10 +348,10 @@ describe('ForecastCalculationApi', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify(mockResponseData)),
+        text: () => Promise.resolve(JSON.stringify([mockResponseData])),
       } as Response);
 
-      await forecastCalculationApi.calculateForecast(forecastId);
+      await forecastCalculationApi.getCalculationHistory(forecastId);
 
       // Verify no Authorization header is sent
       const actualCall = mockFetch.mock.calls[0];

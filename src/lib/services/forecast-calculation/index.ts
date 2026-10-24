@@ -1,9 +1,3 @@
-// Frontend forecast calculation services - UI validation only
-export { GraphConverter } from './graph-converter';
-
-// Re-export types for convenience
-export type {
-  CalculationTree,
-  CalculationTreeNode,
-  GraphValidationResult
-} from '@/types/forecast'; 
+// Graph validation for the editor; the same rules run in the backend calculation.
+export { validateForecastGraph, checkForecastConnection } from './graph-validation';
+export type { ForecastGraphValidation } from './graph-validation';

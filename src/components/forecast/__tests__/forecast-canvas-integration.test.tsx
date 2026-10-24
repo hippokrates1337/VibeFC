@@ -30,6 +30,8 @@ jest.mock('reactflow', () => {
       className,
       defaultEdgeOptions,
       connectionLineStyle,
+      isValidConnection,
+      onConnectEnd,
       ...domProps 
     }: any, ref: any) => {
       const [selectedNodes, setSelectedNodes] = React.useState([]);
@@ -156,6 +158,7 @@ const mockOnEdgesChange = jest.fn();
 jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
   useForecastGraph: jest.fn(),
   useForecastGraphActions: jest.fn(),
+  useCalculations: () => ({ graphValidation: null }),
 }));
 
 const { useForecastGraph, useForecastGraphActions } = jest.requireMock(

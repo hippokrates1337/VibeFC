@@ -31,7 +31,8 @@ const mockGraphState = {
 
 jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
   useForecastGraph: jest.fn(),
-  useForecastGraphActions: jest.fn()
+  useForecastGraphActions: jest.fn(),
+  useCalculations: () => ({ graphValidation: null }),
 }));
 
 // Mock React Flow
@@ -53,6 +54,8 @@ jest.mock('reactflow', () => {
     className,
     defaultEdgeOptions,
     connectionLineStyle,
+    isValidConnection,
+    onConnectEnd,
     ...domProps
   }: any) => {
     const mockReact = require('react');

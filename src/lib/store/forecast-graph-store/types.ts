@@ -1,5 +1,6 @@
 import { Edge, Node, NodeChange, EdgeChange } from 'reactflow';
 import type { Forecast as ClientForecastSummary } from '@/lib/api/forecast';
+import type { ForecastGraphValidation } from '@/lib/services/forecast-calculation/graph-validation';
 import type { 
   GraphValidationResult, 
   NodeVisualizationValue, 
@@ -21,6 +22,8 @@ export interface DataNodeAttributes {
   name: string;
   variableId: string;
   offsetMonths: number;
+  /** Missing months count as 0 instead of empty (null); default false. */
+  missingAsZero?: boolean;
 }
 
 export interface ConstantNodeAttributes {
@@ -125,8 +128,8 @@ export interface CalculationActions {
   setForecastPeriods: (periods: ForecastPeriods | null) => void;
   
   // Validation
-  validateGraph: () => Promise<GraphValidationResult>;
-  setGraphValidation: (validation: GraphValidationResult) => void;
+  validateGraph: () => Promise<ForecastGraphValidation>;
+  setGraphValidation: (validation: ForecastGraphValidation) => void;
   clearGraphValidation: () => void;
   
   // Data access
