@@ -20,6 +20,9 @@
     "test:engine": "jest -c packages/forecast-engine/jest.config.js",
     "backend:dev": "cd backend && npm run start:dev",
     "backend:build": "cd backend && npm run build",
+    "db:new": "supabase migration new",
+    "db:list": "supabase migration list",
+    "db:push": "supabase db push",
     "types:build": "cd packages/shared-types && npm run build"
   },
   "dependencies": {
@@ -90,6 +93,7 @@
     "postcss": "^8.4.35",
     "prisma": "^5.10.0",
     "rimraf": "^5.0.5",
+    "supabase": "2.120.0",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.3.3"

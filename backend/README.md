@@ -58,7 +58,7 @@ Enables the creation and management of forecasting models using a graph-based ap
 
 1.  **Install Dependencies:** Run `npm install` or the provided `install-deps.ps1` script.
 2.  **Environment Setup:** Configure environment variables (e.g., database connection string, JWT secrets) in a `.env` file (refer to `.env.example` if available).
-3.  **Database:** Ensure the Supabase database is set up and migrated. Refer to `SUPABASE_SETUP.md` and potentially `MIGRATION_GUIDE.md`.
+3.  **Database:** The schema lives in `supabase/migrations` (repo root). See `SUPABASE_SETUP.md` for the dev/prod projects and how to apply migrations.
 4.  **Run:** Use `npm run start:dev` for development or the provided `run-app.ps1` script.
 
 ## Standards

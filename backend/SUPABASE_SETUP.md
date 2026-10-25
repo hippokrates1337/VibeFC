@@ -2,10 +2,41 @@
 
 This guide will help you set up your Supabase project for use with the VibeFC application.
 
-## Prerequisites
+## Environments
 
-1. Create a Supabase account at [https://supabase.com](https://supabase.com)
-2. Create a new Supabase project
+| Project | Used by | Data |
+|---|---|---|
+| `vibefc-dev` | local development (`.env.local`, `backend/.env`), Playwright e2e, manual testing | disposable |
+| production (`yspnngenawwvocgucxmh`) | the Vercel deployment only; keys live in the Vercel project settings | real users |
+
+Never put production keys into a local env file, and never run tests against production.
+
+## Schema: Supabase CLI migrations
+
+The schema lives in `supabase/migrations/*.sql` and is applied with the Supabase CLI
+(a pinned dev dependency, run it as `npx supabase …`). No Docker is needed for the remote
+commands below. CI applies every migration to a throwaway database on each pull request.
+
+One-time per machine:
+
+```bash
+npx supabase login
+npx supabase link --project-ref <vibefc-dev project ref>
+```
+
+`link` asks for the project's database password (Project Settings → Database). The link is
+stored in `supabase/.temp` (git-ignored), so it is per machine.
+
+Day to day:
+
+```bash
+npm run db:new -- add_edge_rank      # creates supabase/migrations/<timestamp>_add_edge_rank.sql
+npm run db:push                      # applies pending migrations to the linked project
+npm run db:list                      # local vs remote migration history
+```
+
+Rules: never edit a migration that has been pushed anywhere; add a new one. Push to dev
+first, then to production (`npx supabase db push --project-ref <prod ref>`).
 
 ## Setup Steps
 
@@ -39,8 +70,9 @@ Invites use Supabase Auth’s email flow. Configure **SMTP** (or a supported mai
 
 ### 3. Create Database Schema
 
-1. In your Supabase dashboard, navigate to the SQL Editor.
-2. Execute the authoritative script `backend/sql/complete_supabase_setup.sql` once (it is idempotent). Do not run removed legacy scripts from `backend/sql`; they are superseded by this file.
+Link the new project and run `npm run db:push` (see "Schema: Supabase CLI migrations"
+above). Do not paste SQL into the dashboard's SQL editor: changes made there are not in
+the migration history and will drift from the repo.
 
 The `variables` table includes:
 - `id`: UUID primary key
@@ -51,7 +83,7 @@ The `variables` table includes:
 - `organization_id`: Organization identifier (UUID, FK to organizations)
 - `created_at` and `updated_at`: Timestamps
 
-The same script also creates organizations, forecasts, RPCs, profiles, invitations, and related RLS (see comments at the top of the SQL file).
+The baseline migration also creates organizations, forecasts, RPCs, profiles, invitations, and related RLS.
 
 ### 4. Test the Connection
 
