@@ -1,0 +1,6 @@
+Variable,Type,01/2026,02/2026,03/2026
+E2E Edge Negative,input,-100,-200.5,-300
+E2E Edge Sci,INPUT,1e3,2.5e2,3E1
+"E2E Edge, Quoted",INPUT,1,2,3
+E2E Units,INPUT,999,999,999
+E2E Edge Thousands,INPUT,"1,234.5",2000,3000
