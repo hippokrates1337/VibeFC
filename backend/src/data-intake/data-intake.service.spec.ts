@@ -129,6 +129,74 @@ describe('DataIntakeService', () => {
     });
   });
 
+  // Dates are stored as the first of their calendar month, identically in every server
+  // time zone. East of UTC, local-time Date methods used to store March as '2024-02-29',
+  // and every later save moved the series another month back. The time zone can only be
+  // chosen when the process starts (jest sandboxes process.env), so CI runs this suite
+  // under several TZ values.
+  describe(`date normalization (TZ=${process.env.TZ ?? 'system default'})`, () => {
+    const storedDates = async (dates: string[]): Promise<string[]> => {
+      tableBuilders.variables.select.mockResolvedValueOnce({ data: [{ id: 'id-1' }], error: null });
+      await service.addVariables(
+        {
+          variables: [
+            {
+              id: 'id-1',
+              name: 'Revenue',
+              type: VariableType.INPUT,
+              values: dates.map((date, i) => ({ date, value: i })),
+              user_id: 'user-123',
+              organization_id: 'org-1',
+            },
+          ],
+        },
+        mockRequest
+      );
+      const calls = tableBuilders.variables.insert.mock.calls;
+      const [row] = calls[calls.length - 1][0];
+      return row.values.map((point: { date: string }) => point.date);
+    };
+
+    it('runs in the time zone requested via TZ', () => {
+      if (process.env.TZ) {
+        expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(process.env.TZ);
+      }
+    });
+
+    it('stores the first of the calendar month as written', async () => {
+      await expect(
+        storedDates([
+          '2024-01-01',
+          '2024-02-29',
+          '2024-03-15',
+          '2024-07-01',
+          '2024-10-27',
+          '2024-12-31',
+          '2025-03-01T00:00:00+01:00',
+          '2025-04-30T23:30:00Z',
+        ])
+      ).resolves.toEqual([
+        '2024-01-01',
+        '2024-02-01',
+        '2024-03-01',
+        '2024-07-01',
+        '2024-10-01',
+        '2024-12-01',
+        '2025-03-01',
+        '2025-04-01',
+      ]);
+    });
+
+    it('leaves already normalized dates unchanged when saved again', async () => {
+      const first = await storedDates(['2025-01-01', '2025-06-01', '2025-12-01']);
+      const second = await storedDates(first);
+      const third = await storedDates(second);
+
+      expect(first).toEqual(['2025-01-01', '2025-06-01', '2025-12-01']);
+      expect(third).toEqual(first);
+    });
+  });
+
   describe('getVariablesByUser', () => {
     it('returns variables for organizations the user belongs to', async () => {
       tableBuilders.organization_members.eq.mockResolvedValueOnce({

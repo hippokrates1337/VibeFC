@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SupabaseOptimizedService } from '../supabase/supabase-optimized.service';
 import { Request } from 'express';
+import { formatMonth, monthIndexFromDate, monthIndexFromDateString } from '@vibefc/forecast-engine';
 
 // DTOs
 import { AddVariablesDto } from './dto/add-variables.dto';
@@ -293,45 +294,22 @@ export class DataIntakeService {
   }
 
   /**
-   * Helper method to convert date to first of month in YYYY-MM-DD format
-   * This ensures consistency with MM-YYYY period calculations
+   * First day of the date's calendar month as 'YYYY-MM-01'. The month is read the same
+   * way the forecast engine reads stored dates (monthIndexFromDateString: as written, no
+   * time zone), so '2024-03-15' and '2024-03-01T00:00:00+01:00' are both March 2024 on
+   * every server. Local-time Date methods here used to store March as '2024-02-29' on
+   * hosts east of UTC.
    */
   private normalizeToFirstOfMonth(dateInput: string): string {
+    let month: number;
     try {
-      const date = new Date(dateInput);
-      if (isNaN(date.getTime())) {
-        return new Date().toISOString().slice(0, 7) + '-01'; // Current month, first day
-      }
-      
-      // Set to first day of the month
-      date.setDate(1);
-      date.setHours(0, 0, 0, 0);
-      
-      return date.toISOString().slice(0, 10); // YYYY-MM-DD format
-    } catch (error) {
-      this.logger.warn(`Error normalizing date ${dateInput}, using current month first day`);
-      return new Date().toISOString().slice(0, 7) + '-01';
+      month = monthIndexFromDateString(dateInput);
+    } catch {
+      this.logger.warn(`Invalid date ${dateInput}, using current month first day`);
+      month = monthIndexFromDate(new Date());
     }
-  }
-
-  /**
-   * Convert YYYY-MM-DD date to MM-YYYY format for period comparisons
-   */
-  private dateToMMYYYY(dateString: string): string {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return new Date().toISOString().slice(5, 7) + '-' + new Date().getFullYear();
-      }
-      
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${month}-${year}`;
-    } catch (error) {
-      const now = new Date();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      return `${month}-${now.getFullYear()}`;
-    }
+    const year = Math.floor(month / 12);
+    return `${year}-${String(month - year * 12 + 1).padStart(2, '0')}-01`;
   }
 
   private normalizeTimeSeriesValues(values: TimeSeriesPoint[], variableName: string): TimeSeriesPoint[] {
@@ -364,7 +342,7 @@ export class DataIntakeService {
         
         // Log the normalization for debugging MM-YYYY period consistency
         if (value.date !== normalizedValue.date) {
-          this.logger.debug(`Date normalized for variable ${variableName}: ${value.date} -> ${normalizedValue.date} (MM-YYYY: ${this.dateToMMYYYY(normalizedValue.date)})`);
+          this.logger.debug(`Date normalized for variable ${variableName}: ${value.date} -> ${normalizedValue.date} (MM-YYYY: ${formatMonth(monthIndexFromDateString(normalizedValue.date))})`);
         }
         
         return normalizedValue;

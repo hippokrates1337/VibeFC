@@ -39,6 +39,17 @@ jobs:
       - name: Unit tests backend
         run: npm test -w backend -- --ci
 
+      # Stored dates must not depend on the server's time zone (east and west of UTC).
+      - name: Unit tests backend (Europe/Berlin)
+        run: npm test -w backend -- --ci
+        env:
+          TZ: Europe/Berlin
+
+      - name: Unit tests backend (America/New_York)
+        run: npm test -w backend -- --ci
+        env:
+          TZ: America/New_York
+
       # The engine must not depend on the machine's time zone.
       - name: Unit tests forecast engine (UTC)
         run: npx jest -c packages/forecast-engine/jest.config.js --ci
