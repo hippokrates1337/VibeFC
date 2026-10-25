@@ -82,7 +82,7 @@ Severity: **Critical** = silent wrong numbers or data loss · **High** = wrong o
   - The data-intake spec covers dates as written, explicit offsets and idempotent re-saves.
   - CI runs the backend suite under UTC, Europe/Berlin and America/New_York.
   - Verified live: the Berlin-zone backend now stores `2025-01-01` as `2025-01-01`, and re-saving twice changes nothing.
-  - Repair for rows already stored: `backend/sql/migrations/20261025_repair_shifted_variable_dates.sql` (draft; not yet run on the project).
+  - A repair script for already-stored rows was drafted in #37 and removed again: production runs in UTC on Vercel and holds no live data, so there was nothing to repair.
 - **Still open, same family (west of UTC only):**
   - The frontend parses stored dates with `new Date('YYYY-MM-DD')` (UTC) but saves them with local getters. A browser west of UTC therefore shows and re-saves every series one month early.
   - `ForecastService.generateDefaultPeriods` uses local-time `Date` methods, so on a backend west of UTC the default actual window starts a month early.
@@ -232,11 +232,7 @@ Ordered by risk. Where an item overlaps [UPGRADE_PLAN.md](UPGRADE_PLAN.md), the 
 ### Phase A: stop data corruption (do first, ~2 days)
 
 1. **Fix intake dates (C1).** ✅ Done on `fix/intake-month-shift`: calendar-field parsing, multi-time-zone tests, CI steps. Still to do: the two west-of-UTC follow-ups listed under C1.
-2. **Repair existing rows.** Drafted: `backend/sql/migrations/20261025_repair_shifted_variable_dates.sql`.
-   - Step 1 previews the affected variables. Step 2 backs them up into the non-exposed `repair` schema, moves last-day-of-month dates to the first of the next month, runs three checks and ends with ROLLBACK.
-   - Variables that may have drifted more than one month are flagged for review rather than guessed at.
-   - Tested against fixtures on an in-memory Postgres (PGlite): dry run, commit, re-run and undo.
-   - Run it only after the fix is deployed, then recalculate the affected forecasts.
+2. **Repair existing rows.** Not needed: there is no live data, and the test data was wiped. (A tested repair script existed briefly in #37.)
 3. **Keep missing values (H1).** Reject points with an unparseable date or value (400). Keep `null` as `null`.
 4. **Replace the CSV parsing (C2, H2).**
    - Use a real parser such as papaparse.
@@ -293,11 +289,6 @@ Ordered by risk. Where an item overlaps [UPGRADE_PLAN.md](UPGRADE_PLAN.md), the 
     - Real summary counts.
     - De-duplicated `claim-invites` calls.
 
-## 5. Test data left behind
+## 5. Test data
 
-- **Organization "E2E Test 2026-10-24":**
-  - 25 variables: E2E-* uploaded via UI (date-shifted by C1), UTC-* clean set, edge cases.
-  - 15 forecasts: E2E A_arith … PERF, TZ_impact, V_invalid, "New Forecast".
-  - About 40 calculation results.
-- "E2E Test Org B" was created, renamed and deleted during the test.
-- Deleting the organization removes all of it (ON DELETE CASCADE).
+All test data was deleted on 2026-10-25 by deleting the organization "E2E Test 2026-10-24": 25 variables, 15 forecasts and their calculation results, removed by cascade. "E2E Test Org B" had already been deleted during the test. The test user itself still exists in the production project.

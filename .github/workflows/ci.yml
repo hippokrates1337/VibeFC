@@ -60,3 +60,17 @@ jobs:
         run: npx jest -c packages/forecast-engine/jest.config.js --ci
         env:
           TZ: Europe/Berlin
+
+  # Applies supabase/migrations to a throwaway local Postgres; fails if any migration does.
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+
+      - name: Apply migrations
+        run: supabase db start
