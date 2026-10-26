@@ -43,17 +43,10 @@ export class DataIntakeController {
         throw new HttpException('No variables provided in request', HttpStatus.BAD_REQUEST);
       }
 
-      // Add user ID and potentially organization ID to each variable if missing
-      if (req.user) {
-        addVariablesDto.variables.forEach(variable => {
-          if (!variable.user_id) {
-            variable.user_id = req.user.userId;
-          }
-          if (!variable.organization_id && req.user.organizationId) {
-            variable.organization_id = req.user.organizationId;
-          }
-        });
-      }
+      // The owner is always the caller; a user_id in the body is ignored.
+      addVariablesDto.variables.forEach(variable => {
+        variable.user_id = req.user.userId;
+      });
       
       // Process the request
       const result = await this.dataIntakeService.addVariables(addVariablesDto, req);

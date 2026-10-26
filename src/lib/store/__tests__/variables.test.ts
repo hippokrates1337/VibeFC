@@ -9,7 +9,7 @@ jest.mock('@/lib/utils/logger', () => ({
 }));
 
 // Use the actual path to your store and types
-import { useVariableStore, Variable, rehydrateVariable, TimeSeriesData } from '../variables';
+import { useVariableStore, Variable } from '../variables';
 import { act } from 'react'; // Using act for store updates if needed
 import { logger } from '@/lib/utils/logger';
 
@@ -51,8 +51,8 @@ const mockVariables: Variable[] = [
     type: 'ACTUAL',
     organizationId: 'org-test',
     timeSeries: [
-      { date: new Date('2023-01-01T00:00:00.000Z'), value: 1000 },
-      { date: new Date('2023-02-01T00:00:00.000Z'), value: 1200 },
+      { month: '2023-01', value: 1000 },
+      { month: '2023-02', value: 1200 },
     ],
   },
   {
@@ -61,8 +61,8 @@ const mockVariables: Variable[] = [
     type: 'ACTUAL',
     organizationId: 'org-test',
     timeSeries: [
-      { date: new Date('2023-01-01T00:00:00.000Z'), value: 500 },
-      { date: new Date('2023-02-01T00:00:00.000Z'), value: 600 },
+      { month: '2023-01', value: 500 },
+      { month: '2023-02', value: 600 },
     ],
   },
 ];
@@ -74,7 +74,7 @@ const mockApiResponse = {
     name: v.name,
     type: v.type,
     values: v.timeSeries.map(ts => ({ // Note the 'values' key (not timeSeries)
-      date: ts.date.toISOString(),
+      date: `${ts.month}-01`,
       value: ts.value,
     })),
     organization_id: v.organizationId, // Note the 'organization_id' key (not organizationId)
@@ -145,8 +145,8 @@ const setupFetchMock = (scenario: 'success' | 'empty' | 'serverError' | 'network
               type: 'INPUT',
               organization_id: 'org-test',
               values: [
-                { date: 'not-a-date', value: 100 }, // Invalid date
-                { date: '2023-03-01T00:00:00.000Z', value: 'not-a-number' } // Non-numeric value
+                { date: '2023-03-01', value: '42' }, // numeric string
+                { date: '2023-04-01', value: null } // explicitly no value
               ]
             }]
           };
@@ -393,7 +393,7 @@ describe('Variable Store', () => {
       expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('No variables array found in the API response'));
     });
 
-    it('should handle invalid data within API response (bad dates, non-numeric values)', async () => {
+    it('maps API points to months, numbers and null', async () => {
       cleanupFetchMock();
       const { mockFetch: currentMockFetch, cleanup } = setupFetchMock('invalidData');
       mockFetch = currentMockFetch;
@@ -410,15 +410,11 @@ describe('Variable Store', () => {
       const invalidVar = state.variables[0];
       expect(invalidVar.id).toBe('var-invalid');
       expect(invalidVar.timeSeries).toHaveLength(2);
-      // Check how invalid dates are handled - likely result in Invalid Date objects
-      expect(invalidVar.timeSeries[0].date.toString()).toBe('Invalid Date');
-      expect(invalidVar.timeSeries[0].value).toBe(100);
-      // Check how non-numeric values are handled - should become NaN
-      expect(invalidVar.timeSeries[1].date).toEqual(new Date('2023-03-01T00:00:00.000Z'));
-      expect(invalidVar.timeSeries[1].value).toBeNaN(); // Fixed: Expect NaN, not null
+      expect(invalidVar.timeSeries).toEqual([
+        { month: '2023-03', value: 42 },
+        { month: '2023-04', value: null },
+      ]);
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      // Check if logger.warn was called for the non-numeric value
-      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Non-numeric value detected: not-a-number'));
     });
 
 
@@ -441,6 +437,19 @@ describe('Variable Store', () => {
       expect(state.variables).toEqual(mockVariables.filter(v => v.organizationId === orgId));
       expect(mockFetch).not.toHaveBeenCalled();
       expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('Variables already exist in store for the selected organization, skipping fetch.'));
+    });
+
+    it('fetches anyway with force (e.g. after saving)', async () => {
+      act(() => {
+        useVariableStore.setState({ variables: mockVariables.slice(0, 1), selectedOrganizationId: 'org-test' });
+      });
+
+      await act(async () => {
+        await useVariableStore.getState().fetchVariables(userId, 'some-token', { force: true });
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(useVariableStore.getState().variables).toEqual(mockVariables);
     });
 
     it('should still fetch if variables exist but not for the selected organization', async () => {
@@ -499,24 +508,12 @@ describe('Variable Store', () => {
        jest.useRealTimers();
     });
 
-    it('rehydrateVariable helper should convert date strings to Date objects', () => {
-      const variableWithStringDates = {
-        id: 'test-var',
-        name: 'Test',
-        type: 'ACTUAL' as Variable['type'],
-        organizationId: 'org-test',
-        timeSeries: [
-          { date: '2023-01-01T00:00:00.000Z', value: 100 },
-          { date: '2023-02-01T00:00:00.000Z', value: 200 },
-        ] as any
-      };
+    it('drops variables cached in the old {date} format (persist version 0)', () => {
+      const migrate = useVariableStore.persist.getOptions().migrate!;
+      const old = { variables: [{ id: 'x', timeSeries: [{ date: '2023-01-01T00:00:00.000Z', value: 1 }] }], selectedOrganizationId: 'org-test' };
 
-      const rehydrated = rehydrateVariable(variableWithStringDates);
-
-      expect(rehydrated.timeSeries[0].date).toBeInstanceOf(Date);
-      expect(rehydrated.timeSeries[0].date.toISOString()).toBe('2023-01-01T00:00:00.000Z');
-      expect(rehydrated.timeSeries[1].date).toBeInstanceOf(Date);
-      expect(rehydrated.timeSeries[1].date.toISOString()).toBe('2023-02-01T00:00:00.000Z');
+      expect(migrate(old, 0)).toEqual({ ...old, variables: [] });
+      expect(migrate({ variables: mockVariables }, 1)).toEqual({ variables: mockVariables });
     });
 
     // Simulating the full persist rehydration is complex.
@@ -528,23 +525,19 @@ describe('Variable Store', () => {
         const cleanMockVariables = JSON.parse(JSON.stringify(mockVariables));
         const storedState = {
             state: {
-                variables: cleanMockVariables.map((v: Variable) => ({
-                    ...v,
-                    // Simulate serialized dates
-                    timeSeries: v.timeSeries.map((ts: TimeSeriesData) => ({ ...ts, date: new Date(ts.date).toISOString() }))
-                })),
+                variables: cleanMockVariables,
                 isLoading: false,
                 error: null,
                 selectedOrganizationId: orgId // Make sure selected Org ID is also stored/rehydrated
             },
-            version: 0 
+            version: 1 
         };
         mockLocalStorage.setItem('variable-storage', JSON.stringify(storedState));
 
         // Act: Simulate store initialization/rehydration trigger
         act(() => {
            const stateFromStorage = JSON.parse(mockLocalStorage.getItem('variable-storage') || '');
-           const rehydratedVars = stateFromStorage.state.variables.map((v: any) => rehydrateVariable(v as Variable));
+           const rehydratedVars = stateFromStorage.state.variables as Variable[];
            // Set the full rehydrated state including selectedOrganizationId
            // Ensure we are setting the correct state slice
            useVariableStore.setState({ 
@@ -561,7 +554,6 @@ describe('Variable Store', () => {
 
         // Assert initial state post-manual rehydration
         const finalState = useVariableStore.getState();
-        // Compare against the original mockVariables, which have Date objects
         expect(finalState.variables).toEqual(mockVariables);
         expect(finalState.isLoading).toBe(false);
         expect(finalState.selectedOrganizationId).toBe(orgId);

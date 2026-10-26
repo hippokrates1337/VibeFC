@@ -16,6 +16,9 @@ import { ApiStatus } from './data-status'
 import { LoadingState, ErrorState, EmptyState } from './state-display'
 import { useAuth } from '@/providers/auth-provider'
 import { logger } from '@/lib/utils/logger'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
+import { VariableDetailsModal } from './variable-details-modal'
 
 // Define the container props type to be passed to render prop
 interface ContainerProps {
@@ -25,7 +28,7 @@ interface ContainerProps {
   isDetailsModalOpen: boolean;
   selectedVariableForModal: Variable | null;
   closeDetailsModal: () => void;
-  handleUpdateVariable: (variableId: string, updateData: any) => Promise<void>;
+  handleUpdateVariable: (variableId: string, updateData: any) => Promise<boolean | void>;
   selectedOrgIdFromOrgStore: string | null;
   apiStatus: { success: boolean; error: string | null };
   storeIsLoading: boolean;
@@ -72,18 +75,20 @@ export const DataIntakeContainer = ({
     apiStatus,
     handleImportVariables,
     handleDeleteVariable,
-    handleUpdateVariable
+    handleUpdateVariable,
+    handleCreateVariable
   } = useVariableApi(variables, setVariables)
-  
+
   const {
     isUploading,
     error,
-    processedVariables,
-    setProcessedVariables,
+    fileName,
+    importResult,
+    reparse,
     showImportModal,
     setShowImportModal,
     parseCSV
-  } = useCsvProcessor(variables)
+  } = useCsvProcessor()
 
   // State for delete confirmation modal
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -116,25 +121,6 @@ export const DataIntakeContainer = ({
        // useVariableStore.getState().clearVariables(); // Decide if this is desired behaviour
     }
   }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore, fetchVariables, user, session?.access_token]);
-
-  const dates = useMemo(() => {
-    const allDates = filteredVariables.flatMap(variable => 
-      variable.timeSeries.map(ts => ts.date)
-    )
-    
-    const dateMap = new Map<number, Date>()
-    allDates.forEach(date => {
-      const normalizedDate = new Date(date.getFullYear(), date.getMonth(), 1)
-      const timeValue = normalizedDate.getTime()
-      
-      if (!dateMap.has(timeValue)) {
-        dateMap.set(timeValue, normalizedDate)
-      }
-    })
-    
-    return Array.from(dateMap.values())
-      .sort((a, b) => a.getTime() - b.getTime())
-  }, [filteredVariables])
 
   const handleDeleteClick = useCallback((id: string, name: string): void => {
     setDeleteConfirmation({
@@ -171,7 +157,14 @@ export const DataIntakeContainer = ({
     setSelectedVariableForModal(null);
   }, []);
 
-  if (storeIsLoading || authIsLoading) {
+  // The details modal without a variable creates a new one
+  const openCreateModal = useCallback((): void => {
+    setSelectedVariableForModal(null);
+    setIsDetailsModalOpen(true);
+  }, []);
+
+  // Full-page loading only for the first load; reloads after saving keep the page (and open dialogs) in place
+  if ((storeIsLoading && filteredVariables.length === 0) || authIsLoading) {
     return <LoadingState pageTitle="Data Intake" />
   }
 
@@ -205,8 +198,17 @@ export const DataIntakeContainer = ({
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-4 text-slate-100">Data Intake</h1>
-        
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold text-slate-100">Data Intake</h1>
+          <Button
+            onClick={openCreateModal}
+            disabled={!selectedOrgIdFromOrgStore}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Plus className="mr-1 h-4 w-4" /> New variable
+          </Button>
+        </div>
+
         <ApiStatus success={apiStatus.success} error={apiStatus.error} />
 
         <UploadSection
@@ -227,15 +229,26 @@ export const DataIntakeContainer = ({
           )
         )}
 
-        {showImportModal && (
+        {showImportModal && importResult && (
           <ImportModal
             isOpen={showImportModal}
             onClose={() => setShowImportModal(false)}
-            newVariables={processedVariables}
-            existingVariables={variables}
+            fileName={fileName}
+            result={importResult}
+            onReparse={reparse}
+            existingVariables={filteredVariables}
             onConfirm={handleImportVariables}
           />
         )}
+
+        <VariableDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={closeDetailsModal}
+          variableToEdit={selectedVariableForModal}
+          onSave={handleUpdateVariable}
+          onCreate={handleCreateVariable}
+          currentOrganizationId={selectedOrgIdFromOrgStore}
+        />
 
         <DeleteConfirmationModal
           isOpen={deleteConfirmation.isOpen}

@@ -2,8 +2,9 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { logger } from '@/lib/utils/logger'
 
+/** One month of a variable. `month` is 'YYYY-MM' (no Date: months must not depend on the time zone). */
 export interface TimeSeriesData {
-  date: Date
+  month: string
   value: number | null
 }
 
@@ -23,18 +24,21 @@ interface VariableState {
   setVariables: (variables: Variable[]) => void
   addVariables: (variables: Variable[]) => void
   clearVariables: () => void
-  fetchVariables: (userId: string, token: string) => Promise<void>
+  /** `force` reloads even when the store already holds the organization's variables (e.g. after saving). */
+  fetchVariables: (userId: string, token: string, options?: { force?: boolean }) => Promise<void>
   setSelectedOrganizationId: (organizationId: string | null) => void
 }
 
-// Helper function to rehydrate dates in a variable
-// Export for testing purposes
-export const rehydrateVariable = (variable: Variable): Variable => ({
-  ...variable,
-  timeSeries: variable.timeSeries.map(ts => ({
-    ...ts,
-    date: new Date(ts.date)
-  }))
+/** API variable row (`values: [{date: 'YYYY-MM-01', value}]`) -> store variable. */
+export const toStoreVariable = (v: any): Variable => ({
+  id: v.id,
+  name: v.name,
+  type: v.type as Variable['type'],
+  organizationId: v.organization_id,
+  timeSeries: (Array.isArray(v.values) ? v.values : []).map((point: any) => ({
+    month: String(point.date).slice(0, 7),
+    value: point.value === null || point.value === undefined ? null : Number(point.value),
+  })),
 })
 
 // Create a default export so we can debug it
@@ -63,7 +67,7 @@ const createVariableStore = () => {
           logger.log('[VariableStore] setSelectedOrganizationId called with:', organizationId);
           set({ selectedOrganizationId: organizationId });
         },
-        fetchVariables: async (userId: string, token: string) => {
+        fetchVariables: async (userId: string, token: string, options?: { force?: boolean }) => {
           const state = get(); // Get current state at the beginning
 
           // Prevent duplicate fetches if already loading
@@ -79,7 +83,7 @@ const createVariableStore = () => {
             ? state.variables.some(v => v.organizationId === state.selectedOrganizationId)
             : false; // Only skip if an org is selected and data for it exists
 
-          if (relevantVariablesExist) {
+          if (relevantVariablesExist && !options?.force) {
             logger.log('[fetchVariables] Variables already exist in store for the selected organization, skipping fetch.');
             return;
           }
@@ -140,39 +144,9 @@ const createVariableStore = () => {
               throw new Error('Failed to parse response data: ' + (e instanceof Error ? e.message : String(e)));
             }
             
-            if (data && data.variables && Array.isArray(data.variables)) {            
-              const transformedVariables: Variable[] = data.variables.map((v: any) => {              
-                const transformedTimeSeries = Array.isArray(v.values) 
-                  ? v.values.map((val: any) => {
-                      const parsedValue = val.value !== null && val.value !== undefined 
-                        ? Number(val.value) 
-                        : null;
-                      
-                      if (parsedValue !== null && isNaN(parsedValue)) {
-                        logger.warn(`Non-numeric value detected: ${val.value}`);
-                      }
-                      
-                      return {
-                        date: new Date(val.date),
-                        value: parsedValue
-                      };
-                    })
-                  : [];
-                
-                // Ensure organizationId is mapped from the backend response
-                if (!v.organization_id) {
-                  logger.warn(`[fetchVariables] Variable ${v.id} (${v.name}) received from backend is missing organization_id.`);
-                }
+            if (data && data.variables && Array.isArray(data.variables)) {
+              const transformedVariables: Variable[] = data.variables.map(toStoreVariable);
 
-                return {
-                  id: v.id,
-                  name: v.name,
-                  type: v.type as 'ACTUAL' | 'BUDGET' | 'INPUT' | 'UNKNOWN',
-                  organizationId: v.organization_id, // Map organizationId
-                  timeSeries: transformedTimeSeries
-                };
-              });
-              
               logger.log('[fetchVariables] Successfully loaded variables:', transformedVariables.length);
               set({ variables: transformedVariables, isLoading: false });
             } else {
@@ -194,26 +168,13 @@ const createVariableStore = () => {
       {
         name: 'variable-storage',
         storage: createJSONStorage(() => localStorage),
-        onRehydrateStorage: () => (state) => {
-          logger.log('[onRehydrateStorage] Starting rehydration...');
-          
-          if (state) {
-            logger.log('[onRehydrateStorage] State found in storage');
-            
-            if (state.variables && state.variables.length > 0) {
-              // Rehydrate dates first
-              logger.log(`[onRehydrateStorage] Found ${state.variables.length} variables, rehydrating dates...`);
-              state.variables = state.variables.map(rehydrateVariable);
-              logger.log(`[onRehydrateStorage] Store rehydrated with ${state.variables.length} variables.`);
-            } else {
-              logger.log('[onRehydrateStorage] No variables found in storage');
-            }
-          } else {
-            logger.log('[onRehydrateStorage] No state found in storage');
-          }
-          
-          logger.log('[onRehydrateStorage] Rehydration complete.');
-        }
+        // v1: time series points are {month: 'YYYY-MM'} instead of {date}. Older caches are
+        // dropped and reloaded from the server.
+        version: 1,
+        migrate: (persisted, version) => {
+          const state = persisted as Partial<VariableState>;
+          return version < 1 ? { ...state, variables: [] } : state;
+        },
       }
     )
   )

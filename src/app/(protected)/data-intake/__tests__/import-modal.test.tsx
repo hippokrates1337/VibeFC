@@ -2,155 +2,120 @@ import React from 'react';
 import { render, screen, waitFor } from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { ImportModal, type ImportAction, type VariableImportDecision } from '../import-modal';
+import { ImportModal } from '../import-modal';
+import { parseVariablesCsv } from '../_components/csv-import';
+import type { Variable } from '@/lib/store/variables';
 
-// Mock scrollIntoView for Radix UI components in JSDOM
-window.HTMLElement.prototype.scrollIntoView = jest.fn();
+// Opening a Radix Select inside the Radix Dialog recurses endlessly in JSDOM (two focus traps),
+// so the select is replaced by a combobox whose options are always rendered
+jest.mock('@/components/ui/select', () => {
+  const React = require('react');
+  const OnChange = React.createContext(() => {});
+  return {
+    Select: ({ children, onValueChange }: any) => <OnChange.Provider value={onValueChange}>{children}</OnChange.Provider>,
+    SelectTrigger: ({ children, 'aria-label': label }: any) => <button type="button" role="combobox" aria-label={label}>{children}</button>,
+    SelectValue: () => null,
+    SelectContent: ({ children }: any) => <div>{children}</div>,
+    SelectItem: ({ children, value, disabled }: any) => {
+      const onValueChange = React.useContext(OnChange);
+      return <button type="button" role="option" disabled={disabled} onClick={() => onValueChange(value)}>{children}</button>;
+    },
+  };
+});
 
-describe('ImportModal Component Integration Tests', () => {
-  // Sample test data
-  const mockNewVariables = [
-    {
-      id: '1',
-      name: 'New Revenue',
-      type: 'ACTUAL' as const,
-      organizationId: 'org-1',
-      timeSeries: [
-        { date: new Date('2023-01-01'), value: 1000 },
-        { date: new Date('2023-02-01'), value: 1200 },
-      ]
-    },
-    {
-      id: '2',
-      name: 'New Expenses',
-      type: 'BUDGET' as const,
-      organizationId: 'org-1',
-      timeSeries: [
-        { date: new Date('2023-01-01'), value: 800 },
-        { date: new Date('2023-03-01'), value: 850 },
-      ]
-    }
-  ];
-  
-  const mockExistingVariables = [
-    {
-      id: 'existing-1',
-      name: 'Existing Revenue',
-      type: 'ACTUAL' as const,
-      organizationId: 'org-1',
-      timeSeries: [
-        { date: new Date('2023-01-01'), value: 900 },
-      ]
-    },
-    {
-      id: 'existing-2',
-      name: 'Existing Expenses',
-      type: 'BUDGET' as const,
-      organizationId: 'org-1',
-      timeSeries: [
-        { date: new Date('2023-01-01'), value: 700 },
-      ]
-    }
-  ];
-  
-  const mockProps = {
+const existingVariables: Variable[] = [
+  { id: 'existing-units', name: 'Units', type: 'INPUT', organizationId: 'org-1', timeSeries: [{ month: '2026-01', value: 1 }] },
+  { id: 'existing-cost', name: 'Cost', type: 'ACTUAL', organizationId: 'org-1', timeSeries: [] },
+];
+
+const renderModal = (csv: string, overrides: Partial<React.ComponentProps<typeof ImportModal>> = {}) => {
+  const props = {
     isOpen: true,
     onClose: jest.fn(),
-    newVariables: mockNewVariables,
-    existingVariables: mockExistingVariables,
-    onConfirm: jest.fn(),
+    fileName: 'data.csv',
+    result: parseVariablesCsv(csv),
+    onReparse: jest.fn(),
+    existingVariables,
+    onConfirm: jest.fn().mockResolvedValue(true),
+    ...overrides,
   };
-  
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-  
-  test('renders correctly when open and displays variable names', () => {
-    render(<ImportModal {...mockProps} />);
+  const view = render(<ImportModal {...props} />);
+  return { ...view, props };
+};
 
-    // Use accessible role and name for the dialog
-    expect(screen.getByRole('dialog', { name: /import variables/i })).toBeInTheDocument();
+describe('ImportModal', () => {
+  test('shows each variable with its months and a value preview', () => {
+    renderModal('Variable,Type,2026-01,2026-02\nRevenue,ACTUAL,1000,1200.5\n');
 
-    // Check if variables from CSV are displayed by their text content
-    expect(screen.getByText('New Revenue')).toBeInTheDocument();
-    expect(screen.getByText('New Expenses')).toBeInTheDocument();
-  });
-
-  test('does not render when isOpen is false', () => {
-    render(<ImportModal {...mockProps} isOpen={false} />);
-
-    // Use queryByRole which returns null if not found
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Import variables')).toBeInTheDocument();
+    expect(screen.getByText(/data\.csv · 1 variables · 2 months \(01\/2026 – 02\/2026\)/)).toBeInTheDocument();
+    const row = screen.getByTestId('variable-row-0');
+    expect(row).toHaveTextContent('Revenue');
+    expect(row).toHaveTextContent('2 months · 01/2026 – 02/2026');
+    // Values are shown in the browser's locale
+    expect(row).toHaveTextContent(/01\/2026: 1[.,]000/);
   });
 
-  test('renders variable rows with correct test ids', () => {
-    render(<ImportModal {...mockProps} />);
-
-    // Check that variable rows are rendered with correct test ids
-    expect(screen.getByTestId('variable-row-0')).toBeInTheDocument();
-    expect(screen.getByTestId('variable-row-1')).toBeInTheDocument();
-  });
-
-  test('renders action select dropdowns for each variable', () => {
-    render(<ImportModal {...mockProps} />);
-
-    // Check that action select dropdowns are present
-    const actionSelects = screen.getAllByRole('combobox', { name: /action for variable/i });
-    expect(actionSelects).toHaveLength(2);
-  });
-
-  test('confirms with default "add" decisions if no changes are made', async () => {
+  test('updates a variable with the same name by default and imports the rest as new', async () => {
     const user = userEvent.setup();
-    render(<ImportModal {...mockProps} />);
+    const { props } = renderModal('Variable,Type,2026-02\nunits,INPUT,110\nPrice,INPUT,10.5\n');
 
-    // Directly click the main confirm button without changing any actions
-    const confirmButton = screen.getByRole('button', { name: /apply changes/i });
-    await user.click(confirmButton);
+    expect(screen.getByTestId('import-summary')).toHaveTextContent('1 new · 1 update · 0 skip');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
 
-    // --- Assertions ---
-    expect(mockProps.onConfirm).toHaveBeenCalledTimes(1);
-    const actualDecisions = mockProps.onConfirm.mock.calls[0][0];
-
-    const expectedDecisions: VariableImportDecision[] = [
-      { variable: mockNewVariables[0], action: 'add', replaceId: undefined },
-      { variable: mockNewVariables[1], action: 'add', replaceId: undefined }
-    ];
-
-    expect(actualDecisions).toEqual(expectedDecisions);
+    await waitFor(() => expect(props.onConfirm).toHaveBeenCalledTimes(1));
+    const decisions = (props.onConfirm as jest.Mock).mock.calls[0][0];
+    expect(decisions.map((d: any) => `${d.variable.name}:${d.action}:${d.targetId ?? ''}`)).toEqual([
+      'units:update:existing-units',
+      'Price:add:',
+    ]);
+    expect(decisions[0].variable.points).toEqual([{ month: '2026-02', value: 110 }]);
+    await waitFor(() => expect(props.onClose).toHaveBeenCalled());
   });
 
-  test('calls onClose when Cancel button is clicked', async () => {
+  test('blocks the import while the file has problems and lists them', () => {
+    renderModal('Variable,Type,2026-01\nA,INPUT,abc\n');
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Row 2, column "2026-01": "abc" in "A" is not a number');
+    expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
+  });
+
+  test('asks to confirm an ambiguous number format before importing', async () => {
     const user = userEvent.setup();
-    render(<ImportModal {...mockProps} />);
+    renderModal('Variable;Type;2026-01\nX;INPUT;1.234\n');
 
-    const cancelButton = screen.getByRole('button', { name: /cancel/i });
-    await user.click(cancelButton);
+    expect(screen.getByTestId('format-question')).toHaveTextContent('number format');
+    expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
 
-    expect(mockProps.onClose).toHaveBeenCalledTimes(1);
-    expect(mockProps.onConfirm).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'These formats are right' }));
+
+    expect(screen.queryByTestId('format-question')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled();
   });
 
-  test('calls onClose when close icon/button is clicked', async () => {
+  test('re-reads the file when the user picks another number format', async () => {
     const user = userEvent.setup();
-    render(<ImportModal {...mockProps} />);
+    const { props } = renderModal('Variable;Type;2026-01\nX;INPUT;1.234\n');
 
-    const closeButton = screen.getByRole('button', { name: /close import modal/i }); 
-    await user.click(closeButton);
+    await user.click(screen.getByRole('combobox', { name: 'number format' }));
+    await user.click(await screen.findByRole('option', { name: /decimal point/ }));
 
-    expect(mockProps.onClose).toHaveBeenCalledTimes(1);
-    expect(mockProps.onConfirm).not.toHaveBeenCalled();
+    expect(props.onReparse).toHaveBeenCalledWith({ decimal: 'dot', dateOrder: 'DMY' });
   });
 
-  test('displays correct variable count in footer', () => {
-    render(<ImportModal {...mockProps} />);
+  test('keeps the dialog open when saving fails', async () => {
+    const user = userEvent.setup();
+    const { props } = renderModal('Variable,Type,2026-01\nNew,INPUT,1\n', { onConfirm: jest.fn().mockResolvedValue(false) });
 
-    expect(screen.getByText('2 variables selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() => expect(props.onConfirm).toHaveBeenCalled());
+    expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  test('renders variable type badges correctly', () => {
-    render(<ImportModal {...mockProps} />);
+  test('renders nothing when closed', () => {
+    renderModal('Variable,Type,2026-01\nNew,INPUT,1\n', { isOpen: false });
 
-    expect(screen.getByText('ACTUAL')).toBeInTheDocument();
-    expect(screen.getByText('BUDGET')).toBeInTheDocument();
+    expect(screen.queryByText('Import variables')).not.toBeInTheDocument();
   });
-}); 
+});

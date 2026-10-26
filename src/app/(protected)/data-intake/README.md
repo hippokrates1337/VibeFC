@@ -48,8 +48,8 @@ The module supports four types of variables:
 ### Import Management
 
 When importing data, users can:
-- **Add as New**: Add imported variables as new entries (creates new variables in backend database)
-- **Update Existing**: Update existing variables with new time series data (updates existing variables in backend database via PUT API)
+- **Add as new**: Create a new variable.
+- **Update existing**: Add the file's months to an existing variable and overwrite months it already has; its other months stay. Chosen automatically when a variable with the same name exists.
 - **Skip**: Ignore variables from the import (no backend action taken)
 
 All import actions maintain synchronization between the frontend Zustand store and the backend database.

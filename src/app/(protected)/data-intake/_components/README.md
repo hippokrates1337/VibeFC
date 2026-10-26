@@ -50,18 +50,14 @@ The hook ensures both frontend Zustand store and backend database remain synchro
 ### `useCsvProcessor` (from `api-hooks.ts`)
 Responsible for client-side CSV file processing. It parses the uploaded CSV file, validates its structure and content, and prepares the data for the import modal or for direct addition via the API.
 
-## Utility Functions (`utils.ts`)
+## CSV import (`csv-import.ts`)
 
-This file contains various helper functions used within the data intake components:
-
-- **Date Utilities**:
-  - `parseDate`: Parses various date string formats (e.g., ISO, `dd.MM.yyyy`, `MM/yyyy`) into JavaScript `Date` objects.
-  - `formatDate`: Formats `Date` objects into a consistent `MM-yyyy` string for display.
-- **Number Utilities**:
-  - `formatNumber`: Formats numeric values using the English locale (e.g., `1,234.5`).
-- **Validation Utilities**:
-  - `isValidVariableType`: Validates if a string is one of the recognized variable types (ACTUAL, BUDGET, INPUT, UNKNOWN).
-  - `validateHeaders`: Checks if the headers of a CSV file conform to the expected structure (Variable, Type, Date columns).
+`parseVariablesCsv(text, options)` reads a variables CSV (columns `Variable`, `Type`, then one per month) into
+`{month: 'YYYY-MM', value}` points without any `Date` objects. Quoted cells, `,`/`;`/tab delimiters and many month
+header formats are supported (`2026-01`, `31.01.2026`, `01/2026`, `Jan 2026`, `März 2026`, ...). Each file uses one
+number format (`1,234.56` or `1.234,56`) and one date order for slash dates; both are detected from the whole file,
+and `ambiguous` tells the import dialog to ask. Cells that don't fit are reported as errors, never guessed.
+`month-values.ts` holds the display and input helpers (month labels, locale-aware number input).
 
 ## Testing
 
