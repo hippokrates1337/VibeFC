@@ -8,6 +8,7 @@ export enum VariableType {
   UNKNOWN = 'UNKNOWN'
 }
 
+/** One month of a variable. `date` is 'YYYY-MM' or 'YYYY-MM-DD' (read as written); null value = no value. */
 export class TimeSeriesPoint {
   @IsString()
   date: string;
@@ -40,14 +41,3 @@ export class VariableDto {
   @IsArray()
   values: TimeSeriesPoint[];
 }
-
-// Interface matching the Supabase database schema
-export interface VariableEntity {
-  id: string;
-  name: string;
-  type: VariableType;
-  values: TimeSeriesPoint[];
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-} 

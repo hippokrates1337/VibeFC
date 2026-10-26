@@ -21,6 +21,7 @@ import {
 import { useOrganizationStore } from '@/lib/store/organization';
 import { useAuth } from '@/providers/auth-provider';
 import { useVariableApi, useCsvProcessor } from '../_components/api-hooks';
+import { parseVariablesCsv } from '../_components/csv-import';
 
 // Type definitions for the container props
 interface ContainerProps {
@@ -30,7 +31,7 @@ interface ContainerProps {
   isDetailsModalOpen: boolean;
   selectedVariableForModal: Variable | null;
   closeDetailsModal: () => void;
-  handleUpdateVariable: (variableId: string, updateData: any) => Promise<void>;
+  handleUpdateVariable: (variableId: string, updateData: any) => Promise<boolean | void>;
   selectedOrgIdFromOrgStore: string | null;
   apiStatus: { success: boolean | null; error: string | null };
   storeIsLoading: boolean;
@@ -63,6 +64,7 @@ jest.mock('lucide-react', () => ({
   ChevronDown: (props: any) => <div data-testid="chevron-down-icon" {...props}>Chevron Down Icon</div>, // ADDED FOR SELECT COMPONENTS
   ChevronUp: (props: any) => <div data-testid="chevron-up-icon" {...props}>Chevron Up Icon</div>, // ADDED FOR SELECT COMPONENTS
   Check: (props: any) => <div data-testid="check-icon" {...props}>Check Icon</div>, // ADDED FOR SELECT COMPONENTS
+  Plus: (props: any) => <div data-testid="plus-icon" {...props}>Plus Icon</div>,
 }));
 
 // Mock the logger
@@ -120,14 +122,15 @@ describe('DataIntakeContainer', () => {
   let handleUpdateVariableMock: jest.Mock;
   let parseCSVMock: jest.Mock;
   let setShowImportModalMock: jest.Mock;
-  let setProcessedVariablesMock: jest.Mock;
+  let handleCreateVariableMock: jest.Mock;
+  let reparseMock: jest.Mock;
 
   const mockOrg123Variables: Variable[] = [
-    { id: '1', name: 'Variable 1 Alpha', type: 'ACTUAL', organizationId: 'org-123', timeSeries: [{ date: new Date('2023-01-01'), value: 100 }]/*, unit: 'USD', category: 'Revenue', description: 'Desc 1'*/ },
-    { id: '3', name: 'Variable 3 Gamma', type: 'INPUT', organizationId: 'org-123', timeSeries: [{ date: new Date('2023-02-01'), value: 300 }]/*, unit: 'EUR', category: 'Expense', description: 'Desc 3'*/ },
+    { id: '1', name: 'Variable 1 Alpha', type: 'ACTUAL', organizationId: 'org-123', timeSeries: [{ month: '2023-01', value: 100 }]/*, unit: 'USD', category: 'Revenue', description: 'Desc 1'*/ },
+    { id: '3', name: 'Variable 3 Gamma', type: 'INPUT', organizationId: 'org-123', timeSeries: [{ month: '2023-02', value: 300 }]/*, unit: 'EUR', category: 'Expense', description: 'Desc 3'*/ },
   ];
   const mockOrg456Variables: Variable[] = [
-    { id: '2', name: 'Variable 2 Beta', type: 'BUDGET', organizationId: 'org-456', timeSeries: [{ date: new Date('2023-01-01'), value: 200 }]/*, unit: 'GBP', category: 'Profit', description: 'Desc 2'*/ },
+    { id: '2', name: 'Variable 2 Beta', type: 'BUDGET', organizationId: 'org-456', timeSeries: [{ month: '2023-01', value: 200 }]/*, unit: 'GBP', category: 'Profit', description: 'Desc 2'*/ },
   ];
   const allMockVariables: Variable[] = [...mockOrg123Variables, ...mockOrg456Variables];
 
@@ -142,7 +145,8 @@ describe('DataIntakeContainer', () => {
     handleUpdateVariableMock = jest.fn().mockResolvedValue({ success: true });
     parseCSVMock = jest.fn();
     setShowImportModalMock = jest.fn();
-    setProcessedVariablesMock = jest.fn();
+    handleCreateVariableMock = jest.fn().mockResolvedValue(true);
+    reparseMock = jest.fn();
 
     mockedUseVariableStore.mockImplementation((selector) => {
       const state = {
@@ -170,12 +174,14 @@ describe('DataIntakeContainer', () => {
       handleImportVariables: handleImportVariablesMock,
       handleDeleteVariable: handleDeleteVariableMock,
       handleUpdateVariable: handleUpdateVariableMock,
+      handleCreateVariable: handleCreateVariableMock,
     });
     mockedUseCsvProcessor.mockReturnValue({
       isUploading: false,
       error: null,
-      processedVariables: [],
-      setProcessedVariables: setProcessedVariablesMock,
+      fileName: '',
+      importResult: null,
+      reparse: reparseMock,
       showImportModal: false,
       setShowImportModal: setShowImportModalMock,
       parseCSV: parseCSVMock,
@@ -188,8 +194,9 @@ describe('DataIntakeContainer', () => {
     jest.clearAllMocks();
   });
 
-  test('displays loading state when variables are loading', () => {
+  test('displays loading state while the first load runs', () => {
     mockedUseIsVariablesLoading.mockReturnValue(true);
+    mockedUseVariableStore.mockImplementation((selector) => selector({ variables: [], selectedOrganizationId: 'org-123' }));
     render(<DataIntakeContainer />);
     expect(screen.getByText('Loading variables...')).toBeInTheDocument(); // Adjusted text
     expect(screen.getByTestId('loader-icon')).toBeInTheDocument(); 
@@ -246,6 +253,14 @@ describe('DataIntakeContainer', () => {
     expect(screen.getByText('Variable 3 Gamma')).toBeInTheDocument();
     expect(screen.queryByText('Variable 2 Beta')).not.toBeInTheDocument();
     expect(screen.getByText(/choose file/i)).toBeInTheDocument(); // UploadSection's label
+  });
+
+  test('keeps the page in place while reloading after a save', () => {
+    mockedUseIsVariablesLoading.mockReturnValue(true);
+    render(<DataIntakeContainer>{(props: ContainerProps) => <div>{props.filteredVariables.length} variables</div>}</DataIntakeContainer>);
+
+    expect(screen.queryByText('Loading variables...')).not.toBeInTheDocument();
+    expect(screen.getByText('2 variables')).toBeInTheDocument();
   });
 
   test('calls fetchVariables on initial load if organization is selected', async () => {
@@ -357,6 +372,7 @@ describe('DataIntakeContainer', () => {
       handleImportVariables: handleImportVariablesMock,
       handleDeleteVariable: handleDeleteVariableMock,
       handleUpdateVariable: handleUpdateVariableMock,
+      handleCreateVariable: handleCreateVariableMock,
     });
     render(<DataIntakeContainer />);
     expect(screen.getByText(/variables saved successfully/i)).toBeInTheDocument(); // Adjusted text
@@ -369,6 +385,7 @@ describe('DataIntakeContainer', () => {
       handleImportVariables: handleImportVariablesMock,
       handleDeleteVariable: handleDeleteVariableMock,
       handleUpdateVariable: handleUpdateVariableMock,
+      handleCreateVariable: handleCreateVariableMock,
     });
     render(<DataIntakeContainer />);
     expect(screen.getByText(apiErrorMsg)).toBeInTheDocument();
@@ -390,110 +407,62 @@ describe('DataIntakeContainer', () => {
     expect(parseCSVMock).toHaveBeenCalledWith(mockFile);
   });
 
-  test('shows ImportModal when showImportModal is true and processedVariables exist', () => {
-    const processedVars = [{ id: 'new-1', name: 'New Imported Var', type: 'ACTUAL', organizationId: 'org-123', timeSeries: [] }] as Variable[];
+  const withImport = (csv: string) => {
     mockedUseCsvProcessor.mockReturnValue({
-      isUploading: false, error: null, processedVariables: processedVars, setProcessedVariables: setProcessedVariablesMock,
-      showImportModal: true, // Key for this test
-      setShowImportModal: setShowImportModalMock, parseCSV: parseCSVMock,
+      isUploading: false, error: null, fileName: 'import.csv', importResult: parseVariablesCsv(csv), reparse: reparseMock,
+      showImportModal: true, setShowImportModal: setShowImportModalMock, parseCSV: parseCSVMock,
     });
+  };
+
+  test('shows the ImportModal with the parsed file', () => {
+    withImport('Variable,Type,2026-01\nNew Imported Var,ACTUAL,1\n');
     render(<DataIntakeContainer />);
-    // Assuming ImportModal has a title or identifiable text
-    expect(screen.getByRole('heading', { name: /Import Variables/i })).toBeInTheDocument();
-    // And a confirm button
-    expect(screen.getByRole('button', { name: /Apply Changes/i })).toBeInTheDocument();
+
+    expect(screen.getByRole('heading', { name: /Import variables/i })).toBeInTheDocument();
+    expect(screen.getByText('New Imported Var')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument();
   });
 
   test('calls handleImportVariables on ImportModal confirm', async () => {
     const user = userEvent.setup();
-    const newVars = [{ id: 'new-1', name: 'New Var To Import', type: 'ACTUAL', organizationId: 'org-123', timeSeries: [] }] as Variable[];
-    mockedUseCsvProcessor.mockReturnValue({
-      isUploading: false, error: null, processedVariables: newVars, setProcessedVariables: setProcessedVariablesMock,
-      showImportModal: true, setShowImportModal: setShowImportModalMock, parseCSV: parseCSVMock,
-    });
-     mockedUseVariableStore.mockImplementation((selector) => { // Ensure existing variables are available
-      const state = {
-        variables: mockOrg123Variables, 
-        selectedOrganizationId: 'org-123',
-        setVariables: jest.fn(), 
-      };
-      return selector(state);
-    });
-
+    withImport('Variable,Type,2026-01\nNew Var To Import,ACTUAL,5\n');
 
     render(<DataIntakeContainer />);
-    
-    const confirmButton = screen.getByRole('button', { name: /Apply Changes/i });
-    await user.click(confirmButton);
+    await user.click(screen.getByRole('button', { name: 'Import' }));
 
-    const expectedDecisions = [
-      {
-        action: 'add',
-        variable: newVars[0], // The first (and only) variable from newVars
-      },
-    ];
-
-    expect(handleImportVariablesMock).toHaveBeenCalledWith(expectedDecisions);
-    // The setShowImportModal(false) is typically called within handleImportVariables or its success callback.
-    // We are mocking handleImportVariables, so we can't assert its side effect on setShowImportModal directly
-    // unless handleImportVariablesMock itself calls setShowImportModalMock(false).
-    // Or, ImportModal's onConfirm might call onClose which calls setShowImportModal(false)
-    // For this test, we assume the modal is closed by onConfirm.
-    // If `handleImportVariables` from useVariableApi itself calls `setShowImportModal(false)`, then it would need to be part of the mock.
-    // The component's ImportModal has `onClose={() => setShowImportModal(false)}` and `onConfirm={handleImportVariables}`
-    // So, handleImportVariables doesn't directly close. If it's successful, the modal should close.
-    // Let's assume after a successful import, showImportModal becomes false.
-    // This test relies on the ImportModal's own onConfirm behavior or an update to showImportModal state.
+    expect(handleImportVariablesMock).toHaveBeenCalledWith([
+      { action: 'add', variable: { name: 'New Var To Import', type: 'ACTUAL', points: [{ month: '2026-01', value: 5 }] } },
+    ]);
   });
 
-
-  // Test for VariableDetailsModal remains as is, testing the mock
-  test('renders the VariableDetailsModal with correct props when open', () => {
-    // This test focuses on the DataIntakeContainer's logic to pass props
-    // It does not test the VariableDetailsModal's internal workings
-    const mockCloseFunction = jest.fn();
-    const variableForModal = mockOrg123Variables[0];
-
-    // Mock useState within DataIntakeContainer for this specific test
-    // This is tricky without directly mocking useState. Instead, we'll rely on the 
-    // child render prop to simulate opening the modal if that's how it's controlled,
-    // or by setting the state via a mocked hook if directly controlled.
-    // The DataIntakeContainer uses internal state: isDetailsModalOpen, selectedVariableForModal
-    // We need to simulate these being set.
-    // For now, we keep the original test structure for VariableDetailsModal which directly renders it.
-
-    const testProps = {
-      isOpen: true,
-      onClose: mockCloseFunction,
-      variableToEdit: variableForModal, // Pass a variable
-      onSave: handleUpdateVariableMock,
-      currentOrganizationId: 'org-123'
-    };
-
+  test('opens the variable editor for a listed variable', async () => {
+    const user = userEvent.setup();
     render(
-      <div data-testid="test-container">
-        <VariableDetailsModalMock 
-          isOpen={testProps.isOpen}
-          onClose={testProps.onClose}
-          variableToEdit={testProps.variableToEdit}
-          onSave={testProps.onSave}
-          currentOrganizationId={testProps.currentOrganizationId}
-        />
-      </div>
+      <DataIntakeContainer>
+        {(props: ContainerProps) => (
+          <button onClick={() => props.handleOpenDetailsModal(mockOrg123Variables[0])}>View</button>
+        )}
+      </DataIntakeContainer>
     );
 
-    expect(VariableDetailsModalMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isOpen: true,
-        onClose: mockCloseFunction,
-        variableToEdit: variableForModal,
-        onSave: handleUpdateVariableMock,
-        currentOrganizationId: 'org-123'
-      }),
-      {} 
-    );
-    
-    expect(screen.getByTestId('test-container')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'View' }));
+
     expect(screen.getByTestId('mock-variable-details-modal')).toBeInTheDocument();
+    expect(VariableDetailsModalMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isOpen: true, variableToEdit: mockOrg123Variables[0], currentOrganizationId: 'org-123' }),
+      {}
+    );
   });
-}); 
+
+  test('"New variable" opens the editor in create mode', async () => {
+    const user = userEvent.setup();
+    render(<DataIntakeContainer />);
+
+    await user.click(screen.getByRole('button', { name: /New variable/ }));
+
+    expect(VariableDetailsModalMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isOpen: true, variableToEdit: null, onCreate: handleCreateVariableMock }),
+      {}
+    );
+  });
+});

@@ -1,9 +1,9 @@
 'use client'
 
-import { format } from 'date-fns'
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Variable } from '@/lib/store/variables'
+import { monthRangeLabel } from './month-values'
 
 interface VariableListRowProps {
   variable: Variable
@@ -21,12 +21,7 @@ export function VariableListRow({ variable, onDelete, onViewDetails }: VariableL
     onDelete(variable.id, variable.name)
   }
 
-  const sortedTimeSeries = [...variable.timeSeries].sort((a, b) => a.date.getTime() - b.date.getTime())
-  const hasTimeSeriesData = sortedTimeSeries.length > 0
-
-  const rangeText = hasTimeSeriesData
-    ? `${format(sortedTimeSeries[0].date, 'MM/yyyy')} – ${format(sortedTimeSeries[sortedTimeSeries.length - 1].date, 'MM/yyyy')}`
-    : 'No time series data'
+  const rangeText = monthRangeLabel(variable.timeSeries) ?? 'No time series data'
 
   return (
     <div

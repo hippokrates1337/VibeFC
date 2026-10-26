@@ -1,352 +1,272 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { SupabaseOptimizedService } from '../supabase/supabase-optimized.service';
 import { Request } from 'express';
-import { formatMonth, monthIndexFromDate, monthIndexFromDateString } from '@vibefc/forecast-engine';
+import { formatMonth, monthIndex } from '@vibefc/forecast-engine';
 
 // DTOs
 import { AddVariablesDto } from './dto/add-variables.dto';
 import { UpdateVariablesDto } from './dto/update-variables.dto';
 import { DeleteVariablesDto } from './dto/delete-variables.dto';
-import { VariableDto, VariableType, TimeSeriesPoint, VariableEntity } from './dto/variable.dto';
+import { VariableType, TimeSeriesPoint } from './dto/variable.dto';
+
+/** A point as the save functions expect it: first of the month and a finite number or null. */
+interface MonthPoint {
+  month: string; // 'YYYY-MM-01'
+  value: number | null;
+}
+
+/** Variable row with its values, as returned by the API: values are `{date: 'YYYY-MM-01', value}`. */
+const VARIABLE_COLUMNS = 'id, name, type, user_id, organization_id, created_at, updated_at, variable_values(month, value)';
+
+// 'YYYY-MM' or 'YYYY-MM-DD', optionally followed by a time: read as written, no time zone.
+const ISO_MONTH_PREFIX = /^(\d{4})-(\d{2})(?:-(\d{2}))?(?:$|T)/;
 
 @Injectable()
 export class DataIntakeService {
   private readonly logger = new Logger(DataIntakeService.name);
-  
-  constructor(
-    private supabase: SupabaseOptimizedService
-  ) {}
 
-  // CREATE - Add new variables
+  constructor(private supabase: SupabaseOptimizedService) {}
+
+  // CREATE - Add new variables (each with its values, in one transaction)
   async addVariables(addVariablesDto: AddVariablesDto, request: Request) {
     const { variables } = addVariablesDto;
-    
-    this.logger.log(`Processing ${variables?.length || 0} variables`);
-    
     if (!variables || variables.length === 0) {
-      this.logger.warn('No variables received in request');
+      return { message: 'No variables to add', count: 0, variables: [] };
+    }
+
+    const payload = variables.map((variable) => {
+      const name = variable.name || 'Unnamed Variable';
+      if (!variable.user_id || !variable.organization_id) {
+        throw new BadRequestException(`User ID and Organization ID are required for variable ${name}`);
+      }
       return {
-        message: 'No variables to add',
+        id: variable.id,
+        name,
+        type: Object.values(VariableType).includes(variable.type as VariableType) ? variable.type : VariableType.UNKNOWN,
+        user_id: variable.user_id,
+        organization_id: variable.organization_id,
+        values: this.toMonthPoints(variable.values, name),
+      };
+    });
+
+    const client = this.supabase.getClientForRequest(request);
+    const { error } = await client.rpc('create_variables', { p_variables: payload });
+    if (error) {
+      throw this.toHttpException(error, 'add variables');
+    }
+
+    const saved = await this.findByIds(payload.map((v) => v.id), request);
+    this.logger.log(`Added ${saved.length} variables`);
+    return { message: 'Variables added successfully', count: saved.length, variables: saved };
+  }
+
+  // READ - Variables of all organizations the user belongs to
+  async getVariablesByUser(userId: string, request: Request) {
+    const client = this.supabase.getClientForRequest(request);
+
+    const { data: orgMembers, error: orgError } = await client
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', userId);
+    if (orgError) {
+      throw this.toHttpException(orgError, 'fetch organizations');
+    }
+    if (!orgMembers || orgMembers.length === 0) {
+      return {
+        message: 'User not found in any organization or no variables available for their organizations',
         count: 0,
         variables: [],
       };
     }
-    
-    try {
-      const client = this.supabase.getClientForRequest(request);
-      const now = new Date().toISOString();
-      const payload = variables.map((variable) => {
-        const name = variable.name || 'Unnamed Variable';
-        const userId = variable.user_id;
-        const organizationId = variable.organization_id;
-        if (!userId || !organizationId) {
-          throw new Error(`User ID and Organization ID are required for variable ${name}`);
-        }
 
-        const validType = Object.values(VariableType).includes(variable.type as VariableType)
-          ? variable.type
-          : VariableType.UNKNOWN;
-
-        return {
-          id: variable.id,
-          name,
-          type: validType,
-          values: this.normalizeTimeSeriesValues(variable.values, name),
-          user_id: userId,
-          organization_id: organizationId,
-          created_at: now,
-          updated_at: now,
-        };
-      });
-
-      const { data: savedVariables, error } = await client
-        .from('variables')
-        .insert(payload)
-        .select();
-
-      if (error) {
-        this.logger.error(`Failed to save variables batch: ${error.message}`);
-        throw new Error(`Failed to save variables: ${error.message}`);
-      }
-      
-      this.logger.log(`Successfully added ${savedVariables.length} variables`);
-      
-      return {
-        message: 'Variables added successfully',
-        count: savedVariables.length,
-        variables: savedVariables,
-      };
-    } catch (error) {
-      this.logger.error(`Error adding variables: ${error.message}`);
-      throw new Error(`Error adding variables: ${error.message}`);
+    const organizationIds = orgMembers.map((member) => member.organization_id);
+    const { data, error } = await client
+      .from('variables')
+      .select(VARIABLE_COLUMNS)
+      .in('organization_id', organizationIds);
+    if (error) {
+      throw this.toHttpException(error, 'fetch variables');
     }
+
+    const variables = (data || []).map((row) => this.toApiVariable(row));
+    return {
+      message: variables.length > 0 ? 'Variables retrieved successfully' : "No variables found for the user's organizations",
+      count: variables.length,
+      variables,
+    };
   }
 
-  // READ - Get variables by user ID
-  async getVariablesByUser(userId: string, request: Request) {
-    try {
-      const client = this.supabase.getClientForRequest(request);
-      this.logger.log(`Fetching organizations for user: ${userId}`);
-      
-      // Step 1: Get organization IDs for the user
-      const { data: orgMembers, error: orgError } = await client
-        .from('organization_members') // ASSUMPTION: Table linking users and orgs
-        .select('organization_id')
-        .eq('user_id', userId);
-
-      if (orgError) {
-        this.logger.error(`Failed to fetch organizations for user ${userId}: ${orgError.message}`);
-        throw new Error(`Failed to fetch organizations: ${orgError.message}`);
-      }
-
-      if (!orgMembers || orgMembers.length === 0) {
-        this.logger.warn(`User ${userId} is not a member of any organization.`);
-        return {
-          message: 'User not found in any organization or no variables available for their organizations',
-          count: 0,
-          variables: [],
-        };
-      }
-
-      const organizationIds = orgMembers.map(member => member.organization_id);
-      this.logger.log(`User ${userId} belongs to organizations: ${organizationIds.join(', ')}`);
-
-      // Step 2: Fetch variables belonging to those organizations
-      this.logger.log(`Fetching variables for organizations: ${organizationIds.join(', ')}`);
-      const { data, error } = await client
-        .from('variables')
-        .select('*')
-        .in('organization_id', organizationIds); // ASSUMPTION: 'variables' table has 'organization_id'
-
-      if (error) {
-        this.logger.error(`Failed to fetch variables for organizations ${organizationIds.join(', ')}: ${error.message}`);
-        throw new Error(`Failed to fetch variables: ${error.message}`);
-      }
-
-      if (!data || data.length === 0) {
-        this.logger.warn(`No variables found for organizations ${organizationIds.join(', ')}`);
-        // It's possible the user is in orgs, but those orgs have no variables
-        return {
-          message: 'No variables found for the user\'s organizations',
-          count: 0,
-          variables: [],
-        };
-      }
-
-      this.logger.log(`Found ${data.length} variables for organizations associated with user ${userId}`);
-
-      return {
-        message: 'Variables retrieved successfully',
-        count: data.length,
-        variables: data,
-      };
-    } catch (error) {
-      // Catch potential errors from the revised logic or re-thrown errors
-      this.logger.error(`Error in getVariablesByUser for user ${userId}: ${error.message}`);
-      // Ensure a consistent error response structure if desired, or rethrow
-      throw new Error(`Error fetching variables by user's organizations: ${error.message}`);
-    }
-  }
-
-  // UPDATE - Update variables
+  // UPDATE - Name, type and/or values. Values are merged by month unless replaceValues is set.
   async updateVariables(updateVariablesDto: UpdateVariablesDto, request: Request) {
     const { variables } = updateVariablesDto;
-    
     if (!variables || variables.length === 0) {
-      this.logger.warn('No variables received for update');
-      return {
-        message: 'No variables to update',
-        count: 0,
-        variables: [],
-      };
+      return { message: 'No variables to update', count: 0, variables: [] };
     }
-    
-    try {
-      const client = this.supabase.getClientForRequest(request);
-      this.logger.log(`Updating ${variables.length} variables`);
-      
-      const variableIds = variables.map((variable) => variable.id);
-      const { data: existingRows, error: existingError } = await client
-        .from('variables')
-        .select('*')
-        .in('id', variableIds);
 
-      if (existingError) {
-        throw new Error(`Failed to verify existing variables: ${existingError.message}`);
-      }
+    const payload = variables.map((variable) => ({
+      id: variable.id,
+      ...(variable.name !== undefined ? { name: variable.name } : {}),
+      ...(variable.type !== undefined ? { type: variable.type } : {}),
+      ...(variable.values !== undefined
+        ? { values: this.toMonthPoints(variable.values, variable.name || variable.id), replace_values: variable.replaceValues === true }
+        : {}),
+    }));
 
-      const existingById = new Map((existingRows || []).map((row) => [row.id, row]));
-      for (const variable of variables) {
-        if (!existingById.has(variable.id)) {
-          this.logger.warn(`Variable with ID ${variable.id} not found`);
-          throw new NotFoundException(`Variable with ID ${variable.id} not found`);
-        }
-      }
-
-      const updateResults = await Promise.all(
-        variables.map(async (variable) => {
-          const existingData = existingById.get(variable.id);
-          const updateObj: Partial<VariableEntity> = {
-            updated_at: new Date().toISOString(),
-          };
-
-          if (variable.name !== undefined) {
-            updateObj.name = variable.name;
-          }
-          if (variable.type !== undefined) {
-            updateObj.type = variable.type;
-          }
-          if (variable.values !== undefined) {
-            updateObj.values = this.normalizeTimeSeriesValues(variable.values, variable.name || existingData.name);
-          }
-
-          const { data: updatedData, error: updateError } = await client
-            .from('variables')
-            .update(updateObj)
-            .eq('id', variable.id)
-            .select()
-            .single();
-
-          if (updateError) {
-            throw new Error(`Failed to update variable ${variable.id}: ${updateError.message}`);
-          }
-          return updatedData;
-        })
-      );
-      
-      this.logger.log(`Successfully updated ${updateResults.length} variables`);
-      
-      return {
-        message: 'Variables updated successfully',
-        count: updateResults.length,
-        variables: updateResults,
-      };
-    } catch (error) {
-      this.logger.error(`Error updating variables: ${error.message}`);
-      throw new Error(`Error updating variables: ${error.message}`);
+    const client = this.supabase.getClientForRequest(request);
+    const { error } = await client.rpc('update_variables', { p_variables: payload });
+    if (error) {
+      throw this.toHttpException(error, 'update variables');
     }
+
+    const updated = await this.findByIds(payload.map((v) => v.id), request);
+    this.logger.log(`Updated ${updated.length} variables`);
+    return { message: 'Variables updated successfully', count: updated.length, variables: updated };
   }
 
-  // DELETE - Delete variables
+  // DELETE - Variables of one organization; their values go with them (ON DELETE CASCADE)
   async deleteVariables(
-    deleteVariablesDto: DeleteVariablesDto, 
-    requestingUserId: string, // Added user ID from controller
-    requestingOrgId: string, // Added organization ID from controller
+    deleteVariablesDto: DeleteVariablesDto,
+    requestingUserId: string,
+    requestingOrgId: string,
     request: Request
   ) {
     const { ids } = deleteVariablesDto;
-    
     if (!ids || ids.length === 0) {
-      this.logger.warn('No variable IDs received for deletion');
-      return {
-        message: 'No variables to delete',
-        count: 0,
-        deletedIds: [],
-      };
+      return { message: 'No variables to delete', count: 0, deletedIds: [] };
     }
-    
-    try {
-      const client = this.supabase.getClientForRequest(request);
-      this.logger.log(`Deleting ${ids.length} variables for user ${requestingUserId} in org ${requestingOrgId}`);
 
-      const { data: existingRows, error: existingError } = await client
-        .from('variables')
-        .select('id, organization_id, name')
-        .in('id', ids);
+    const client = this.supabase.getClientForRequest(request);
+    this.logger.log(`Deleting ${ids.length} variables for user ${requestingUserId} in org ${requestingOrgId}`);
 
-      if (existingError) {
-        throw new Error(`Failed to verify variables before deletion: ${existingError.message}`);
-      }
-
-      const existingById = new Map((existingRows || []).map((row) => [row.id, row]));
-      for (const variableId of ids) {
-        const existingData = existingById.get(variableId);
-        if (!existingData) {
-          throw new NotFoundException(`Variable with ID ${variableId} not found`);
-        }
-        if (existingData.organization_id !== requestingOrgId) {
-          throw new Error(`Access denied: Variable does not belong to your organization`);
-        }
-      }
-
-      const { error: deleteError } = await client
-        .from('variables')
-        .delete()
-        .in('id', ids);
-
-      if (deleteError) {
-        throw new Error(`Failed to delete variables: ${deleteError.message}`);
-      }
-
-      const deletedIds = ids;
-      
-      this.logger.log(`Successfully deleted ${deletedIds.length} variables`);
-      
-      return {
-        message: 'Variables deleted successfully',
-        count: deletedIds.length,
-        deletedIds: deletedIds,
-      };
-    } catch (error) {
-      this.logger.error(`Error deleting variables: ${error.message}`);
-      throw new Error(`Error deleting variables: ${error.message}`);
+    const { data: existingRows, error: existingError } = await client
+      .from('variables')
+      .select('id, organization_id, name')
+      .in('id', ids);
+    if (existingError) {
+      throw this.toHttpException(existingError, 'verify variables before deletion');
     }
+
+    const existingById = new Map((existingRows || []).map((row) => [row.id, row]));
+    for (const variableId of ids) {
+      const existing = existingById.get(variableId);
+      if (!existing) {
+        throw new NotFoundException(`Variable with ID ${variableId} not found`);
+      }
+      if (existing.organization_id !== requestingOrgId) {
+        throw new ForbiddenException('Access denied: Variable does not belong to your organization');
+      }
+    }
+
+    const { error: deleteError } = await client.from('variables').delete().in('id', ids);
+    if (deleteError) {
+      throw this.toHttpException(deleteError, 'delete variables');
+    }
+
+    this.logger.log(`Deleted ${ids.length} variables`);
+    return { message: 'Variables deleted successfully', count: ids.length, deletedIds: ids };
+  }
+
+  private async findByIds(ids: string[], request: Request) {
+    const client = this.supabase.getClientForRequest(request);
+    const { data, error } = await client.from('variables').select(VARIABLE_COLUMNS).in('id', ids);
+    if (error) {
+      throw this.toHttpException(error, 'read saved variables');
+    }
+    return (data || []).map((row) => this.toApiVariable(row));
+  }
+
+  private toApiVariable(row: any) {
+    const { variable_values: points, ...variable } = row;
+    const values = ((points as Array<{ month: string; value: number | null }>) || [])
+      .map((point) => ({ date: point.month, value: point.value }))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return { ...variable, values };
   }
 
   /**
-   * First day of the date's calendar month as 'YYYY-MM-01'. The month is read the same
-   * way the forecast engine reads stored dates (monthIndexFromDateString: as written, no
-   * time zone), so '2024-03-15' and '2024-03-01T00:00:00+01:00' are both March 2024 on
-   * every server. Local-time Date methods here used to store March as '2024-02-29' on
-   * hosts east of UTC.
+   * Validates incoming points and converts them to first-of-month rows. Dates are read as
+   * written ('2024-03-15', '2024-03', '2024-03-01T00:00:00+01:00' are all March 2024), so the
+   * server's time zone never matters. Values must be finite numbers or null (= no value).
+   * Rejects the whole request rather than storing guesses.
    */
-  private normalizeToFirstOfMonth(dateInput: string): string {
-    let month: number;
-    try {
-      month = monthIndexFromDateString(dateInput);
-    } catch {
-      this.logger.warn(`Invalid date ${dateInput}, using current month first day`);
-      month = monthIndexFromDate(new Date());
-    }
-    const year = Math.floor(month / 12);
-    return `${year}-${String(month - year * 12 + 1).padStart(2, '0')}-01`;
-  }
-
-  private normalizeTimeSeriesValues(values: TimeSeriesPoint[], variableName: string): TimeSeriesPoint[] {
-    if (!values || !Array.isArray(values)) {
-      this.logger.warn(`Invalid values array for variable ${variableName}. Using empty array.`);
+  private toMonthPoints(values: TimeSeriesPoint[] | undefined, variableName: string): MonthPoint[] {
+    if (values === undefined || values === null) {
       return [];
     }
+    if (!Array.isArray(values)) {
+      throw new BadRequestException(`Values of variable "${variableName}" must be an array`);
+    }
 
-    return values
-      .filter(value => {
-        // Filter out invalid entries
-        if (!value || typeof value !== 'object') {
-          this.logger.warn(`Invalid value entry for variable ${variableName}:`, value);
-          return false;
-        }
-        
-        if (!value.date) {
-          this.logger.warn(`Missing date for value entry in variable ${variableName}:`, value);
-          return false;
-        }
-        
-        return true;
-      })
-      .map(value => {
-        // Normalize the value structure with consistent first-of-month dates
-        const normalizedValue: TimeSeriesPoint = {
-          date: this.normalizeToFirstOfMonth(value.date), // Ensure first of month
-          value: typeof value.value === 'number' ? value.value : 0,
-        };
-        
-        // Log the normalization for debugging MM-YYYY period consistency
-        if (value.date !== normalizedValue.date) {
-          this.logger.debug(`Date normalized for variable ${variableName}: ${value.date} -> ${normalizedValue.date} (MM-YYYY: ${formatMonth(monthIndexFromDateString(normalizedValue.date))})`);
-        }
-        
-        return normalizedValue;
-      })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Sort by date ascending
+    const problems: string[] = [];
+    const seen = new Set<string>();
+    const points: MonthPoint[] = [];
+
+    values.forEach((point, index) => {
+      const where = `variable "${variableName}", value ${index + 1}`;
+      if (!point || typeof point !== 'object') {
+        problems.push(`${where}: expected {date, value}`);
+        return;
+      }
+
+      const match = typeof point.date === 'string' ? ISO_MONTH_PREFIX.exec(point.date) : null;
+      const month = match ? Number(match[2]) : NaN;
+      if (!match || month < 1 || month > 12) {
+        problems.push(`${where}: date "${point.date}" is not YYYY-MM or YYYY-MM-DD`);
+        return;
+      }
+
+      const raw = point.value as unknown;
+      if (raw !== null && raw !== undefined && (typeof raw !== 'number' || !Number.isFinite(raw))) {
+        problems.push(`${where}: value ${JSON.stringify(raw)} is not a finite number or null`);
+        return;
+      }
+
+      const monthStart = `${match[1]}-${match[2]}-01`;
+      if (seen.has(monthStart)) {
+        problems.push(`${where}: month ${formatMonth(monthIndex(Number(match[1]), month))} appears more than once`);
+        return;
+      }
+      seen.add(monthStart);
+      points.push({ month: monthStart, value: (raw as number | null | undefined) ?? null });
+    });
+
+    if (problems.length > 0) {
+      const shown = problems.slice(0, 10);
+      const more = problems.length > shown.length ? ` (and ${problems.length - shown.length} more)` : '';
+      throw new BadRequestException(`Invalid values: ${shown.join('; ')}${more}`);
+    }
+    return points.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
   }
-} 
+
+  /** Maps a Supabase/PostgREST error to an HTTP status without echoing database internals. */
+  private toHttpException(error: { code?: string; message?: string }, action: string): HttpException {
+    this.logger.error(`Failed to ${action}: [${error.code}] ${error.message}`);
+    switch (error.code) {
+      case 'P0002':
+        return new NotFoundException(error.message);
+      case '23505':
+        return new ConflictException('A variable with this ID already exists');
+      case '42501':
+        return new ForbiddenException('You do not have permission to change variables in this organization');
+      case '22P02':
+      case '22007':
+      case '22008':
+      case '23514':
+        return new BadRequestException(`Invalid variable data (${action})`);
+      default:
+        if (error.message?.toLowerCase().includes('row-level security')) {
+          return new ForbiddenException('You do not have permission to change variables in this organization');
+        }
+        return new InternalServerErrorException(`Failed to ${action}`);
+    }
+  }
+}

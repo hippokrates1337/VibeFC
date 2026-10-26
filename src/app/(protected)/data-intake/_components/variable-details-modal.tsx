@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -18,314 +17,276 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { X } from 'lucide-react'
+import { Check, Plus, Trash2, X } from 'lucide-react'
 import { Variable, TimeSeriesData } from '@/lib/store/variables'
-import { format } from 'date-fns'
+import type { VariableDraft } from './api-hooks'
+import { formatMonthLabel, formatValue, parseUserNumber, sortByMonth } from './month-values'
+
+type UpdateData = { name?: string; timeSeries?: TimeSeriesData[]; type?: Variable['type'] }
 
 interface VariableDetailsModalProps {
   isOpen: boolean
   onClose: () => void
+  /** The variable to edit; null with `onCreate` opens an empty form for a new variable. */
   variableToEdit: Variable | null
-  onSave: (variableId: string, updateData: { name?: string; timeSeries?: TimeSeriesData[]; type?: Variable['type'] }, organizationId: string | null) => Promise<void>
+  onSave: (variableId: string, updateData: UpdateData, organizationId: string | null) => Promise<boolean | void>
+  onCreate?: (draft: VariableDraft, organizationId: string | null) => Promise<boolean | void>
   currentOrganizationId: string | null
 }
 
-// Utility function to parse number input with international notation
-const parseNumberInput = (value: string): number | null => {
-  if (!value || value.trim() === '') return null
-  
-  // Remove thousand separators and keep the decimal separator
-  const normalized = value
-    .replace(/\s/g, '')     // Remove any whitespace
-    .replace(/,/g, '')      // Remove commas (thousand separators in international format)
-  
-  const parsed = parseFloat(normalized)
-  return isNaN(parsed) ? null : parsed
-}
-
-// Format number for display in edit field
-const formatNumberForEdit = (value: number | null): string => {
-  if (value === null) return ''
-  return value.toString()
-}
+const EMPTY_DRAFT: VariableDraft = { name: '', type: 'INPUT', timeSeries: [] }
 
 export function VariableDetailsModal({
   isOpen,
   onClose,
   variableToEdit,
   onSave,
+  onCreate,
   currentOrganizationId
 }: VariableDetailsModalProps): React.ReactNode {
-  const [editableVariable, setEditableVariable] = useState<Variable | null>(null)
-  const [editingCellIndex, setEditingCellIndex] = useState<number | null>(null)
+  const isCreate = variableToEdit === null
+  const [draft, setDraft] = useState<VariableDraft>(EMPTY_DRAFT)
+  const [editingMonth, setEditingMonth] = useState<string | null>(null)
   const [editedValue, setEditedValue] = useState<string>('')
+  const [newMonth, setNewMonth] = useState<string>('')
+  const [newValue, setNewValue] = useState<string>('')
+  const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState<boolean>(false)
 
-  // Create a deep copy of the variable when it changes
+  // Start from a copy, so edits stay local until saved
   useEffect(() => {
-    if (variableToEdit) {
-      // Deep clone the variable to isolate local changes
-      setEditableVariable({
-        ...variableToEdit,
-        timeSeries: variableToEdit.timeSeries.map(ts => ({
-          date: new Date(ts.date),
-          value: ts.value
-        }))
-      })
-    } else {
-      setEditableVariable(null)
-    }
-    
-    // Reset editing state
-    setEditingCellIndex(null)
+    setDraft(variableToEdit
+      ? { name: variableToEdit.name, type: variableToEdit.type, timeSeries: sortByMonth(variableToEdit.timeSeries) }
+      : EMPTY_DRAFT)
+    setEditingMonth(null)
     setEditedValue('')
-  }, [variableToEdit])
+    setNewMonth('')
+    setNewValue('')
+    setFormError(null)
+  }, [variableToEdit, isOpen])
 
-  if (!isOpen || !editableVariable) return null
+  if (!isOpen || (isCreate && !onCreate)) return null
 
-  // Sort time series data by date for consistent display
-  const sortedTimeSeries = [...editableVariable.timeSeries].sort(
-    (a, b) => a.date.getTime() - b.date.getTime()
-  )
+  const points = draft.timeSeries
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    setEditableVariable(prev => prev ? { ...prev, name: e.target.value } : null)
-  }
-
-  const handleTypeChange = (value: string): void => {
-    setEditableVariable(prev => 
-      prev ? { 
-        ...prev, 
-        type: value as 'ACTUAL' | 'BUDGET' | 'INPUT' | 'UNKNOWN'
-      } : null
-    )
-  }
-
-  const startEditingValue = (index: number): void => {
-    setEditingCellIndex(index)
-    setEditedValue(formatNumberForEdit(sortedTimeSeries[index].value))
+  const startEditingValue = (point: TimeSeriesData): void => {
+    setEditingMonth(point.month)
+    setEditedValue(point.value === null ? '' : String(point.value))
+    setFormError(null)
   }
 
   const confirmValueChange = (): void => {
-    if (editingCellIndex === null) return
-
-    const updatedTimeSeries = [...sortedTimeSeries]
-    const parsedValue = parseNumberInput(editedValue)
-    
-    updatedTimeSeries[editingCellIndex] = {
-      ...updatedTimeSeries[editingCellIndex],
-      value: parsedValue
+    if (editingMonth === null) return
+    const value = parseUserNumber(editedValue)
+    if (value === undefined) {
+      setFormError(`"${editedValue}" is not a number.`)
+      return
     }
-    
-    setEditableVariable(prev => prev ? {
-      ...prev,
-      timeSeries: updatedTimeSeries
-    } : null)
-    
-    setEditingCellIndex(null)
+    setDraft(prev => ({ ...prev, timeSeries: prev.timeSeries.map(p => (p.month === editingMonth ? { ...p, value } : p)) }))
+    setEditingMonth(null)
     setEditedValue('')
+    setFormError(null)
   }
 
   const cancelValueChange = (): void => {
-    setEditingCellIndex(null)
+    setEditingMonth(null)
     setEditedValue('')
+    setFormError(null)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === 'Enter') {
-      confirmValueChange()
-    } else if (e.key === 'Escape') {
-      cancelValueChange()
+  const removePoint = (month: string): void => {
+    setDraft(prev => ({ ...prev, timeSeries: prev.timeSeries.filter(p => p.month !== month) }))
+  }
+
+  const addPoint = (): void => {
+    if (!/^\d{4}-\d{2}$/.test(newMonth)) {
+      setFormError('Choose a month for the new value.')
+      return
     }
+    if (points.some(p => p.month === newMonth)) {
+      setFormError(`${formatMonthLabel(newMonth)} already has a value; edit it in the table.`)
+      return
+    }
+    const value = parseUserNumber(newValue)
+    if (value === undefined) {
+      setFormError(`"${newValue}" is not a number.`)
+      return
+    }
+    setDraft(prev => ({ ...prev, timeSeries: sortByMonth([...prev.timeSeries, { month: newMonth, value }]) }))
+    setNewMonth('')
+    setNewValue('')
+    setFormError(null)
   }
 
   const handleSave = async (): Promise<void> => {
-    if (!editableVariable) return
-    
+    if (!draft.name.trim()) {
+      setFormError('The variable needs a name.')
+      return
+    }
     setIsSaving(true)
-    
     try {
-      // Determine what's changed to only send modified fields
-      const updateData: {
-        name?: string;
-        type?: Variable['type'];
-        timeSeries?: TimeSeriesData[];
-      } = {}
-      
-      if (editableVariable.name !== variableToEdit?.name) {
-        updateData.name = editableVariable.name
+      let saved: boolean | void
+      if (variableToEdit === null) {
+        saved = await onCreate!({ ...draft, name: draft.name.trim() }, currentOrganizationId)
+      } else {
+        const updateData: UpdateData = {}
+        if (draft.name.trim() !== variableToEdit.name) updateData.name = draft.name.trim()
+        if (draft.type !== variableToEdit.type) updateData.type = draft.type
+        if (JSON.stringify(points) !== JSON.stringify(sortByMonth(variableToEdit.timeSeries))) updateData.timeSeries = points
+        saved = Object.keys(updateData).length > 0
+          ? await onSave(variableToEdit.id, updateData, currentOrganizationId)
+          : true
       }
-      
-      if (editableVariable.type !== variableToEdit?.type) {
-        updateData.type = editableVariable.type
-      }
-      
-      // Check if time series data has changed (we need a deep comparison)
-      const timeSeriesChanged = JSON.stringify(sortedTimeSeries) !== 
-        JSON.stringify([...variableToEdit!.timeSeries].sort((a, b) => 
-          a.date.getTime() - b.date.getTime()
-        ))
-      
-      if (timeSeriesChanged) {
-        updateData.timeSeries = sortedTimeSeries
-      }
-      
-      // Only call API if something changed
-      if (Object.keys(updateData).length > 0) {
-        await onSave(editableVariable.id, updateData, currentOrganizationId)
-      }
-      
-      onClose()
-    } catch (error) {
-      console.error('Error saving variable:', error)
+      if (saved !== false) onClose()
     } finally {
       setIsSaving(false)
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Enter') confirmValueChange()
+    else if (e.key === 'Escape') cancelValueChange()
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={open => { if (!open && !isSaving) onClose() }}>
       <DialogContent className="max-w-2xl h-[80vh] flex flex-col bg-slate-800 border-slate-700 text-slate-100">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-slate-100">
-            Variable Details
+            {isCreate ? 'New variable' : 'Variable details'}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="flex flex-col gap-4 flex-1 overflow-hidden py-4">
-          {/* Variable Name */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-sm font-medium text-slate-200">Name:</label>
-            <Input 
+            <label htmlFor="variable-name" className="text-sm font-medium text-slate-200">Name:</label>
+            <Input
+              id="variable-name"
               className="col-span-3 bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400 focus:border-blue-500"
-              value={editableVariable.name}
-              onChange={handleNameChange}
+              value={draft.name}
+              placeholder="e.g. Revenue"
+              onChange={e => setDraft(prev => ({ ...prev, name: e.target.value }))}
             />
           </div>
-          
-          {/* Variable Type */}
+
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-sm font-medium text-slate-200">Type:</label>
-            <Select 
-              value={editableVariable.type} 
-              onValueChange={handleTypeChange}
-            >
-              <SelectTrigger className="col-span-3 bg-slate-700 border-slate-600 text-slate-100 focus:border-blue-500">
+            <Select value={draft.type} onValueChange={value => setDraft(prev => ({ ...prev, type: value as Variable['type'] }))}>
+              <SelectTrigger className="col-span-3 bg-slate-700 border-slate-600 text-slate-100 focus:border-blue-500" aria-label="variable type">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent className="bg-slate-700 border-slate-600">
-                <SelectItem value="ACTUAL" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">ACTUAL</SelectItem>
-                <SelectItem value="BUDGET" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">BUDGET</SelectItem>
-                <SelectItem value="INPUT" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">INPUT</SelectItem>
-                <SelectItem value="UNKNOWN" className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">UNKNOWN</SelectItem>
+                {(['ACTUAL', 'BUDGET', 'INPUT', 'UNKNOWN'] as const).map(type => (
+                  <SelectItem key={type} value={type} className="text-slate-100 hover:bg-slate-600 focus:bg-slate-600">{type}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          
-          {/* Time Series Data */}
+
           <div className="flex flex-col gap-2 flex-1 overflow-hidden">
-            <label className="text-sm font-medium text-slate-200">Time Series Data:</label>
+            <label className="text-sm font-medium text-slate-200">Monthly values:</label>
             <div className="border border-slate-600 rounded-md overflow-auto flex-1 bg-slate-700">
               <table className="w-full">
                 <thead>
                   <tr className="bg-slate-600 border-b border-slate-500">
-                    <th className="px-4 py-2 text-left font-medium text-sm text-slate-100">Date</th>
+                    <th className="px-4 py-2 text-left font-medium text-sm text-slate-100">Month</th>
                     <th className="px-4 py-2 text-right font-medium text-sm text-slate-100">Value</th>
+                    <th className="w-10" aria-label="actions" />
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedTimeSeries.length > 0 ? (
-                    sortedTimeSeries.map((point, index) => (
-                      <tr 
-                        key={index}
-                        className="border-t border-slate-600 hover:bg-slate-600/50"
-                      >
-                        <td className="px-4 py-2 text-sm text-slate-200">
-                          {format(point.date, 'MM/yyyy')}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          {editingCellIndex === index ? (
-                            <div className="flex items-center space-x-1 justify-end">
-                              <Input
-                                className="w-24 text-right py-1 px-2 h-8 bg-slate-800 border-slate-500 text-slate-100 focus:border-blue-500"
-                                value={editedValue}
-                                onChange={(e) => setEditedValue(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                autoFocus
-                              />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-green-400 hover:text-green-300 hover:bg-green-900/20"
-                                onClick={confirmValueChange}
-                              >
-                                <span className="sr-only">Confirm</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-check"><polyline points="20 6 9 17 4 12"/></svg>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20"
-                                onClick={cancelValueChange}
-                              >
-                                <span className="sr-only">Cancel</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                              </Button>
-                            </div>
-                          ) : (
-                            <div 
-                              className="cursor-pointer hover:underline text-sm text-slate-200 hover:text-blue-400"
-                              onClick={() => startEditingValue(index)}
-                            >
-                              {point.value !== null ? point.value.toLocaleString() : '-'}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={2} className="px-4 py-2 text-center text-slate-400">
-                        No time series data available
+                  {points.length > 0 ? points.map(point => (
+                    <tr key={point.month} className="border-t border-slate-600 hover:bg-slate-600/50">
+                      <td className="px-4 py-2 text-sm text-slate-200">{formatMonthLabel(point.month)}</td>
+                      <td className="px-4 py-2 text-right">
+                        {editingMonth === point.month ? (
+                          <div className="flex items-center space-x-1 justify-end">
+                            <Input
+                              className="w-28 text-right py-1 px-2 h-8 bg-slate-800 border-slate-500 text-slate-100 focus:border-blue-500"
+                              value={editedValue}
+                              onChange={e => setEditedValue(e.target.value)}
+                              onKeyDown={handleKeyDown}
+                              aria-label={`value for ${formatMonthLabel(point.month)}`}
+                              autoFocus
+                            />
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-green-400 hover:text-green-300 hover:bg-green-900/20" onClick={confirmValueChange}>
+                              <span className="sr-only">Confirm</span>
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20" onClick={cancelValueChange}>
+                              <span className="sr-only">Cancel</span>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="cursor-pointer hover:underline text-sm text-slate-200 hover:text-blue-400"
+                            onClick={() => startEditingValue(point)}
+                          >
+                            {formatValue(point.value)}
+                          </button>
+                        )}
                       </td>
+                      <td className="pr-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-slate-400 hover:text-red-300 hover:bg-red-900/20"
+                          onClick={() => removePoint(point.month)}
+                          aria-label={`remove ${formatMonthLabel(point.month)}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-2 text-center text-slate-400">No values yet</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            <div className="flex items-center gap-2">
+              <Input
+                type="month"
+                className="w-44 bg-slate-700 border-slate-600 text-slate-100"
+                value={newMonth}
+                onChange={e => setNewMonth(e.target.value)}
+                aria-label="new month"
+              />
+              <Input
+                className="w-36 bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                value={newValue}
+                placeholder="Value"
+                onChange={e => setNewValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addPoint() }}
+                aria-label="new value"
+              />
+              <Button variant="outline" onClick={addPoint} className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600">
+                <Plus className="mr-1 h-4 w-4" /> Add month
+              </Button>
+            </div>
+            {formError && <p className="text-sm text-red-400" role="alert">{formError}</p>}
           </div>
         </div>
-        
+
         <DialogFooter className="flex justify-end space-x-2 border-t border-slate-700 pt-4">
-          <Button 
-            variant="outline" 
-            onClick={onClose} 
+          <Button
+            variant="outline"
+            onClick={onClose}
             disabled={isSaving}
             className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white"
           >
             Cancel
           </Button>
-          <Button 
-            onClick={handleSave} 
-            disabled={isSaving}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+          <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+            {isSaving ? 'Saving...' : isCreate ? 'Create variable' : 'Save Changes'}
           </Button>
         </DialogFooter>
-        
-        <DialogClose asChild>
-          <button
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none text-slate-400 hover:text-slate-200 hover:bg-slate-700"
-            aria-label="Close"
-            onClick={onClose}
-            disabled={isSaving}
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </button>
-        </DialogClose>
       </DialogContent>
     </Dialog>
   )
-} 
+}

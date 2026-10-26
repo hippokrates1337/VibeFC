@@ -11,9 +11,9 @@ describe('VariableListRow', () => {
     type: 'ACTUAL',
     organizationId: 'org-123',
     timeSeries: [
-      { date: new Date('2023-01-01'), value: 100 },
-      { date: new Date('2023-02-01'), value: 200 },
-      { date: new Date('2023-03-01'), value: 300 },
+      { month: '2023-01', value: 100 },
+      { month: '2023-02', value: 200 },
+      { month: '2023-03', value: 300 },
     ]
   };
 

@@ -28,7 +28,7 @@ The core data structure managed by this store is the `Variable`:
 
 ```typescript
 interface TimeSeriesData {
-  date: Date;
+  month: string; // 'YYYY-MM'
   value: number | null;
 }
 
@@ -44,7 +44,7 @@ interface Variable {
 - `id`: Unique identifier for the variable.
 - `name`: User-friendly name of the variable.
 - `type`: Categorization of the variable.
-- `timeSeries`: An array of data points, each containing a `date` and a `value`.
+- `timeSeries`: An array of data points, each containing a `month` ('YYYY-MM', no `Date`, so the time zone never shifts it) and a `value` (`null` = no value).
 - `organizationId`: Identifier for the organization this variable belongs to.
 
 ## State
@@ -63,14 +63,14 @@ The store exposes the following actions:
 - `setVariables(variables: Variable[])`: Replaces the entire list of variables.
 - `addVariables(variables: Variable[])`: Adds new variables to the existing list, preventing duplicates based on `id`.
 - `clearVariables()`: Removes all variables from the store.
-- `fetchVariables(userId: string, token: string)`: Asynchronously fetches variables for a given user from the backend API, updates the state, and handles loading/error states. Requires `NEXT_PUBLIC_BACKEND_URL` environment variable to be set.
+- `fetchVariables(userId: string, token: string, options?: { force?: boolean })`: Fetches variables through the Next.js API route. It skips the request when the store already holds variables for the selected organization, unless `force` is set (used after every save).
 - `setSelectedOrganizationId(organizationId: string | null)`: Updates the `selectedOrganizationId` state.
 
 ## Persistence and Rehydration
 
 - **Persistence**: The store uses the `persist` middleware to save its state (excluding `isLoading` and `error`) to `localStorage` under the key `variable-storage`.
 - **Rehydration**: When the application loads, the store attempts to rehydrate its state from `localStorage`.
-  - The `onRehydrateStorage` function ensures that `Date` objects within the `timeSeries` data are correctly reconstructed from their string representations stored in `localStorage` using the `rehydrateVariable` helper function.
+  - The persisted state has `version: 1`; caches from version 0 (points with `date`) are dropped and reloaded from the server.
 
 ## Usage
 
