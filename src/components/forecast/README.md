@@ -6,7 +6,7 @@ This directory contains the UI components for the Graphical Forecast Definition 
 
 - `forecast-canvas.tsx` - The main canvas component that displays and manages the forecast graph
 - `forecast-toolbar.tsx` - Enhanced toolbar for controlling the forecast graph, metadata, **graph validation, and calculation triggers** (UPDATED)
-- `node-config-panel.tsx` - Configuration panel for editing node properties. For Data, Metric, and Seed nodes, variable/metric selection dropdowns are dynamically populated from the global `useVariableStore`, filtered by the currently selected organization in that store.
+- `node-config-panel.tsx` - Configuration panel for editing node properties. For Data, Metric, and Seed nodes, variable/metric selection dropdowns list the variables of the forecast's organization (`useVariables(organizationId)` from `@/lib/queries/variables`).
 
 ## New Calculation Components
 

@@ -94,6 +94,42 @@ describe('forecast-graph-store', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
+  it('opening another forecast clears what belonged to the previous one; reloading the same keeps it', () => {
+    const { result } = renderHook(() => useForecastGraphStore());
+    const forecast = (id: string) => ({
+      id, name: id, startDate: '2026-01-01', endDate: '2026-12-31', organizationId: 'org-1', nodes: [], edges: [],
+    });
+    const leftovers = {
+      calculationResults: { id: 'result-1' } as any,
+      calculationError: 'old error',
+      graphValidation: { isValid: false } as any,
+      selectedNodeId: 'node-1',
+      configPanelOpen: true,
+      showVisualizationSlider: true,
+    };
+
+    act(() => {
+      result.current.loadForecast(forecast('forecast-1'));
+      useForecastGraphStore.setState(leftovers);
+      // e.g. reloaded after saving
+      result.current.loadForecast(forecast('forecast-1'));
+    });
+    expect(useForecastGraphStore.getState()).toMatchObject(leftovers);
+
+    act(() => {
+      result.current.loadForecast(forecast('forecast-2'));
+    });
+    expect(useForecastGraphStore.getState()).toMatchObject({
+      forecastId: 'forecast-2',
+      calculationResults: null,
+      calculationError: null,
+      graphValidation: null,
+      selectedNodeId: null,
+      configPanelOpen: false,
+      showVisualizationSlider: false,
+    });
+  });
+
   // Test setForecastMetadata action
   it('should update forecast metadata', () => {
     const { result } = renderHook(() => useForecastGraphStore());

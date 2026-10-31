@@ -99,7 +99,8 @@ export const useOrganizationStore = create<OrganizationState>()(
 
         } catch (err: any) {
           logger.error('[OrganizationStore] Error fetching organization data:', err);
-          set({ error: err.message || 'Failed to load organization data.', currentOrganization: null, userRole: null, members: [] });
+          // Keep currentOrganization: it is the remembered selection, which a retry should restore
+          set({ error: err.message || 'Failed to load organization data.', userRole: null, members: [] });
         } finally {
           set({ isLoading: false });
         }

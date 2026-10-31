@@ -2,6 +2,7 @@ import { ForecastNodeClient, ForecastEdgeClient } from '@/lib/store/forecast-gra
 import { formatToMmYyyy } from '@/lib/store/forecast-graph-store/utils/date-utils';
 import type { ForecastPeriods } from '@/types/forecast';
 import { joinBackendUrl } from '@/lib/api/join-backend-url';
+import { getAccessToken } from '@/lib/auth/access-token';
 
 /** YYYY-MM-DD (date-only), matches backend expectations for bulk-save metadata */
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -104,19 +105,6 @@ interface ApiResponse<T> {
   };
 }
 
-// Helper function to get auth token from cookie
-function getAuthToken(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'sb-access-token') {
-      return value;
-    }
-  }
-  return undefined;
-}
 
 // Helper function for API requests with auth token
 async function fetchWithAuth<T>(
@@ -127,7 +115,7 @@ async function fetchWithAuth<T>(
     const headers = new Headers(options.headers || {});
     headers.set('Content-Type', 'application/json');
     
-    const token = getAuthToken();
+    const token = await getAccessToken();
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }

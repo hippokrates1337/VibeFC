@@ -96,10 +96,15 @@ export const createCalculationActions = (set: (partial: any) => void, get: () =>
       return;
     }
     
+    const forecastId = state.forecastId;
     try {
-      logger.log(`[ForecastGraphStore] Loading unified calculation results for forecast ${state.forecastId}`);
+      logger.log(`[ForecastGraphStore] Loading unified calculation results for forecast ${forecastId}`);
       
-      const result = await forecastCalculationApi.getUnifiedCalculationResults(state.forecastId);
+      const result = await forecastCalculationApi.getUnifiedCalculationResults(forecastId);
+      if (get().forecastId !== forecastId) {
+        logger.log('[ForecastGraphStore] Another forecast was opened meanwhile; dropping its results');
+        return;
+      }
       
       if (result) {
         // Update periods from result

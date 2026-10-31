@@ -24,6 +24,7 @@ import { PeriodManagementPanel } from '@/components/forecast/period-management-p
 import { ForecastResultsTable } from '@/components/forecast/forecast-results-table';
 import { CalculationWarnings } from '@/components/forecast/calculation-warnings';
 import { forecastApi, mapForecastToClientFormat } from '@/lib/api/forecast';
+import { useOrganizationForecasts } from '@/lib/queries/forecasts';
 
 // Helper function to safely format dates
 const formatDateSafe = (dateString: string | null | undefined, formatPattern: string): string => {
@@ -129,12 +130,14 @@ export default function ForecastDisplayPage() {
   
   const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
   
-  // Get forecasts from store
-  const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
+  const forecastsQuery = useOrganizationForecasts(currentOrganization?.id);
+  const forecasts = forecastsQuery.data ?? [];
+  const isForecastListLoading = forecastsQuery.isPending && Boolean(currentOrganization?.id);
+  const forecastError = forecastsQuery.error?.message ?? null;
   const { loadForecast } = useForecastGraphActions();
   
   // Get forecast data and calculation results
-  const { forecastName, forecastStartDate, forecastEndDate, nodes } = useForecastGraph();
+  const { forecastId: loadedForecastId, forecastName, isDirty, nodes } = useForecastGraph();
   const { calculationResults, isCalculating, calculationError } = useCalculations();
   const { loadUnifiedCalculationResults } = useCalculationActions();
 
@@ -190,8 +193,27 @@ export default function ForecastDisplayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedForecastMeta, loadForecast, isForecastLoaded, loadUnifiedCalculationResults]);
 
+  // Open with the forecast last loaded in the editor, if it belongs to this organization;
+  // after an organization switch, start without a selection.
+  useEffect(() => {
+    if (selectedForecastId && !forecasts.some((f) => f.id === selectedForecastId) && forecastsQuery.isSuccess) {
+      setSelectedForecastId(null);
+      setIsForecastLoaded(false);
+    } else if (!selectedForecastId && loadedForecastId && forecasts.some((f) => f.id === loadedForecastId)) {
+      setSelectedForecastId(loadedForecastId);
+    }
+  }, [forecasts, forecastsQuery.isSuccess, loadedForecastId, selectedForecastId]);
+
   const handleForecastSelect = (forecastId: string) => {
     if (forecastId === 'no-forecasts' || forecastId === 'loading') return;
+    // The editor and this page share the loaded forecast: loading another one drops unsaved edits
+    if (
+      isDirty &&
+      loadedForecastId !== forecastId &&
+      !window.confirm('The forecast open in the editor has unsaved changes. Load another forecast and discard them?')
+    ) {
+      return;
+    }
     setSelectedForecastId(forecastId);
     setIsForecastLoaded(false); // Reset to trigger reload
   };

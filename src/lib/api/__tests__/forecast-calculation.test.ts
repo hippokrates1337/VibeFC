@@ -1,4 +1,5 @@
 import { forecastCalculationApi } from '../forecast-calculation';
+import { getAccessToken } from '@/lib/auth/access-token';
 
 // Mock the environment variable before the module is loaded
 const mockBackendUrl = 'http://localhost:3001';
@@ -13,11 +14,9 @@ jest.mock('../forecast-calculation', () => {
 global.fetch = jest.fn();
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
 
-// Mock document.cookie for auth token
-Object.defineProperty(document, 'cookie', {
-  writable: true,
-  value: 'sb-access-token=test-token',
-});
+jest.mock('@/lib/auth/access-token', () => ({
+  getAccessToken: jest.fn().mockResolvedValue('test-token'),
+}));
 
 describe('ForecastCalculationApi', () => {
   beforeEach(() => {
@@ -330,12 +329,8 @@ describe('ForecastCalculationApi', () => {
   });
 
   describe('authentication', () => {
-    it('should work without auth token when cookie is not present', async () => {
-      // Remove the cookie
-      Object.defineProperty(document, 'cookie', {
-        writable: true,
-        value: '',
-      });
+    it('sends no Authorization header when signed out', async () => {
+      (getAccessToken as jest.Mock).mockResolvedValueOnce(undefined);
 
       const forecastId = 'test-forecast-id';
       const mockResponseData = {
@@ -359,11 +354,6 @@ describe('ForecastCalculationApi', () => {
       expect(headers.get('Authorization')).toBeNull();
       expect(headers.get('Content-Type')).toBe('application/json');
 
-      // Restore cookie for other tests
-      Object.defineProperty(document, 'cookie', {
-        writable: true,
-        value: 'sb-access-token=test-token',
-      });
     });
   });
 }); 

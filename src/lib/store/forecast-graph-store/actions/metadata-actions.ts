@@ -1,6 +1,7 @@
 import { logger } from '@/lib/utils/logger';
 import { formatToMmYyyy } from '../utils';
 import { forecastCalculationApi } from '@/lib/api/forecast-calculation';
+import { initialState } from '../state/initial-state';
 import type { 
   ForecastGraphState
 } from '../state';
@@ -21,6 +22,16 @@ export const createMetadataActions = (set: (partial: any) => void, get: () => an
       logger.warn('[ForecastGraphStore] Cleaned up orphaned SEED node references during load');
     }
     
+    // Results, validation, selection, slider and debug data belong to one forecast. Opening
+    // another one starts clean (a reload of the same forecast, e.g. after saving, keeps them).
+    if (get().forecastId !== data.id) {
+      const {
+        forecastId: _id, forecastName: _name, forecastStartDate: _start, forecastEndDate: _end,
+        organizationId: _org, nodes: _nodes, edges: _edges, ...perForecastState
+      } = initialState;
+      set(perForecastState);
+    }
+
     set({
       forecastId: data.id,
       forecastName: data.name,
@@ -76,15 +87,5 @@ export const createMetadataActions = (set: (partial: any) => void, get: () => an
       logger.log('[ForecastGraphStore] Forecast metadata updated.', newState);
       return newState;
     });
-  },
-
-  loadOrganizationForecasts: (forecasts: any[]) => {
-    logger.log('[ForecastGraphStore] loadOrganizationForecasts called with:', forecasts);
-    set({
-      organizationForecasts: forecasts,
-      isLoading: false,
-      error: null,
-    });
-    logger.log('[ForecastGraphStore] Organization forecasts loaded.');
   },
 });

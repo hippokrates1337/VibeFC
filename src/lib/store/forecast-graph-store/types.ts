@@ -1,5 +1,4 @@
 import { Edge, Node, NodeChange, EdgeChange } from 'reactflow';
-import type { Forecast as ClientForecastSummary } from '@/lib/api/forecast';
 import type { ForecastGraphValidation } from '@/lib/services/forecast-calculation/graph-validation';
 import type { 
   GraphValidationResult, 
@@ -140,7 +139,6 @@ export interface CalculationActions {
 export interface MetadataActions {
   loadForecast: (data: LoadForecastParams) => void;
   setForecastMetadata: (metadata: ForecastMetadataUpdate) => void;
-  loadOrganizationForecasts: (forecasts: ClientForecastSummary[]) => void;
 }
 
 export interface UIActions {
@@ -154,8 +152,6 @@ export interface UIActions {
   updateVisualizationMonthForPeriodChange: (newStartDate: string | null, newEndDate: string | null) => void;
   generateForecastMonths: (startDate: string, endDate: string) => Date[];
   getNodeValueForMonth: (nodeId: string, month: Date) => NodeVisualizationValue | null;
-  // Hydration management for Zustand v5
-  _setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 export interface DebugActions {

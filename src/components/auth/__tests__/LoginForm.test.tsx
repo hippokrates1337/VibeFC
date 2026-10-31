@@ -25,17 +25,55 @@ jest.mock('next/link', () => {
 describe('LoginForm', () => {
   const mockSignIn = jest.fn();
   const mockPush = jest.fn();
+  const mockReplace = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
     
     (useAuth as jest.Mock).mockReturnValue({
       signIn: mockSignIn,
+      session: null,
+      isLoading: false,
     });
     
     (useRouter as jest.Mock).mockReturnValue({
       push: mockPush,
+      replace: mockReplace,
     });
+    window.history.replaceState(null, '', '/login');
+  });
+
+  it('goes back to returnTo after signing in', async () => {
+    mockSignIn.mockResolvedValue({ error: null });
+    window.history.replaceState(null, '', '/login?returnTo=%2Fforecast-display');
+
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/forecast-display'));
+  });
+
+  it('ignores a returnTo that points to another site', async () => {
+    mockSignIn.mockResolvedValue({ error: null });
+    window.history.replaceState(null, '', '/login?returnTo=%2F%2Fevil.example');
+
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/'));
+  });
+
+  it('leaves the login page by itself when a session exists (e.g. after a token refresh)', () => {
+    (useAuth as jest.Mock).mockReturnValue({ signIn: mockSignIn, session: { access_token: 't' }, isLoading: false });
+    window.history.replaceState(null, '', '/login?returnTo=%2Fdata-intake');
+
+    render(<LoginForm />);
+
+    expect(mockReplace).toHaveBeenCalledWith('/data-intake');
   });
 
   it('renders login form with email and password fields', () => {

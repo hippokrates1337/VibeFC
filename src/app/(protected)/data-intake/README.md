@@ -92,8 +92,9 @@ The variable details modal allows users to:
 
 ### Data Storage and API Integration
 
-- **Local State**: Zustand store (`@/lib/store/variables.ts`) manages application state with localStorage persistence
-- **Backend Sync**: Fetches organization-specific variables from backend API when needed
+- **Server data**: `useVariables(orgId)` (`@/lib/queries/variables.ts`, TanStack Query) loads the user's variables once and filters them per organization; nothing is kept in browser storage
+- **After saving**: `useReloadVariables()` reloads the list
+- **Search**: the list (`_components/variable-list.tsx`) filters by name (every word, any order) and type
 - **CRUD Operations**: Full create, read, update, delete operations via Next.js API routes
 - **Authentication**: All API calls use JWT token authentication
 - **Organization Scoping**: All data is scoped to the selected organization

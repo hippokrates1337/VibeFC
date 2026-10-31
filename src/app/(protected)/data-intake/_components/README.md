@@ -65,7 +65,7 @@ Unit tests for `DataIntakeContainer` live in `../__tests__/data-intake-container
 The tests utilize Jest and React Testing Library.
 
 ### Mocking Strategy
-- **Hooks:** Individual hooks (e.g., `useVariableStore` selectors, `useAuth`, custom hooks like `useVariableApi`, `useCsvProcessor`) are mocked using `jest.mock`. Type casting (`as unknown as jest.Mock`) is applied to the imported hook variables *after* the `jest.mock` call to satisfy TypeScript when dealing with complex hook signatures (like those from Zustand).
+- **Hooks:** Individual hooks (e.g., `useVariables` from `@/lib/queries/variables`, `useAuth`, custom hooks like `useVariableApi`, `useCsvProcessor`) are mocked using `jest.mock`. Type casting (`as unknown as jest.Mock`) is applied to the imported hook variables *after* the `jest.mock` call to satisfy TypeScript when dealing with complex hook signatures (like those from Zustand).
 - **Components:** Child components (`UploadSection`, etc.) and UI library components (`Alert`) are mocked to isolate the container's logic.
 - **State Scenarios:** Different states (loading, error, empty, data present) are simulated by overriding the default mock implementations of the relevant hooks within specific `test` blocks.
 

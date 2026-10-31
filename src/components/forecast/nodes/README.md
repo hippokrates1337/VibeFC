@@ -12,4 +12,4 @@ Each node is styled with Tailwind CSS and shadcn/ui, and receives props from Rea
 
 ## Variable Display
 
-Both `DataNode` and `MetricNode` integrate with the `useVariableStore` to display human-readable variable names instead of variable IDs. If a variable is not found in the store, the component falls back to displaying the ID. 
+Both `DataNode` and `MetricNode` read the variables with `useVariables()` (`@/lib/queries/variables`) to display human-readable variable names instead of variable IDs. If a variable is not found, the component falls back to displaying the ID. 

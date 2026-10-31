@@ -2,11 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useOrganizationStore } from '@/lib/store/organization';
-import { 
-  useForecastGraph,
-  useForecastGraphActions,
-  useOrganizationForecastsLoader
-} from '@/lib/store/forecast-graph-store/hooks';
+import { useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
+import { useOrganizationForecasts } from '@/lib/queries/forecasts';
 import { useDebug, useDebugActions, useDebugComputed } from '@/lib/store/forecast-graph-store/hooks/use-debug';
 import { 
   Select, 
@@ -438,10 +435,11 @@ export default function DebugCalcPage() {
   
   const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
   
-  // Get forecasts from store
-  const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
+  const forecastsQuery = useOrganizationForecasts(currentOrganization?.id);
+  const forecasts = forecastsQuery.data ?? [];
+  const isForecastListLoading = forecastsQuery.isPending && Boolean(currentOrganization?.id);
+  const forecastError = forecastsQuery.error?.message ?? null;
   const { loadForecast } = useForecastGraphActions();
-  useOrganizationForecastsLoader(currentOrganization?.id);
   
   // Get debug state and actions
   const debug = useDebug();

@@ -7,12 +7,9 @@ import { OrganizationSelector } from '@/components/organization/OrganizationSele
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useOrganizationStore } from '@/lib/store/organization';
-import { 
-  useSetSelectedOrganizationId, 
-  useFetchVariables 
-} from '@/lib/store/variables';
 import { computeProtectedLayoutLoadingState } from './layout-loading-state';
 import { isDebugToolsEnabled } from '@/lib/config/feature-flags';
+import { loginPathFor } from '@/lib/auth/redirect-policy';
 
 export default function ProtectedLayout({
   children,
@@ -23,17 +20,13 @@ export default function ProtectedLayout({
   const router = useRouter();
   const fetchOrganizationData = useOrganizationStore((state) => state.fetchOrganizationData);
   const organizations = useOrganizationStore((state) => state.organizations);
-  const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
   const orgStoreIsLoading = useOrganizationStore((state) => state.isLoading);
   const orgStoreError = useOrganizationStore((state) => state.error);
-  
-  // Variable store actions and state
-  const setSelectedOrgIdForVariables = useSetSelectedOrganizationId();
-  const fetchVariablesForOrg = useFetchVariables();
+
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.replace('/login');
+      router.replace(loginPathFor(window.location.pathname, window.location.search));
     }
   }, [user, isLoading, router]);
   
@@ -45,20 +38,6 @@ export default function ProtectedLayout({
       fetchOrganizationData(user.id, session.access_token);
     }
   }, [user?.id, session?.access_token, fetchOrganizationData, organizations.length]);
-  
-  // Fetch variable data when organization is selected
-  useEffect(() => {
-    if (user && session?.access_token && currentOrganization?.id) {
-      setSelectedOrgIdForVariables(currentOrganization.id);
-      fetchVariablesForOrg(user.id, session.access_token);
-    }
-  }, [
-    user?.id,
-    session?.access_token,
-    currentOrganization?.id,
-    setSelectedOrgIdForVariables,
-    fetchVariablesForOrg,
-  ]);
   
   const shouldShowLoading = computeProtectedLayoutLoadingState({
     isAuthLoading: isLoading,
