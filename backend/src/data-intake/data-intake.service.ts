@@ -175,6 +175,38 @@ export class DataIntakeService {
     return { message: 'Variables deleted successfully', count: ids.length, deletedIds: ids };
   }
 
+  /**
+   * Forecasts with a node that reads this variable: a DATA node's variable or a METRIC
+   * node's historical or budget variable. Only forecasts the caller can read are listed.
+   */
+  async getVariableUsage(variableId: string, request: Request): Promise<{ forecasts: Array<{ id: string; name: string }> }> {
+    const client = this.supabase.getClientForRequest(request);
+    const { data, error } = await client
+      .from('forecast_nodes')
+      .select('forecasts(id, name)')
+      .or(
+        ['variableId', 'historicalVariableId', 'budgetVariableId']
+          .map((attribute) => `attributes->>${attribute}.eq.${variableId}`)
+          .join(',')
+      );
+    if (error) {
+      throw this.toHttpException(error, 'find forecasts that use the variable');
+    }
+
+    const forecasts = new Map<string, string>();
+    // Without generated types supabase-js types the many-to-one embed as an array; it is an object
+    for (const row of (data || []) as unknown as Array<{ forecasts: { id: string; name: string } | null }>) {
+      if (row.forecasts) {
+        forecasts.set(row.forecasts.id, row.forecasts.name);
+      }
+    }
+    return {
+      forecasts: [...forecasts]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  }
+
   private async findByIds(ids: string[], request: Request) {
     const client = this.supabase.getClientForRequest(request);
     const { data, error } = await client.from('variables').select(VARIABLE_COLUMNS).in('id', ids);

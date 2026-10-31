@@ -11,7 +11,7 @@ import { useOrganizationStore } from '@/lib/store/organization';
 import { ImportModal } from '../import-modal'
 import { DeleteConfirmationModal } from '../delete-confirmation-modal'
 import { UploadSection } from './upload-section'
-import { useVariableApi, useCsvProcessor } from './api-hooks'
+import { useVariableApi, useCsvProcessor, useVariableUsage } from './api-hooks'
 import { ApiStatus } from './data-status'
 import { LoadingState, ErrorState, EmptyState } from './state-display'
 import { useAuth } from '@/providers/auth-provider'
@@ -100,6 +100,8 @@ export const DataIntakeContainer = ({
     variableId: '',
     variableName: ''
   })
+
+  const variableUsage = useVariableUsage(deleteConfirmation.isOpen ? deleteConfirmation.variableId : null)
 
   // New states for variable details modal
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState<boolean>(false);
@@ -255,6 +257,7 @@ export const DataIntakeContainer = ({
           variableName={deleteConfirmation.variableName}
           onClose={closeDeleteConfirmation}
           onConfirm={handleConfirmDelete}
+          usage={variableUsage}
         />
       </div>
     </div>

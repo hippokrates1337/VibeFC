@@ -13,6 +13,7 @@ describe('DeleteConfirmationModal Component', () => {
     onClose: jest.fn(),
     variableName: 'Test Variable',
     onConfirm: jest.fn(),
+    usage: { status: 'loaded' as const, forecasts: [] },
   };
 
   afterEach(() => {
@@ -80,5 +81,30 @@ describe('DeleteConfirmationModal Component', () => {
 
     // Check that onConfirm was NOT called
     expect(mockProps.onConfirm).not.toHaveBeenCalled();
+  });
+
+  test('lists the forecasts that use the variable and still allows deleting', () => {
+    const usage = { status: 'loaded' as const, forecasts: [{ id: 'f-1', name: 'Budget 2026' }, { id: 'f-2', name: 'Plan 2027' }] };
+    render(<DeleteConfirmationModal {...mockProps} usage={usage} />);
+
+    const notice = screen.getByRole('alert');
+    expect(notice).toHaveTextContent('Used in 2 forecasts:');
+    expect(notice).toHaveTextContent('Budget 2026');
+    expect(notice).toHaveTextContent('Plan 2027');
+    expect(screen.getByRole('button', { name: /^delete$/i })).toBeEnabled();
+  });
+
+  test('waits for the usage check before allowing the deletion', () => {
+    render(<DeleteConfirmationModal {...mockProps} usage={{ status: 'loading', forecasts: [] }} />);
+
+    expect(screen.getByText(/checking which forecasts use it/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^delete$/i })).toBeDisabled();
+  });
+
+  test('says so when the usage check failed, without blocking the deletion', () => {
+    render(<DeleteConfirmationModal {...mockProps} usage={{ status: 'failed', forecasts: [] }} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not check whether forecasts use this variable.');
+    expect(screen.getByRole('button', { name: /^delete$/i })).toBeEnabled();
   });
 }); 

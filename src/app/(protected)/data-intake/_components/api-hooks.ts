@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { type Variable, type TimeSeriesData, useFetchVariables } from '@/lib/store/variables'
 import { useAuth } from '@/providers/auth-provider'
 import { useOrganizationStore } from '@/lib/store/organization'
@@ -28,6 +28,44 @@ export interface VariableDraft {
 }
 
 const VARIABLES_URL = '/api/data-intake/variables'
+
+/** Forecasts whose nodes read a variable; loading while variableId is set and the answer is pending. */
+export interface VariableUsage {
+  status: 'idle' | 'loading' | 'loaded' | 'failed'
+  forecasts: Array<{ id: string; name: string }>
+}
+
+export const useVariableUsage = (variableId: string | null): VariableUsage => {
+  const { session } = useAuth()
+  const token = session?.access_token
+  const [usage, setUsage] = useState<VariableUsage>({ status: 'idle', forecasts: [] })
+
+  useEffect(() => {
+    if (!variableId || !token) {
+      setUsage({ status: 'idle', forecasts: [] })
+      return
+    }
+    let current = true
+    setUsage({ status: 'loading', forecasts: [] })
+    fetch(`${VARIABLES_URL}/item/${encodeURIComponent(variableId)}/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await errorMessage(response, 'Could not load variable usage'))
+        const data = await response.json()
+        if (current) setUsage({ status: 'loaded', forecasts: data.forecasts ?? [] })
+      })
+      .catch((error) => {
+        logger.warn('Variable usage lookup failed:', error)
+        if (current) setUsage({ status: 'failed', forecasts: [] })
+      })
+    return () => {
+      current = false
+    }
+  }, [variableId, token])
+
+  return usage
+}
 
 const toApiValues = (points: Array<{ month: string; value: number | null }>) => points.map(toApiPoint)
 

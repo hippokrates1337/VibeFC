@@ -12,7 +12,8 @@ import {
   HttpStatus,
   UseGuards,
   Req,
-  HttpCode
+  HttpCode,
+  ParseUUIDPipe
 } from '@nestjs/common';
 import { DataIntakeService } from './data-intake.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -101,6 +102,12 @@ export class DataIntakeController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  // READ - Forecasts that use a variable (shown before deleting it)
+  @Get('variables/:variableId/usage')
+  async getVariableUsage(@Req() req: AuthenticatedRequest, @Param('variableId', ParseUUIDPipe) variableId: string) {
+    return this.dataIntakeService.getVariableUsage(variableId, req);
   }
 
   // UPDATE - Update variables

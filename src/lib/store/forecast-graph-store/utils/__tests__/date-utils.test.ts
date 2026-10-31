@@ -49,6 +49,7 @@ describe('monthsFromUnifiedCalculationResults', () => {
       id: 'r1',
       forecastId: 'f1',
       calculatedAt: new Date(),
+      warnings: [],
       calculationTypes: ['forecast'],
       periodInfo: {
         forecastStartMonth: '03-2026',

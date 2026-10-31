@@ -59,7 +59,7 @@ export class DebugCalculationService {
     const started = Date.now();
     const level: DebugLevel = debugRequest.debugLevel ?? 'basic';
 
-    const run = await this.forecastCalculationService.calculateAndStore(
+    const run = await this.forecastCalculationService.runCalculation(
       forecastId,
       userId,
       request,
@@ -67,7 +67,7 @@ export class DebugCalculationService {
         calculationTypes: debugRequest.calculationTypes,
         includeIntermediateNodes: debugRequest.includeIntermediateNodes ?? true,
       },
-      { trace: true }
+      { store: false, trace: true }
     );
 
     const resultStarted = Date.now();

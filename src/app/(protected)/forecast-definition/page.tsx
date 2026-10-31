@@ -7,9 +7,18 @@ import { Forecast, forecastApi } from '@/lib/api/forecast';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
-import { Loader2, BarChart3, Clock } from 'lucide-react';
+import { Loader2, BarChart3, Clock, Trash2 } from 'lucide-react';
 import { useOrganizationStore } from '@/lib/store/organization';
-import { useForecastGraph, useOrganizationForecastsLoader } from '@/lib/store/forecast-graph-store/hooks';
+import { useForecastGraph, useForecastGraphActions, useOrganizationForecastsLoader } from '@/lib/store/forecast-graph-store/hooks';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Helper function to safely format dates
 const formatDateSafe = (dateString: string | null | undefined, formatPattern: string): string => {
@@ -182,8 +191,37 @@ export default function ForecastDefinitionPage() {
   const [isCreating, setIsCreating] = useState(false);
   const currentOrganizationFromStore = useOrganizationStore((state) => state.currentOrganization);
 
-  const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError } = useForecastGraph();
+  const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError, forecastId: openForecastId } = useForecastGraph();
+  const { loadOrganizationForecasts, resetStore } = useForecastGraphActions();
   useOrganizationForecastsLoader(currentOrganizationFromStore?.id);
+  const [forecastToDelete, setForecastToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Delete a forecast with its nodes, edges and stored results (ON DELETE CASCADE)
+  const handleDeleteForecast = async () => {
+    if (!forecastToDelete) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await forecastApi.deleteForecast(forecastToDelete.id);
+      if (error) {
+        throw new Error(error.message);
+      }
+      loadOrganizationForecasts(forecasts.filter((forecast) => forecast.id !== forecastToDelete.id));
+      if (openForecastId === forecastToDelete.id) {
+        resetStore();
+      }
+      toast({ title: 'Forecast deleted', description: `"${forecastToDelete.name}" was deleted.` });
+      setForecastToDelete(null);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete forecast: ' + error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Create a new forecast
   const handleCreateForecast = async () => {
@@ -292,14 +330,25 @@ export default function ForecastDefinitionPage() {
                         <Clock className="h-3 w-3" />
                         Updated {formatDateSafe(forecast.updatedAt, 'MMM d, yyyy')}
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push(`/forecast-definition/${forecast.id}`)}
-                        className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white"
-                      >
-                        Open Editor
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          aria-label={`Delete ${forecast.name}`}
+                          onClick={() => setForecastToDelete({ id: forecast.id, name: forecast.name })}
+                          className="bg-slate-700 border-slate-600 text-slate-300 hover:bg-red-700 hover:text-white"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/forecast-definition/${forecast.id}`)}
+                          className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white"
+                        >
+                          Open Editor
+                        </Button>
+                      </div>
                     </CardFooter>
                   </Card>
                 ))}
@@ -323,6 +372,26 @@ export default function ForecastDefinitionPage() {
           </>
         )}
         
+        <AlertDialog open={forecastToDelete !== null} onOpenChange={(open) => !open && !isDeleting && setForecastToDelete(null)}>
+          <AlertDialogContent className="bg-slate-800 border-slate-700">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-slate-200">Delete forecast?</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-400">
+                &quot;{forecastToDelete?.name}&quot; will be deleted with its nodes, connections and calculation results. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting} className="bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-600">
+                Cancel
+              </AlertDialogCancel>
+              <Button onClick={handleDeleteForecast} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 text-white">
+                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Delete forecast
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <Toaster />
       </div>
     </div>

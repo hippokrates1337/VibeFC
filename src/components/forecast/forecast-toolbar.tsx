@@ -27,6 +27,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/use-toast';
 import NodeConfigPanel from '@/components/forecast/node-config-panel';
 import { GraphValidationDisplay } from './graph-validation-display';
+import { CalculationWarnings } from './calculation-warnings';
 import { CalculationErrorBoundary } from './calculation-error-boundary';
 import { validateForecastGraph } from '@/lib/services/forecast-calculation/graph-validation';
 import { 
@@ -599,6 +600,8 @@ const ForecastToolbar: React.FC<ForecastToolbarProps> = ({ onSave, onBack, onRel
               </div>
             </div>
           )}
+
+          <CalculationWarnings warnings={calculationResults?.warnings} nodes={nodes} />
           
           {isDirty && (
             <div className="text-xs text-yellow-400 bg-yellow-900/20 border border-yellow-700 rounded p-2">

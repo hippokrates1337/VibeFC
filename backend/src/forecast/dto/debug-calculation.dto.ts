@@ -1,4 +1,4 @@
-import { IsUUID, IsString, IsNumber, IsArray, IsOptional, IsObject, IsEnum } from 'class-validator';
+import { IsUUID, IsString, IsNumber, IsArray, IsOptional, IsObject, IsEnum, ArrayNotEmpty, ArrayUnique } from 'class-validator';
 import { Type } from 'class-transformer';
 import { UnifiedCalculationResultDto, CalculationTypeDto } from './calculation.dto';
 
@@ -164,14 +164,13 @@ export class DebugInfoDto {
 }
 
 /**
- * DTO for unified calculation result with debug information
- * Extends the standard unified result with comprehensive debug data
+ * Unified calculation result with debug information.
+ * A debug run is not stored (it must not replace the latest result), so it has no id.
  */
-export class DebugCalculationResultDto extends UnifiedCalculationResultDto {
-  @IsObject()
-  @Type(() => DebugInfoDto)
+export type DebugCalculationResultDto = Omit<UnifiedCalculationResultDto, 'id'> & {
+  readonly id: null;
   readonly debugInfo: DebugInfoDto;
-}
+};
 
 /**
  * DTO for debug calculation request
@@ -179,6 +178,8 @@ export class DebugCalculationResultDto extends UnifiedCalculationResultDto {
  */
 export class DebugCalculationRequestDto {
   @IsArray()
+  @ArrayNotEmpty({ message: 'Select at least one calculation type (historical, forecast or budget)' })
+  @ArrayUnique()
   @IsEnum(CalculationTypeDto, { each: true })
   readonly calculationTypes: CalculationTypeDto[];
 

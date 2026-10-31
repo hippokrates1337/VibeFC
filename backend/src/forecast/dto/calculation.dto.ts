@@ -1,4 +1,4 @@
-import { IsUUID, IsDateString, IsObject, IsArray, IsString, IsNumber, IsOptional, IsEnum, IsBoolean } from 'class-validator';
+import { IsUUID, IsDateString, IsObject, IsArray, IsString, IsNumber, IsOptional, IsEnum, IsBoolean, ArrayNotEmpty, ArrayUnique } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Phase 8: CalculateForecastDto removed - use UnifiedCalculationRequestDto instead
@@ -111,6 +111,8 @@ export enum CalculationTypeDto {
  */
 export class UnifiedCalculationRequestDto {
   @IsArray()
+  @ArrayNotEmpty({ message: 'Select at least one calculation type (historical, forecast or budget)' })
+  @ArrayUnique()
   @IsEnum(CalculationTypeDto, { each: true })
   readonly calculationTypes: CalculationTypeDto[];
 
@@ -203,4 +205,25 @@ export class UnifiedCalculationResultDto {
   @IsArray()
   @Type(() => UnifiedNodeResultDto)
   readonly allNodes?: UnifiedNodeResultDto[]; // All nodes when includeIntermediateNodes = true
+
+  /** Engine warnings of this run, e.g. a DATA node whose variable no longer exists. */
+  @IsArray()
+  @Type(() => CalculationWarningDto)
+  readonly warnings: CalculationWarningDto[];
+}
+
+/**
+ * A problem that did not stop the calculation but leaves values empty or unexpected.
+ * Results stored before warnings were kept have none.
+ */
+export class CalculationWarningDto {
+  @IsString()
+  readonly code: string; // forecast-engine WarningCode, e.g. VARIABLE_NOT_FOUND
+
+  @IsString()
+  readonly message: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  readonly nodeIds: string[];
 } 

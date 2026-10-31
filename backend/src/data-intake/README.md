@@ -18,6 +18,7 @@ organization. The forecast engine reads them through `DataIntakeService.getVaria
 |---|---|---|
 | POST | `/data-intake/variables` | `{variables: [{id, name, type, organization_id, values}]}`; the owner is always the caller |
 | GET | `/data-intake/variables/:userId` | variables of all organizations the caller belongs to |
+| GET | `/data-intake/variables/:variableId/usage` | `{forecasts: [{id, name}]}` whose DATA or METRIC nodes read the variable (shown before deleting it) |
 | PUT | `/data-intake/variables` | `{variables: [{id, name?, type?, values?, replaceValues?}]}` |
 | DELETE | `/data-intake/variables` | `{ids, organizationId}`; values are deleted with the variable |
 

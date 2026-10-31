@@ -30,6 +30,15 @@ export interface UnifiedCalculationResult {
   };
   readonly metrics: UnifiedNodeResult[];
   readonly allNodes?: UnifiedNodeResult[];
+  /** Problems that left values empty or unexpected, e.g. a DATA node whose variable was deleted. */
+  readonly warnings: readonly CalculationWarning[];
+}
+
+/** A forecast-engine warning; code is the engine's WarningCode, e.g. VARIABLE_NOT_FOUND. */
+export interface CalculationWarning {
+  readonly code: string;
+  readonly message: string;
+  readonly nodeIds: readonly string[];
 }
 
 // NEW: Period management types for unified system (Phase 1)
