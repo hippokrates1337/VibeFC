@@ -9,7 +9,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
 import { Loader2, BarChart3, Clock, Trash2 } from 'lucide-react';
 import { useOrganizationStore } from '@/lib/store/organization';
-import { useForecastGraph, useForecastGraphActions, useOrganizationForecastsLoader } from '@/lib/store/forecast-graph-store/hooks';
+import { useForecastGraph, useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { forecastKeys, useOrganizationForecasts } from '@/lib/queries/forecasts';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -191,9 +193,14 @@ export default function ForecastDefinitionPage() {
   const [isCreating, setIsCreating] = useState(false);
   const currentOrganizationFromStore = useOrganizationStore((state) => state.currentOrganization);
 
-  const { organizationForecasts: forecasts, isLoading: isForecastListLoading, error: forecastError, forecastId: openForecastId } = useForecastGraph();
-  const { loadOrganizationForecasts, resetStore } = useForecastGraphActions();
-  useOrganizationForecastsLoader(currentOrganizationFromStore?.id);
+  const organizationId = currentOrganizationFromStore?.id;
+  const forecastsQuery = useOrganizationForecasts(organizationId);
+  const forecasts = forecastsQuery.data ?? [];
+  const isForecastListLoading = forecastsQuery.isPending && Boolean(organizationId);
+  const forecastError = forecastsQuery.error?.message ?? null;
+  const queryClient = useQueryClient();
+  const { forecastId: openForecastId } = useForecastGraph();
+  const { resetStore } = useForecastGraphActions();
   const [forecastToDelete, setForecastToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -206,7 +213,9 @@ export default function ForecastDefinitionPage() {
       if (error) {
         throw new Error(error.message);
       }
-      loadOrganizationForecasts(forecasts.filter((forecast) => forecast.id !== forecastToDelete.id));
+      queryClient.setQueryData(forecastKeys.list(organizationId), (list: typeof forecasts | undefined) =>
+        (list ?? []).filter((forecast) => forecast.id !== forecastToDelete.id)
+      );
       if (openForecastId === forecastToDelete.id) {
         resetStore();
       }
@@ -258,6 +267,7 @@ export default function ForecastDefinitionPage() {
       }
       
       if (data) {
+        void queryClient.invalidateQueries({ queryKey: forecastKeys.list(organizationId) });
         router.push(`/forecast-definition/${data.id}`);
         return;
       }

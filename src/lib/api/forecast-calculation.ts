@@ -4,6 +4,7 @@ import type {
   CalculationWarning
 } from '@/types/forecast';
 import { joinBackendUrl } from '@/lib/api/join-backend-url';
+import { getAccessToken } from '@/lib/auth/access-token';
 
 // Legacy types for deprecated methods (Phase 8 cleanup - these methods will be removed)
 interface ForecastCalculationResult {
@@ -117,21 +118,6 @@ interface ApiResponse<T> {
   };
 }
 
-/**
- * Helper function to get auth token from cookie
- */
-function getAuthToken(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'sb-access-token') {
-      return value;
-    }
-  }
-  return undefined;
-}
 
 /**
  * Helper function for API requests with auth token
@@ -144,7 +130,7 @@ async function fetchWithAuth<T>(
     const headers = new Headers(options.headers || {});
     headers.set('Content-Type', 'application/json');
     
-    const token = getAuthToken();
+    const token = await getAccessToken();
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }

@@ -1,4 +1,4 @@
-import { groupVariablesByType, getVariableCategoryLabel, VARIABLE_CATEGORY_ORDER } from '../variable-categories';
+import { groupVariablesByType, getVariableCategoryLabel, VARIABLE_CATEGORY_ORDER, filterVariables } from '../variable-categories';
 import { type Variable } from '@/lib/store/variables';
 
 const baseVar = (overrides: Partial<Variable>): Variable => ({
@@ -57,5 +57,26 @@ describe('variable-categories', () => {
       expect(grouped.INPUT).toHaveLength(1);
       expect(grouped.UNKNOWN).toEqual([]);
     });
+  });
+});
+
+describe('filterVariables', () => {
+  const variables = [
+    baseVar({ id: '1', name: 'Revenue Germany', type: 'ACTUAL' }),
+    baseVar({ id: '2', name: 'Revenue France', type: 'BUDGET' }),
+    baseVar({ id: '3', name: 'Headcount', type: 'INPUT' }),
+  ];
+  const ids = (list: Variable[]) => list.map((v) => v.id);
+
+  it('matches every word of the query in any order, ignoring case', () => {
+    expect(ids(filterVariables(variables, 'revenue'))).toEqual(['1', '2']);
+    expect(ids(filterVariables(variables, 'germany REV'))).toEqual(['1']);
+    expect(ids(filterVariables(variables, '  '))).toEqual(['1', '2', '3']);
+    expect(ids(filterVariables(variables, 'cost'))).toEqual([]);
+  });
+
+  it('narrows to one type', () => {
+    expect(ids(filterVariables(variables, 'revenue', 'BUDGET'))).toEqual(['2']);
+    expect(ids(filterVariables(variables, '', 'INPUT'))).toEqual(['3']);
   });
 });

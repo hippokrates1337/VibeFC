@@ -1,18 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/providers/auth-provider';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { safeReturnTo } from '@/lib/auth/redirect-policy';
+
+/** The page that sent the user here (?returnTo=), or '/'. */
+const returnToFromUrl = (): string =>
+  safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'));
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, session, isLoading: isSessionLoading } = useAuth();
   const router = useRouter();
+
+  // Still signed in (e.g. sent here while the token was being refreshed): go back
+  useEffect(() => {
+    if (!isSessionLoading && session) {
+      router.replace(returnToFromUrl());
+    }
+  }, [isSessionLoading, session, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,8 +43,7 @@ export function LoginForm() {
       if (error) {
         setError(error.message || 'Invalid login credentials');
       } else {
-        // Successful login - redirect to root
-        router.push('/');
+        router.push(returnToFromUrl());
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during login');

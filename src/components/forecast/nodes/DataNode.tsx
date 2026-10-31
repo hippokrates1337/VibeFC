@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, NodeProps, Position } from 'reactflow';
-import { useVariableStore } from '@/lib/store/variables';
+import { useVariables } from '@/lib/queries/variables';
 import { Database } from 'lucide-react';
 import { useNodeVisualizationValue, useVisualization } from '@/lib/store/forecast-graph-store/hooks';
 import NodeValueOverlay from '../node-value-overlay';
@@ -9,7 +9,7 @@ import NodeValueOverlay from '../node-value-overlay';
  * DataNode displays a variable and offset.
  */
 const DataNode: React.FC<NodeProps> = ({ data, selected, id }) => {
-  const variables = useVariableStore((state) => state.variables);
+  const { data: variables = [] } = useVariables();
   const variable = variables.find(v => v.id === data?.variableId);
   const displayName = variable?.name || data?.variableId || '-';
 

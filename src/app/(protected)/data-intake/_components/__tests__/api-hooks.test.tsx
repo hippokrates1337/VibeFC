@@ -1,11 +1,13 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useVariableApi, useVariableUsage } from '../api-hooks'
-import type { Variable } from '@/lib/store/variables'
 
-const mockFetchVariables = jest.fn().mockResolvedValue(undefined)
+const mockReloadVariables = jest.fn().mockResolvedValue(undefined)
 
-jest.mock('@/lib/store/variables', () => ({
-  useFetchVariables: () => mockFetchVariables,
+jest.mock('@/lib/queries/variables', () => ({
+  useReloadVariables: () => mockReloadVariables,
+}))
+jest.mock('@/lib/auth/access-token', () => ({
+  getAccessToken: () => Promise.resolve('token-1'),
 }))
 jest.mock('@/providers/auth-provider', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, session: { access_token: 'token-1' } }),
@@ -17,7 +19,6 @@ jest.mock('@/lib/utils/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), log: jest.fn(), warn: jest.fn(), debug: jest.fn() },
 }))
 
-const units: Variable = { id: 'var-units', name: 'Units', type: 'INPUT', organizationId: 'org-1', timeSeries: [] }
 
 function mockFetch(responses: Array<{ ok: boolean; status?: number; body?: unknown }>): jest.Mock {
   const fetchMock = jest.fn()
@@ -44,7 +45,7 @@ describe('useVariableApi', () => {
 
   it('imports new variables (POST) and merges into existing ones (PUT), then reloads', async () => {
     const fetchMock = mockFetch([{ ok: true }, { ok: true }])
-    const { result } = renderHook(() => useVariableApi([units], jest.fn()))
+    const { result } = renderHook(() => useVariableApi())
 
     let saved: boolean | undefined
     await act(async () => {
@@ -65,13 +66,13 @@ describe('useVariableApi', () => {
       method: 'PUT',
       body: { variables: [{ id: 'var-units', values: [{ date: '2026-02-01', value: 110 }] }] },
     })
-    expect(mockFetchVariables).toHaveBeenCalledWith('user-1', 'token-1', { force: true })
+    expect(mockReloadVariables).toHaveBeenCalled()
     expect(result.current.apiStatus).toEqual({ loading: false, error: null, success: true })
   })
 
   it('saves an edited series as a replacement and leaves values alone for a rename', async () => {
     const fetchMock = mockFetch([{ ok: true }, { ok: true }])
-    const { result } = renderHook(() => useVariableApi([units], jest.fn()))
+    const { result } = renderHook(() => useVariableApi())
 
     await act(async () => {
       await result.current.handleUpdateVariable('var-units', { timeSeries: [{ month: '2026-01', value: null }] }, 'org-1')
@@ -84,7 +85,7 @@ describe('useVariableApi', () => {
 
   it('creates a variable by hand', async () => {
     const fetchMock = mockFetch([{ ok: true }])
-    const { result } = renderHook(() => useVariableApi([], jest.fn()))
+    const { result } = renderHook(() => useVariableApi())
 
     await act(async () => {
       await result.current.handleCreateVariable({ name: 'Headcount', type: 'UNKNOWN', timeSeries: [{ month: '2026-03', value: 12 }] }, 'org-1')
@@ -98,7 +99,7 @@ describe('useVariableApi', () => {
 
   it('reports the server message and does not reload when saving fails', async () => {
     mockFetch([{ ok: false, status: 400, body: { message: 'Invalid values: value "x" is not a finite number or null' } }])
-    const { result } = renderHook(() => useVariableApi([units], jest.fn()))
+    const { result } = renderHook(() => useVariableApi())
 
     let saved: boolean | undefined
     await act(async () => {
@@ -107,20 +108,19 @@ describe('useVariableApi', () => {
 
     expect(saved).toBe(false)
     expect(result.current.apiStatus.error).toBe('Invalid values: value "x" is not a finite number or null')
-    expect(mockFetchVariables).not.toHaveBeenCalled()
+    expect(mockReloadVariables).not.toHaveBeenCalled()
   })
 
-  it('removes a deleted variable from the store', async () => {
+  it('deletes a variable and reloads the list', async () => {
     const fetchMock = mockFetch([{ ok: true }])
-    const setVariables = jest.fn()
-    const { result } = renderHook(() => useVariableApi([units], setVariables))
+    const { result } = renderHook(() => useVariableApi())
 
     await act(async () => {
       await result.current.handleDeleteVariable('var-units', 'org-1')
     })
 
     expect(sent(fetchMock, 0)).toEqual({ method: 'DELETE', body: { ids: ['var-units'], organizationId: 'org-1' } })
-    expect(setVariables).toHaveBeenCalledWith([])
+    expect(mockReloadVariables).toHaveBeenCalled()
   })
 })
 

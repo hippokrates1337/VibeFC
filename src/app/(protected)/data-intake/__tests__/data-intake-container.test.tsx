@@ -10,14 +10,8 @@ import { DataIntakeContainer } from '../_components/data-intake-container';
 // import { DeleteConfirmationModal } from '../delete-confirmation-modal';
 // import { LoadingState, ErrorState, EmptyState } from '../_components/state-display';
 
-import {
-  useVariableStore,
-  useSetSelectedOrganizationId,
-  useIsVariablesLoading,
-  useFetchVariables,
-  useVariableError,
-  Variable
-} from '@/lib/store/variables';
+import type { Variable } from '@/lib/store/variables';
+import { useVariables } from '@/lib/queries/variables';
 import { useOrganizationStore } from '@/lib/store/organization';
 import { useAuth } from '@/providers/auth-provider';
 import { useVariableApi, useCsvProcessor } from '../_components/api-hooks';
@@ -38,11 +32,7 @@ interface ContainerProps {
 }
 
 // Use `as unknown as jest.Mock` for Zustand hooks
-const mockedUseVariableStore = useVariableStore as unknown as jest.Mock;
-const mockedUseSetSelectedOrganizationId = useSetSelectedOrganizationId as jest.Mock;
-const mockedUseIsVariablesLoading = useIsVariablesLoading as jest.Mock;
-const mockedUseFetchVariables = useFetchVariables as jest.Mock;
-const mockedUseVariableError = useVariableError as jest.Mock;
+const mockedUseVariables = useVariables as jest.Mock;
 const mockedUseOrganizationStore = useOrganizationStore as unknown as jest.Mock;
 const mockedUseAuth = useAuth as jest.Mock;
 const mockedUseVariableApi = useVariableApi as jest.Mock;
@@ -78,12 +68,8 @@ jest.mock('@/lib/utils/logger', () => ({
 }));
 
 // Mock the individual hooks from the stores and providers
-jest.mock('@/lib/store/variables', () => ({
-  useVariableStore: jest.fn(),
-  useSetSelectedOrganizationId: jest.fn(() => jest.fn()),
-  useIsVariablesLoading: jest.fn(() => false),
-  useFetchVariables: jest.fn(() => jest.fn()),
-  useVariableError: jest.fn(() => null),
+jest.mock('@/lib/queries/variables', () => ({
+  useVariables: jest.fn(),
 }));
 
 jest.mock('@/lib/store/organization', () => ({
@@ -116,8 +102,6 @@ jest.mock('../_components/variable-details-modal', () => {
 
 describe('DataIntakeContainer', () => {
   let VariableDetailsModalMock: jest.Mock;
-  let fetchVariablesMock: jest.Mock;
-  let setSelectedOrgIdMock: jest.Mock;
   let handleImportVariablesMock: jest.Mock;
   let handleDeleteVariableMock: jest.Mock;
   let handleUpdateVariableMock: jest.Mock;
@@ -135,12 +119,21 @@ describe('DataIntakeContainer', () => {
   ];
   const allMockVariables: Variable[] = [...mockOrg123Variables, ...mockOrg456Variables];
 
+  // The variables query: every variable of the user, filtered to the organization asked for
+  let mockVariables: Variable[] = [];
+  const variablesQuery = (state: { isPending?: boolean; fetchStatus?: string; error?: Error | null } = {}) =>
+    mockedUseVariables.mockImplementation((organizationId: string | null) => ({
+      data: state.isPending ? undefined : mockVariables.filter((v) => v.organizationId === organizationId),
+      isPending: false,
+      fetchStatus: 'idle',
+      error: null,
+      ...state,
+    }));
+
 
   beforeEach(() => {
     VariableDetailsModalMock = require('../_components/variable-details-modal').VariableDetailsModal;
 
-    fetchVariablesMock = jest.fn();
-    setSelectedOrgIdMock = jest.fn();
     handleImportVariablesMock = jest.fn().mockResolvedValue({ success: true }); // Assuming it returns an object with success status
     handleDeleteVariableMock = jest.fn().mockResolvedValue({ success: true });
     handleUpdateVariableMock = jest.fn().mockResolvedValue({ success: true });
@@ -149,14 +142,8 @@ describe('DataIntakeContainer', () => {
     handleCreateVariableMock = jest.fn().mockResolvedValue(true);
     reparseMock = jest.fn();
 
-    mockedUseVariableStore.mockImplementation((selector) => {
-      const state = {
-        variables: allMockVariables, // Provide all variables
-        selectedOrganizationId: 'org-123', // Default selected org
-        setVariables: jest.fn(), 
-      };
-      return selector(state);
-    });
+    mockVariables = allMockVariables;
+    variablesQuery();
     mockedUseOrganizationStore.mockImplementation(selector => {
       const state = { currentOrganization: { id: 'org-123', name: 'Test Org Default' } };
       return selector(state);
@@ -166,10 +153,6 @@ describe('DataIntakeContainer', () => {
       session: { access_token: 'mock-token' },
       isLoading: false,
     });
-    mockedUseIsVariablesLoading.mockReturnValue(false);
-    mockedUseVariableError.mockReturnValue(null);
-    mockedUseSetSelectedOrganizationId.mockReturnValue(setSelectedOrgIdMock);
-    mockedUseFetchVariables.mockReturnValue(fetchVariablesMock);
     mockedUseVariableApi.mockReturnValue({
       apiStatus: { success: null, error: null }, // Default apiStatus
       handleImportVariables: handleImportVariablesMock,
@@ -196,8 +179,7 @@ describe('DataIntakeContainer', () => {
   });
 
   test('displays loading state while the first load runs', () => {
-    mockedUseIsVariablesLoading.mockReturnValue(true);
-    mockedUseVariableStore.mockImplementation((selector) => selector({ variables: [], selectedOrganizationId: 'org-123' }));
+    variablesQuery({ isPending: true, fetchStatus: 'fetching' });
     render(<DataIntakeContainer />);
     expect(screen.getByText('Loading variables...')).toBeInTheDocument(); // Adjusted text
     expect(screen.getByTestId('loader-icon')).toBeInTheDocument(); 
@@ -215,7 +197,7 @@ describe('DataIntakeContainer', () => {
 
   test('displays error state when there is a variable fetch error', () => {
     const errorMessage = 'Failed to fetch variables due to network error.';
-    mockedUseVariableError.mockReturnValue(errorMessage);
+    variablesQuery({ error: new Error(errorMessage) });
     render(<DataIntakeContainer />);
     // expect(screen.getByText('An Error Occurred')).toBeInTheDocument(); // Removed, not present in actual output
     expect(screen.getByText(errorMessage)).toBeInTheDocument(); 
@@ -224,7 +206,7 @@ describe('DataIntakeContainer', () => {
   });
 
   test('displays empty state when there are no variables for the selected org', () => {
-    mockedUseVariableStore.mockImplementation((selector) => selector({ variables: [], selectedOrganizationId: 'org-123' }));
+    mockVariables = [];
     render(<DataIntakeContainer />);
     // expect(screen.getByText('No Data Available')).toBeInTheDocument(); // Removed, not present
     expect(screen.getByText(/No variables found for the selected organization/i)).toBeInTheDocument(); 
@@ -257,14 +239,14 @@ describe('DataIntakeContainer', () => {
   });
 
   test('keeps the page in place while reloading after a save', () => {
-    mockedUseIsVariablesLoading.mockReturnValue(true);
+    variablesQuery({ fetchStatus: 'fetching' });
     render(<DataIntakeContainer>{(props: ContainerProps) => <div>{props.filteredVariables.length} variables</div>}</DataIntakeContainer>);
 
     expect(screen.queryByText('Loading variables...')).not.toBeInTheDocument();
     expect(screen.getByText('2 variables')).toBeInTheDocument();
   });
 
-  test('calls fetchVariables on initial load if organization is selected', async () => {
+  test('loads the variables of the selected organization', async () => {
     mockedUseOrganizationStore.mockImplementation(selector => {
       const state = { currentOrganization: { id: 'org-fetch-test', name: 'Fetch Org' } };
       return selector(state);
@@ -275,11 +257,10 @@ describe('DataIntakeContainer', () => {
       render(<DataIntakeContainer />);
     });
 
-    expect(setSelectedOrgIdMock).toHaveBeenLastCalledWith('org-fetch-test');
-    expect(fetchVariablesMock).toHaveBeenCalledWith('user-test', 'token-test');
+    expect(mockedUseVariables).toHaveBeenLastCalledWith('org-fetch-test');
   });
   
-  test('does not call fetchVariables if organization is not selected initially', async () => {
+  test('asks for no variables without a selected organization', async () => {
     mockedUseOrganizationStore.mockImplementation(selector => {
       const state = { currentOrganization: null };
       return selector(state);
@@ -287,14 +268,13 @@ describe('DataIntakeContainer', () => {
      await act(async () => {
       render(<DataIntakeContainer />);
     });
-    expect(setSelectedOrgIdMock).toHaveBeenLastCalledWith(null);
-    expect(fetchVariablesMock).not.toHaveBeenCalled();
+    expect(mockedUseVariables).toHaveBeenLastCalledWith(null);
   });
 
   test('handles delete variable flow correctly', async () => {
     const user = userEvent.setup();
     const variableToDelete = mockOrg123Variables[0]; 
-    mockedUseVariableStore.mockImplementation((selector) => selector({ variables: [variableToDelete], selectedOrganizationId: 'org-123' }));
+    mockVariables = [variableToDelete];
     mockedUseOrganizationStore.mockImplementation(selector => {
       const state = { currentOrganization: { id: 'org-123', name: 'Test Org Delete Flow' } };
       return selector(state);
@@ -337,7 +317,7 @@ describe('DataIntakeContainer', () => {
   test('calls onVariablesUpdated when filteredVariables change', async () => {
     const onVariablesUpdatedMock = jest.fn();
     
-    mockedUseVariableStore.mockImplementation((selector) => selector({ variables: allMockVariables, selectedOrganizationId: 'org-123' }));
+    mockVariables = allMockVariables;
     
     const { rerender } = render(<DataIntakeContainer onVariablesUpdated={onVariablesUpdatedMock} />);
     
@@ -352,12 +332,6 @@ describe('DataIntakeContainer', () => {
       const state = { currentOrganization: { id: 'org-456', name: 'Other Org' } };
       return selector(state);
     });
-    // This will trigger the useEffect in DataIntakeContainer, which calls setSelectedOrganizationIdInStore('org-456')
-    // Then useVariableStore mock needs to reflect this change for filteredVariables to update
-    mockedUseVariableStore.mockImplementation((selector) => selector({ 
-      variables: allMockVariables, 
-      selectedOrganizationId: 'org-456' 
-    }));
     
     await act(async () => {
       rerender(<DataIntakeContainer onVariablesUpdated={onVariablesUpdatedMock} />);

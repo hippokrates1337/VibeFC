@@ -209,10 +209,8 @@ export const createGraphActions = (set: (partial: any) => void, get: () => any) 
       forecastPeriods: null,
       selectedVisualizationMonth: null,
       showVisualizationSlider: false,
-      // Preserve organization forecasts
-      organizationForecasts: state.organizationForecasts,
     }));
-    logger.log('[ForecastGraphStore] Store reset to initial state, preserving organization forecasts.');
+    logger.log('[ForecastGraphStore] Store reset to initial state.');
   },
 
   duplicateNodeWithEdges: (nodeId: string) => {

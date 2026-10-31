@@ -50,6 +50,7 @@ jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
   useForecastGraph: jest.fn(),
   useForecastGraphActions: jest.fn(),
   useCalculations: jest.fn(),
+  useCalculationActions: jest.fn(),
   useVisualization: jest.fn(),
   useVisualizationActions: jest.fn(),
   useForecastMonths: jest.fn(),
@@ -261,6 +262,7 @@ describe('ForecastEditorPage - Reload Preservation', () => {
     useForecastGraph,
     useForecastGraphActions,
     useCalculations,
+    useCalculationActions,
     useVisualization,
     useVisualizationActions,
     useForecastMonths,
@@ -280,7 +282,6 @@ describe('ForecastEditorPage - Reload Preservation', () => {
     selectedNodeId: null,
     isLoading: false,
     error: null,
-    organizationForecasts: [],
     setDirty: jest.fn(),
     setError: jest.fn(),
     resetStore: jest.fn(),
@@ -291,8 +292,10 @@ describe('ForecastEditorPage - Reload Preservation', () => {
   const mockLoadForecast = jest.fn();
   const mockSetDirty = jest.fn();
   const mockSetError = jest.fn();
+  const mockLoadResults = jest.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
+    mockLoadResults.mockClear();
     mockLoadForecast.mockClear();
     mockSetDirty.mockClear();
     mockSetError.mockClear();
@@ -302,7 +305,6 @@ describe('ForecastEditorPage - Reload Preservation', () => {
     (useOrganizationStore as unknown as jest.Mock).mockReturnValue({ currentOrganization: { id: 'test-org-id' } });
 
     const storeSlice = {
-      _hasHydrated: true,
       ...mockStoreState,
       setDirty: mockSetDirty,
       setError: mockSetError,
@@ -315,12 +317,8 @@ describe('ForecastEditorPage - Reload Preservation', () => {
       return storeSlice;
     });
 
-    const storeMock = useForecastGraphStore as unknown as {
-      getState: jest.Mock;
-      persist: { rehydrate: jest.Mock };
-    };
+    const storeMock = useForecastGraphStore as unknown as { getState: jest.Mock };
     storeMock.getState = jest.fn(() => storeSlice);
-    storeMock.persist = { rehydrate: jest.fn() };
 
     useForecastGraph.mockReturnValue({
       isDirty: mockStoreState.isDirty,
@@ -355,6 +353,8 @@ describe('ForecastEditorPage - Reload Preservation', () => {
 
     useForecastMonths.mockReturnValue([]);
 
+    useCalculationActions.mockReturnValue({ loadUnifiedCalculationResults: mockLoadResults });
+
     useCalculations.mockReturnValue({
       calculationResults: null,
       isCalculating: false,
@@ -369,7 +369,7 @@ describe('ForecastEditorPage - Reload Preservation', () => {
     (mapForecastToClientFormat as jest.Mock).mockImplementation((data: unknown) => data);
   });
 
-  it('should preserve unsaved changes when page reloads', async () => {
+  it('keeps unsaved changes when returning to the same forecast in this tab', async () => {
     const mockGetForecast = forecastApi.getForecast as jest.Mock;
     
     // Mock API response
@@ -401,7 +401,6 @@ describe('ForecastEditorPage - Reload Preservation', () => {
     const mockGetForecast = forecastApi.getForecast as jest.Mock;
     
     const cleanStoreState = {
-      _hasHydrated: true,
       ...mockStoreState,
       isDirty: false,
       nodes: [] as typeof mockStoreState.nodes,
@@ -449,13 +448,26 @@ describe('ForecastEditorPage - Reload Preservation', () => {
     await waitFor(() => {
       expect(mockGetForecast).toHaveBeenCalledWith('test-forecast-id');
     });
+    // ...then the last stored calculation is shown without recalculating
+    await waitFor(() => expect(mockLoadResults).toHaveBeenCalled());
+  });
+
+  it('asks before the tab is closed while edits are unsaved', async () => {
+    render(<ForecastEditorPage />);
+    await waitFor(() => {
+      expect(document.querySelector('[data-testid="forecast-canvas"]')).toBeInTheDocument();
+    });
+
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it('should reload fresh data when different forecast ID', async () => {
     const mockGetForecast = forecastApi.getForecast as jest.Mock;
     
     const differentForecastState = {
-      _hasHydrated: true,
       ...mockStoreState,
       forecastId: 'different-forecast-id',
       setDirty: mockSetDirty,

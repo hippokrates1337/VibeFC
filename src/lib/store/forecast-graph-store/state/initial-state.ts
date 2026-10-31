@@ -14,7 +14,6 @@ export const initialState: ForecastGraphState = {
   configPanelOpen: false,
   isLoading: false,
   error: null,
-  organizationForecasts: [],
   
   // Last edited node position tracking
   lastEditedNodePosition: null,
@@ -35,9 +34,6 @@ export const initialState: ForecastGraphState = {
   // Visualization state  
   selectedVisualizationMonth: null,
   showVisualizationSlider: false,
-  
-  // Hydration state for Zustand v5 compatibility
-  _hasHydrated: false,
   
   // Debug state
   ...initialDebugState,

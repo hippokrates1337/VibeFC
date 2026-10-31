@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { type Variable, type TimeSeriesData, useFetchVariables } from '@/lib/store/variables'
+import { type Variable, type TimeSeriesData } from '@/lib/store/variables'
+import { useReloadVariables } from '@/lib/queries/variables'
+import { getAccessToken } from '@/lib/auth/access-token'
 import { useAuth } from '@/providers/auth-provider'
 import { useOrganizationStore } from '@/lib/store/organization'
 import { logger } from '@/lib/utils/logger'
@@ -78,10 +80,9 @@ async function errorMessage(response: Response, fallback: string): Promise<strin
   }
 }
 
-export const useVariableApi = (variables: Variable[], setVariables: (variables: Variable[]) => void) => {
-  const { session, user } = useAuth()
+export const useVariableApi = () => {
   const currentOrganization = useOrganizationStore(state => state.currentOrganization)
-  const fetchVariables = useFetchVariables()
+  const reloadVariables = useReloadVariables()
   const [apiStatus, setApiStatus] = useState<ApiStatus>({
     loading: false,
     error: null,
@@ -89,27 +90,26 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
   })
 
   const send = useCallback(async (method: 'POST' | 'PUT' | 'DELETE', body: unknown, fallbackError: string): Promise<void> => {
-    if (!session?.access_token) {
+    const token = await getAccessToken()
+    if (!token) {
       throw new Error('Authentication token is missing. Please log in again.')
     }
     const response = await fetch(VARIABLES_URL, {
       method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     })
     if (!response.ok) {
       throw new Error(await errorMessage(response, fallbackError))
     }
-  }, [session])
+  }, [])
 
   /** Runs a save, then reloads the organization's variables from the server. */
   const runSave = useCallback(async (event: string, save: () => Promise<void>): Promise<boolean> => {
     setApiStatus({ loading: true, error: null, success: false })
     try {
       await save()
-      if (user && session?.access_token) {
-        await fetchVariables(user.id, session.access_token, { force: true })
-      }
+      await reloadVariables()
       setApiStatus({ loading: false, error: null, success: true })
       setTimeout(() => setApiStatus(prev => ({ ...prev, success: false })), 3000)
       return true
@@ -118,7 +118,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       setApiStatus({ loading: false, error: error instanceof Error ? error.message : 'Saving failed', success: false })
       return false
     }
-  }, [fetchVariables, session, user])
+  }, [reloadVariables])
 
   const handleImportVariables = useCallback(async (decisions: VariableImportDecision[]): Promise<boolean> => {
     const toAdd = decisions.filter(d => d.action === 'add')
@@ -130,8 +130,8 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
     })
     if (toAdd.length === 0 && toUpdate.length === 0) return true
 
-    if (!user || !currentOrganization) {
-      setApiStatus({ loading: false, error: 'User or organization context is missing. Cannot import variables.', success: false })
+    if (!currentOrganization) {
+      setApiStatus({ loading: false, error: 'Organization context is missing. Cannot import variables.', success: false })
       return false
     }
 
@@ -154,7 +154,7 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
         }, 'Failed to update the existing variables')
       }
     })
-  }, [currentOrganization, runSave, send, user])
+  }, [currentOrganization, runSave, send])
 
   /** Variable editor: changed name/type, and the edited series replaces the stored one. */
   const handleUpdateVariable = useCallback(async (
@@ -198,12 +198,9 @@ export const useVariableApi = (variables: Variable[], setVariables: (variables: 
       setApiStatus({ loading: false, error: 'Cannot delete: Organization context is missing.', success: false })
       return
     }
-    const deleted = await runSave('variables.delete', () =>
+    await runSave('variables.delete', () =>
       send('DELETE', { ids: [variableId], organizationId }, 'Failed to delete the variable'))
-    if (deleted) {
-      setVariables(variables.filter(variable => variable.id !== variableId))
-    }
-  }, [runSave, send, setVariables, variables])
+  }, [runSave, send])
 
   return {
     apiStatus,

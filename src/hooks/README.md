@@ -28,12 +28,9 @@ Complete forecast graph state management with 30+ specialized hooks:
 - **Validation**: `useGraphValidation`, `useValidateGraph`
 - **Calculation**: `useCalculationResults`, `useCalculateForecast`
 
-#### Variable Store (`variables.ts`)
-Variable data management:
-- **`useVariableStore`**: Main store access
-- **`useFetchVariables`**: Data fetching
-- **`useIsVariablesLoading`**, **`useVariableError`**: Loading states
-- **`useSetSelectedOrganizationId`**: Organization context
+#### Variables (`@/lib/queries/variables.ts`)
+- **`useVariables(orgId?)`**: TanStack Query; all of the user's variables, filtered to one organization when given
+- **`useReloadVariables()`**: reload after saving
 
 #### Organization Store (`organization.ts`)
 - **`useOrganizationStore`**: Organization selection and management
@@ -88,9 +85,8 @@ const currentOrg = useOrganizationStore(state => state.currentOrganization);
 
 ### Variables
 ```typescript
-import { useVariableStore, useFetchVariables } from '@/lib/store/variables';
-const variables = useVariableStore(state => state.variables);
-const fetchVariables = useFetchVariables();
+import { useVariables } from '@/lib/queries/variables';
+const { data: variables = [], isPending, error } = useVariables(currentOrg?.id);
 ```
 
 ### Toast Notifications

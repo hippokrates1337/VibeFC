@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/utils/logger';
-import { evaluateAuthRedirect } from '@/lib/auth/redirect-policy';
+import { evaluateAuthRedirect, isPublicPath } from '@/lib/auth/redirect-policy';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
@@ -13,13 +13,7 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Define public routes (removed /landing)
-  const publicRoutes = ['/login', '/signup', '/auth/callback', '/forgot-password'];
-  // Check if the current path starts with any of the public routes
-  const isPublicRoute = publicRoutes.some(route => 
-    req.nextUrl.pathname === route || 
-    req.nextUrl.pathname.startsWith(`${route}/`)
-  );
+  const isPublicRoute = isPublicPath(req.nextUrl.pathname);
   // Get the auth token from cookies - Supabase uses a dynamic cookie name
   let authCookie: string | undefined;
 
@@ -80,6 +74,8 @@ export async function middleware(req: NextRequest) {
     isAuthenticated,
     isPublicRoute,
     pathname: req.nextUrl.pathname,
+    search: req.nextUrl.search,
+    returnTo: req.nextUrl.searchParams.get('returnTo'),
   });
   // The policy cannot loop: unauthenticated users land on a public route and
   // authenticated users on '/', which is not public. So no redirect counter is needed

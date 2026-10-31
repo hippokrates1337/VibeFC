@@ -5,19 +5,19 @@ import '@testing-library/jest-dom';
 import ForecastDefinitionPage from '../page';
 import { forecastApi } from '@/lib/api/forecast';
 
-const mockLoadOrganizationForecasts = jest.fn();
 const mockResetStore = jest.fn();
 let mockGraphState: Record<string, unknown>;
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('@/lib/api/forecast', () => ({ forecastApi: { deleteForecast: jest.fn(), createForecast: jest.fn() } }));
+jest.mock('@/lib/api/forecast', () => ({
+  forecastApi: { deleteForecast: jest.fn(), createForecast: jest.fn(), getForecastsWithSummary: jest.fn() },
+}));
 jest.mock('@/lib/store/organization', () => ({
   useOrganizationStore: (selector: (state: unknown) => unknown) => selector({ currentOrganization: { id: 'org-1' } }),
 }));
 jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
   useForecastGraph: () => mockGraphState,
-  useForecastGraphActions: () => ({ loadOrganizationForecasts: mockLoadOrganizationForecasts, resetStore: mockResetStore }),
-  useOrganizationForecastsLoader: jest.fn(),
+  useForecastGraphActions: () => ({ resetStore: mockResetStore }),
 }));
 
 const forecasts = [
@@ -25,24 +25,36 @@ const forecasts = [
   { id: 'f-2', name: 'Plan 2027', forecastStartDate: '2027-01-01', forecastEndDate: '2027-12-31', updatedAt: '2026-10-02' },
 ];
 const deleteForecast = forecastApi.deleteForecast as jest.Mock;
+const getForecastsWithSummary = forecastApi.getForecastsWithSummary as jest.Mock;
+const cardTitles = () => screen.queryAllByText(/^(Budget 2026|Plan 2027)$/).map((el) => el.textContent);
 
 describe('ForecastDefinitionPage: deleting a forecast', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGraphState = { organizationForecasts: forecasts, isLoading: false, error: null, forecastId: 'f-1' };
+    mockGraphState = { forecastId: 'f-1' };
+    getForecastsWithSummary.mockResolvedValue({ data: forecasts });
+  });
+
+  test('loads the forecasts of the current organization', async () => {
+    render(<ForecastDefinitionPage />);
+
+    expect(await screen.findByText('Budget 2026')).toBeInTheDocument();
+    expect(getForecastsWithSummary).toHaveBeenCalledWith('org-1');
+    expect(cardTitles()).toEqual(['Budget 2026', 'Plan 2027']);
   });
 
   test('deletes the forecast after confirmation and removes it from the list', async () => {
     const user = userEvent.setup();
     deleteForecast.mockResolvedValue({ data: undefined, error: null });
     render(<ForecastDefinitionPage />);
+    await screen.findByText('Budget 2026');
 
     await user.click(screen.getByRole('button', { name: 'Delete Budget 2026' }));
     expect(screen.getByRole('alertdialog')).toHaveTextContent('"Budget 2026" will be deleted');
     await user.click(screen.getByRole('button', { name: 'Delete forecast' }));
 
     await waitFor(() => expect(deleteForecast).toHaveBeenCalledWith('f-1'));
-    expect(mockLoadOrganizationForecasts).toHaveBeenCalledWith([forecasts[1]]);
+    await waitFor(() => expect(cardTitles()).toEqual(['Plan 2027']));
     // f-1 is open in the editor store, so the store is cleared
     expect(mockResetStore).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
@@ -51,24 +63,26 @@ describe('ForecastDefinitionPage: deleting a forecast', () => {
   test('cancelling deletes nothing', async () => {
     const user = userEvent.setup();
     render(<ForecastDefinitionPage />);
+    await screen.findByText('Budget 2026');
 
     await user.click(screen.getByRole('button', { name: 'Delete Plan 2027' }));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(deleteForecast).not.toHaveBeenCalled();
-    expect(mockLoadOrganizationForecasts).not.toHaveBeenCalled();
+    expect(cardTitles()).toEqual(['Budget 2026', 'Plan 2027']);
   });
 
   test('keeps the forecast listed when deleting fails', async () => {
     const user = userEvent.setup();
     deleteForecast.mockResolvedValue({ data: undefined, error: { message: 'Forbidden' } });
     render(<ForecastDefinitionPage />);
+    await screen.findByText('Budget 2026');
 
     await user.click(screen.getByRole('button', { name: 'Delete Plan 2027' }));
     await user.click(screen.getByRole('button', { name: 'Delete forecast' }));
 
     await waitFor(() => expect(deleteForecast).toHaveBeenCalledWith('f-2'));
-    expect(mockLoadOrganizationForecasts).not.toHaveBeenCalled();
+    expect(cardTitles()).toEqual(['Budget 2026', 'Plan 2027']);
     expect(mockResetStore).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });

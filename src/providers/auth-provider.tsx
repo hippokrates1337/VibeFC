@@ -2,10 +2,9 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
 import { useOrganizationStore } from '@/lib/store/organization';
-import { useVariableStore } from '@/lib/store/variables';
 import { useForecastGraphActions } from '@/lib/store/forecast-graph-store/hooks';
 import { organizationApi } from '@/lib/api-client';
 import { logger } from '@/lib/utils/logger';
@@ -25,12 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
+  const queryClient = useQueryClient();
 
   const fetchOrgData = useOrganizationStore.getState().fetchOrganizationData;
   const clearOrgData = useOrganizationStore.getState().clearOrganizationData;
-  const fetchVars = useVariableStore.getState().fetchVariables;
-  const clearVars = useVariableStore.getState().clearVariables;
   
   // Safe destructuring with fallbacks to prevent undefined function references
   const forecastActions = useForecastGraphActions();
@@ -49,17 +46,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
       fetchOrgData(userId, token);
-      fetchVars(userId, token);
     }
-  }, [fetchOrgData, fetchVars]);
+  }, [fetchOrgData]);
 
   const clearAllAppData = useCallback(() => {
+    queryClient.clear();
     clearOrgData();
-    clearVars();
     clearForecasts();
     localStorage.removeItem('currentOrganizationId');
     removeAuthCookie();
-  }, [clearOrgData, clearVars, clearForecasts]);
+  }, [queryClient, clearOrgData, clearForecasts]);
 
   // Store token in cookie
   const setAuthCookie = (token: string, expiresIn: number) => {
@@ -161,11 +157,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (!error && data.session) {
-        router.push('/');
-      } else if (error) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      // The caller navigates (LoginForm goes back to returnTo)
+      if (error) {
         logger.error('auth.sign-in.failed', { reason: error.message });
       }
       

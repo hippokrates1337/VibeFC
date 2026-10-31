@@ -1,12 +1,6 @@
 import { useMemo, useState, useCallback, useEffect, ReactNode } from 'react'
-import { 
-  useVariableStore,
-  useSetSelectedOrganizationId,
-  useIsVariablesLoading,
-  useFetchVariables,
-  useVariableError,
-  Variable
-} from '@/lib/store/variables' 
+import type { Variable } from '@/lib/store/variables'
+import { useVariables } from '@/lib/queries/variables'
 import { useOrganizationStore } from '@/lib/store/organization';
 import { ImportModal } from '../import-modal'
 import { DeleteConfirmationModal } from '../delete-confirmation-modal'
@@ -43,17 +37,15 @@ export const DataIntakeContainer = ({
   children,
   onVariablesUpdated
 }: DataIntakeContainerProps) => {
-  const variables = useVariableStore(state => state.variables);
-  const selectedOrganizationId = useVariableStore(state => state.selectedOrganizationId);
-  const setVariables = useVariableStore((state) => state.setVariables);
+  const { isLoading: authIsLoading } = useAuth()
+  const currentOrganization = useOrganizationStore(state => state.currentOrganization);
+  const selectedOrgIdFromOrgStore = currentOrganization?.id || null;
 
-  const filteredVariables = useMemo(() => {
-    if (!selectedOrganizationId) {
-      return variables;
-    }
-    logger.log('[DataIntakeContainer useMemo] Filtering variables for organization:', selectedOrganizationId);
-    return (variables || []).filter(variable => variable.organizationId === selectedOrganizationId);
-  }, [variables, selectedOrganizationId]);
+  // The current organization's variables (none without an organization)
+  const variablesQuery = useVariables(selectedOrgIdFromOrgStore)
+  const filteredVariables = useMemo(() => variablesQuery.data ?? [], [variablesQuery.data])
+  const storeIsLoading = variablesQuery.isPending && variablesQuery.fetchStatus !== 'idle'
+  const storeError = variablesQuery.error?.message ?? null
 
   // Call onVariablesUpdated when filtered variables change
   useEffect(() => {
@@ -62,22 +54,13 @@ export const DataIntakeContainer = ({
     }
   }, [filteredVariables, onVariablesUpdated]);
 
-  const setSelectedOrganizationIdInStore = useSetSelectedOrganizationId();
-  const storeIsLoading = useIsVariablesLoading();
-  const storeError = useVariableError();
-  const fetchVariables = useFetchVariables();
-  
-  const { user, session, isLoading: authIsLoading } = useAuth()
-  const currentOrganization = useOrganizationStore(state => state.currentOrganization);
-  const selectedOrgIdFromOrgStore = currentOrganization?.id || null;
-
   const {
     apiStatus,
     handleImportVariables,
     handleDeleteVariable,
     handleUpdateVariable,
     handleCreateVariable
-  } = useVariableApi(variables, setVariables)
+  } = useVariableApi()
 
   const {
     isUploading,
@@ -106,23 +89,6 @@ export const DataIntakeContainer = ({
   // New states for variable details modal
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState<boolean>(false);
   const [selectedVariableForModal, setSelectedVariableForModal] = useState<Variable | null>(null);
-
-  useEffect(() => {
-    logger.log('[DataIntakeContainer useEffect] Org ID from store changed to:', selectedOrgIdFromOrgStore);
-    // Update the selected ID in the variable store
-    setSelectedOrganizationIdInStore(selectedOrgIdFromOrgStore);
-    
-    // Trigger fetch ONLY if we have a selected org, user, and token
-    if (selectedOrgIdFromOrgStore && user && session?.access_token) {
-      logger.log('[DataIntakeContainer useEffect] Triggering fetchVariables for org:', selectedOrgIdFromOrgStore);
-      // Let the store handle the logic of whether to actually fetch (based on existing data/loading state)
-      fetchVariables(user.id, session.access_token);
-    } else {
-       logger.log('[DataIntakeContainer useEffect] Skipping fetchVariables - missing orgId, user, or token.');
-       // Optionally clear variables if no org is selected?
-       // useVariableStore.getState().clearVariables(); // Decide if this is desired behaviour
-    }
-  }, [selectedOrgIdFromOrgStore, setSelectedOrganizationIdInStore, fetchVariables, user, session?.access_token]);
 
   const handleDeleteClick = useCallback((id: string, name: string): void => {
     setDeleteConfirmation({

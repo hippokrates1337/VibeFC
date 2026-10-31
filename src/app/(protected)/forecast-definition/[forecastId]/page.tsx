@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -12,6 +12,7 @@ import {
   useForecastGraph,
   useForecastGraphActions,
   useCalculations,
+  useCalculationActions,
   useVisualization,
   useVisualizationActions,
   useForecastMonths
@@ -32,9 +33,6 @@ export default function ForecastEditorPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState('');
-  
-  // Check hydration state first to prevent premature rendering
-  const hasHydrated = useForecastGraphStore(state => state._hasHydrated);
   
   // Consolidate into single useForecastGraph call to prevent duplicate subscriptions
   const { 
@@ -57,41 +55,31 @@ export default function ForecastEditorPage() {
   const forecastMonths = useForecastMonths();
   const { setSelectedVisualizationMonth: setSelectedMonth, setShowVisualizationSlider: setShowSlider, updateVisualizationMonthForPeriodChange } = useVisualizationActions();
   const { calculationResults } = useCalculations();
+  const { loadUnifiedCalculationResults } = useCalculationActions();
   
-  // Use consistent naming and memoize computed values
   const isDirty = isStoreDirty;
-  const computedValues = useMemo(() => ({
-    hasNodes: nodes.length > 0,
-    hasEdges: edges.length > 0,
-  }), [nodes.length, edges.length]);
   
-  const { hasNodes, hasEdges } = computedValues;
-  
-  // Initialize hydration on component mount
+  // The browser asks before closing or reloading the tab while edits are unsaved
+  // (the graph is not kept in browser storage, so they would be lost)
   useEffect(() => {
-    if (typeof window !== 'undefined' && !hasHydrated) {
-      console.log('🔄 Initializing store hydration...');
-      useForecastGraphStore.persist.rehydrate();
-    }
-  }, [hasHydrated]);
-  
-  // Debug logging to track re-renders (can be removed after testing)
+    if (!isDirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isDirty]);
+
+  // Switching to another organization leaves its forecast. Only compare once this route's
+  // forecast is loaded: before that the store may still hold the previous forecast.
   useEffect(() => {
-    console.log('🔄 ForecastEditorPage re-render:', {
-      forecastId,
-      currentForecastId,
-      isDirty,
-      hasNodes,
-      hasEdges,
-      startDate,
-      endDate,
-      hasHydrated,
-      timestamp: new Date().toISOString()
-    });
-  });
-  
-  useEffect(() => {
-    if (currentActiveOrg && currentForecastOrgId && currentActiveOrg.id !== currentForecastOrgId) {
+    if (
+      currentForecastId === forecastId &&
+      currentActiveOrg &&
+      currentForecastOrgId &&
+      currentActiveOrg.id !== currentForecastOrgId
+    ) {
       toast({
         title: 'Organization Changed',
         description: `The active organization has changed. You are being redirected as this forecast belongs to a different organization.`,
@@ -99,7 +87,7 @@ export default function ForecastEditorPage() {
       });
       router.push('/forecast-definition');
     }
-  }, [currentActiveOrg, currentForecastOrgId, router, toast]);
+  }, [currentActiveOrg, currentForecastId, currentForecastOrgId, forecastId, router, toast]);
 
   const fetchForecastData = useCallback(async (forceReload = false) => {
     if (!forecastId) return;
@@ -129,7 +117,8 @@ export default function ForecastEditorPage() {
       }
       const clientData = mapForecastToClientFormat(response.data);
       loadForecastToStore(clientData);
-      console.log('[ForecastEditorPage] Fresh data loaded from API');
+      // Show the last stored calculation (and its warnings) without recalculating
+      void loadUnifiedCalculationResults();
     } catch (err: any) {
       console.error('Error loading forecast:', err);
       setStoreError(err.message);
@@ -141,7 +130,7 @@ export default function ForecastEditorPage() {
     } finally {
       setIsPageComponentLoading(false);
     }
-  }, [forecastId, loadForecastToStore, setStoreError, toast]); // Removed unstable dependencies
+  }, [forecastId, loadForecastToStore, loadUnifiedCalculationResults, setStoreError, toast]);
 
   // Add cleanup and mount tracking to prevent race conditions
   useEffect(() => {
@@ -246,18 +235,6 @@ export default function ForecastEditorPage() {
   const handleReload = async () => {
     await fetchForecastData(true); // Force reload
   };
-  
-  // Don't render until store is hydrated to prevent infinite loops
-  if (!hasHydrated) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-900">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
-          <p className="text-sm text-slate-400">Initializing application...</p>
-        </div>
-      </div>
-    );
-  }
   
   if (isPageComponentLoading) {
     return (

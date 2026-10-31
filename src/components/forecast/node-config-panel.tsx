@@ -27,7 +27,8 @@ import {
   SeedNodeAttributes,
   ForecastNodeClient
 } from '@/lib/store/forecast-graph-store/types';
-import { useVariableStore, Variable } from '@/lib/store/variables';
+import { Variable } from '@/lib/store/variables';
+import { useVariables } from '@/lib/queries/variables';
 import { X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toggle } from '@/components/ui/toggle';
@@ -168,16 +169,12 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   open,
   onOpenChange
 }) => {
-  const { selectedNodeId, nodes } = useForecastGraph();
+  const { selectedNodeId, nodes, organizationId } = useForecastGraph();
   const { updateNodeData, deleteNode, setSelectedNodeId: setSelectedGraphNodeId } = useForecastGraphActions();
   const selectedNode = useSelectedNode();
   
-  // Get variables and selectedOrgId from the variable store
-  const allVariables = useVariableStore(state => state.variables);
-  const selectedOrgIdForVariables = useVariableStore(state => state.selectedOrganizationId);
-  
-  // Filter variables for the currently selected organization context of the variable store
-  const organizationVariables = allVariables.filter(variable => variable.organizationId === selectedOrgIdForVariables);
+  // Variables of the forecast's organization
+  const { data: organizationVariables = [] } = useVariables(organizationId);
   
   // Handle node deletion with confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);

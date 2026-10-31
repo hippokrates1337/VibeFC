@@ -13,17 +13,13 @@ jest.mock('@/lib/store/forecast-graph-store/hooks', () => ({
   useSelectedNode: jest.fn()
 }));
 
-jest.mock('@/lib/store/variables', () => ({
-  useVariableStore: jest.fn((selector: any) => {
-    const mockState = {
-      variables: [
-        { id: 'var1', name: 'Test Variable 1', organizationId: 'org-1', type: 'ACTUAL' },
-        { id: 'var2', name: 'Test Variable 2', organizationId: 'org-1', type: 'BUDGET' },
-      ],
-      selectedOrganizationId: 'org-1',
-    };
-    return selector(mockState);
-  }),
+jest.mock('@/lib/queries/variables', () => ({
+  useVariables: jest.fn(() => ({
+    data: [
+      { id: 'var1', name: 'Test Variable 1', organizationId: 'org-1', type: 'ACTUAL' },
+      { id: 'var2', name: 'Test Variable 2', organizationId: 'org-1', type: 'BUDGET' },
+    ],
+  })),
 }));
 
 // Mock all UI components with functional implementations

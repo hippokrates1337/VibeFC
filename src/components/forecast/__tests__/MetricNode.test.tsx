@@ -2,11 +2,10 @@ import { render, screen } from '@/test-utils';
 import MetricNode from '../nodes/MetricNode';
 import '@testing-library/jest-dom';
 import { NodeProps } from 'reactflow';
-import { useVariableStore } from '@/lib/store/variables';
+import { useVariables } from '@/lib/queries/variables';
 
-// Mock the variable store
-jest.mock('@/lib/store/variables');
-const mockUseVariableStore = useVariableStore as jest.MockedFunction<typeof useVariableStore>;
+jest.mock('@/lib/queries/variables');
+const mockUseVariables = useVariables as jest.Mock;
 
 // Mock ReactFlow's Position enum and NodeProps
 jest.mock('reactflow', () => ({
@@ -34,15 +33,11 @@ const createNodeProps = (data: any) => ({
 
 describe('MetricNode', () => {
   beforeEach(() => {
-    // Mock the variable store with test variables
-    mockUseVariableStore.mockImplementation((selector: any) => {
-      const state = {
-        variables: [
-          { id: 'budget-var-id', name: 'Budget Variable', organizationId: 'org-1', type: 'BUDGET' },
-          { id: 'historical-var-id', name: 'Historical Variable', organizationId: 'org-1', type: 'ACTUAL' },
-        ],
-      };
-      return selector(state);
+    mockUseVariables.mockReturnValue({
+      data: [
+        { id: 'budget-var-id', name: 'Budget Variable', organizationId: 'org-1', type: 'BUDGET' },
+        { id: 'historical-var-id', name: 'Historical Variable', organizationId: 'org-1', type: 'ACTUAL' },
+      ],
     });
   });
 

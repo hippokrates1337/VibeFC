@@ -1,5 +1,6 @@
 import { Organization, OrganizationMember } from '@/lib/supabase';
 import { joinBackendUrl } from '@/lib/api/join-backend-url';
+import { getAccessToken } from '@/lib/auth/access-token';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -18,19 +19,6 @@ export interface AddMemberResponse {
   outcome: AddMemberOutcome;
 }
 
-// Helper function to get token from cookie
-function getAuthToken(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'sb-access-token') {
-      return value;
-    }
-  }
-  return undefined;
-}
 
 // Helper function for API requests with auth token
 async function fetchWithAuth<T>(
@@ -41,7 +29,7 @@ async function fetchWithAuth<T>(
     const headers = new Headers(options.headers || {});
     headers.set('Content-Type', 'application/json');
     
-    const token = getAuthToken();
+    const token = await getAccessToken();
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }
