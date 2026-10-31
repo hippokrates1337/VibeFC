@@ -1,5 +1,5 @@
-import { renderHook, act } from '@testing-library/react'
-import { useVariableApi } from '../api-hooks'
+import { renderHook, act, waitFor } from '@testing-library/react'
+import { useVariableApi, useVariableUsage } from '../api-hooks'
 import type { Variable } from '@/lib/store/variables'
 
 const mockFetchVariables = jest.fn().mockResolvedValue(undefined)
@@ -121,5 +121,27 @@ describe('useVariableApi', () => {
 
     expect(sent(fetchMock, 0)).toEqual({ method: 'DELETE', body: { ids: ['var-units'], organizationId: 'org-1' } })
     expect(setVariables).toHaveBeenCalledWith([])
+  })
+})
+
+describe('useVariableUsage', () => {
+  it('loads the forecasts that use the variable', async () => {
+    const fetchMock = mockFetch([{ ok: true, body: { forecasts: [{ id: 'f-1', name: 'Budget 2026' }] } }])
+    const { result } = renderHook(() => useVariableUsage('var-units'))
+
+    expect(result.current.status).toBe('loading')
+    await waitFor(() => expect(result.current.status).toBe('loaded'))
+    expect(result.current.forecasts).toEqual([{ id: 'f-1', name: 'Budget 2026' }])
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/data-intake/variables/item/var-units/usage')
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer token-1' })
+  })
+
+  it('reports a failed lookup and stays idle without a variable', async () => {
+    mockFetch([{ ok: false, status: 500 }])
+    const { result, rerender } = renderHook(({ id }) => useVariableUsage(id), { initialProps: { id: 'var-units' as string | null } })
+
+    await waitFor(() => expect(result.current.status).toBe('failed'))
+    rerender({ id: null })
+    expect(result.current).toEqual({ status: 'idle', forecasts: [] })
   })
 })

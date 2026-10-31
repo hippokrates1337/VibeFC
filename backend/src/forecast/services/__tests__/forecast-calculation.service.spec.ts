@@ -7,7 +7,9 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { ForecastCalculationService } from '../forecast-calculation.service';
 import { ForecastEngineService } from '../forecast-engine.service';
-import { CalculationTypeDto, UnifiedCalculationResultDto } from '../../dto/calculation.dto';
+import { plainToInstance } from 'class-transformer';
+import { validate as validateDto } from 'class-validator';
+import { CalculationTypeDto, UnifiedCalculationRequestDto, UnifiedCalculationResultDto } from '../../dto/calculation.dto';
 
 const request = { headers: { authorization: 'Bearer test-token' } } as unknown as Request;
 const ALL_TYPES = [CalculationTypeDto.HISTORICAL, CalculationTypeDto.FORECAST, CalculationTypeDto.BUDGET];
@@ -102,7 +104,7 @@ function setup(graph: { nodes: unknown[]; edges: unknown[] }, forecast: Record<s
 const calculate = (service: ForecastCalculationService, types = ALL_TYPES, includeIntermediateNodes = true) =>
   service.calculateForecastWithPeriods('forecast-1', 'user-1', request, { calculationTypes: types, includeIntermediateNodes });
 
-function series(result: UnifiedCalculationResultDto, nodeId: string, type: 'historical' | 'forecast' | 'budget') {
+function series(result: Pick<UnifiedCalculationResultDto, 'metrics' | 'allNodes'>, nodeId: string, type: 'historical' | 'forecast' | 'budget') {
   const found = [...result.metrics, ...(result.allNodes ?? [])].find((n) => n.nodeId === nodeId)!;
   return Object.fromEntries(found.values.map((v) => [v.month, v[type]]));
 }
@@ -226,5 +228,34 @@ describe('ForecastCalculationService', () => {
     });
     const result = await calculate(service, [CalculationTypeDto.FORECAST]);
     expect(Object.values(series(result, 'm', 'forecast')).every((v) => v === null)).toBe(true);
+  });
+
+  it('returns and stores the warnings, so a reload still shows them', async () => {
+    const { service, inserted } = setup({
+      nodes: [node('d', 'DATA', { name: 'x', variableId: 'missing', offsetMonths: 0 }), metric('m')],
+      edges: [edge('d', 'm')],
+    });
+    const result = await calculate(service, [CalculationTypeDto.FORECAST]);
+    const missing = { code: 'VARIABLE_NOT_FOUND', message: expect.stringContaining('missing'), nodeIds: ['d'] };
+    expect(result.warnings).toEqual([missing]);
+    expect(inserted[0].results.warnings).toEqual([missing]);
+  });
+
+  it('does not store a run with store: false', async () => {
+    const { service, inserted } = setup({ nodes: [node('c', 'CONSTANT', { value: 1 }), metric('m')], edges: [edge('c', 'm')] });
+    const run = await service.runCalculation('forecast-1', 'user-1', request, { calculationTypes: ALL_TYPES, includeIntermediateNodes: true }, { store: false });
+    expect(run.result.id).toBeNull();
+    expect(series(run.result, 'm', 'forecast')['01-2024']).toBe(1);
+    expect(inserted).toHaveLength(0);
+  });
+});
+
+describe('calculation request validation', () => {
+  const validate = (body: object) => validateDto(plainToInstance(UnifiedCalculationRequestDto, body));
+
+  it('rejects an empty or repeated list of calculation types', async () => {
+    expect(await validate({ calculationTypes: [], includeIntermediateNodes: true })).not.toHaveLength(0);
+    expect(await validate({ calculationTypes: ['forecast', 'forecast'], includeIntermediateNodes: true })).not.toHaveLength(0);
+    expect(await validate({ calculationTypes: ['forecast'], includeIntermediateNodes: true })).toHaveLength(0);
   });
 });

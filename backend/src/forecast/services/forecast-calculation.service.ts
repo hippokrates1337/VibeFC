@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { Request } from 'express';
-import { formatMonth, monthIndexFromDateString, parseMonth, type CalcType } from '@vibefc/forecast-engine';
+import { formatMonth, monthIndexFromDateString, parseMonth, type CalcType, type Issue } from '@vibefc/forecast-engine';
 import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { DataIntakeService } from '../../data-intake/data-intake.service';
 import { ForecastService } from './forecast.service';
@@ -12,6 +12,7 @@ import {
   UnifiedCalculationRequestDto,
   UnifiedCalculationResultDto,
   CalculationTypeDto,
+  CalculationWarningDto,
   UnifiedNodeResultDto,
   PeriodInfoDto,
 } from '../dto/calculation.dto';
@@ -23,9 +24,10 @@ export interface ForecastGraph {
   readonly edges: ForecastEdgeDto[];
 }
 
-/** A stored calculation plus what the debug endpoints need to explain it. */
-export interface CalculationRun {
-  readonly result: UnifiedCalculationResultDto;
+/** A calculation plus what the debug endpoints need to explain it. */
+export interface CalculationRun<Stored extends boolean = true> {
+  /** id is null when the run was not stored. */
+  readonly result: Omit<UnifiedCalculationResultDto, 'id'> & { readonly id: Stored extends true ? string : null };
   readonly graph: ForecastGraph;
   readonly engine: EngineRunOutput;
   readonly timings: { readonly loadMs: number; readonly calculateMs: number; readonly storeMs: number };
@@ -58,17 +60,21 @@ export class ForecastCalculationService {
     request: Request,
     calculationRequest: UnifiedCalculationRequestDto
   ): Promise<UnifiedCalculationResultDto> {
-    return (await this.calculateAndStore(forecastId, userId, request, calculationRequest)).result;
+    return (await this.runCalculation(forecastId, userId, request, calculationRequest, { store: true })).result;
   }
 
-  /** Same as {@link calculateForecastWithPeriods}, also returning the graph, warnings and (optionally) the trace. */
-  async calculateAndStore(
+  /**
+   * Same as {@link calculateForecastWithPeriods}, also returning the graph, warnings and
+   * (optionally) the trace. With store: false nothing is saved, so the latest stored
+   * result stays what the user last calculated (used by debug runs).
+   */
+  async runCalculation<Stored extends boolean>(
     forecastId: string,
     userId: string,
     request: Request,
     calculationRequest: UnifiedCalculationRequestDto,
-    options: { trace?: boolean } = {}
-  ): Promise<CalculationRun> {
+    options: { store: Stored; trace?: boolean }
+  ): Promise<CalculationRun<Stored>> {
     const started = Date.now();
     const forecast = await this.forecastService.findOne(forecastId, userId, request);
     if (!forecast) {
@@ -97,16 +103,22 @@ export class ForecastCalculationService {
     const calculatedAt = new Date();
     const metrics = engine.nodeResults.filter((n) => n.nodeType === 'METRIC');
     const allNodes = calculationRequest.includeIntermediateNodes ? engine.nodeResults : [];
-    const stored = await this.storeUnifiedCalculationResults(forecastId, forecast.organizationId, request, {
-      calculatedAt,
-      calculationTypes,
-      periodInfo,
-      metrics,
-      allNodes,
-    });
+    const warnings = engine.warnings.map(toWarningDto);
+    const id = options.store
+      ? (
+          await this.storeUnifiedCalculationResults(forecastId, forecast.organizationId, request, {
+            calculatedAt,
+            calculationTypes,
+            periodInfo,
+            metrics,
+            allNodes,
+            warnings,
+          })
+        ).id
+      : null;
 
-    const result: UnifiedCalculationResultDto = {
-      id: stored.id,
+    const result = {
+      id: id as Stored extends true ? string : null,
       forecastId,
       calculatedAt: calculatedAt.toISOString(),
       // Unchanged from the previous engine: the response carries upper-case type names.
@@ -114,6 +126,7 @@ export class ForecastCalculationService {
       periodInfo,
       metrics,
       allNodes,
+      warnings,
     };
     return {
       result,
@@ -227,6 +240,7 @@ export class ForecastCalculationService {
       periodInfo: PeriodInfoDto;
       metrics: UnifiedNodeResultDto[];
       allNodes: UnifiedNodeResultDto[];
+      warnings: CalculationWarningDto[];
     }
   ): Promise<UnifiedCalculationResultDto> {
     const client = this.supabaseService.getClientForRequest(request);
@@ -241,6 +255,7 @@ export class ForecastCalculationService {
           allNodes: results.allNodes,
           periodInfo: results.periodInfo,
           calculationTypes: results.calculationTypes,
+          warnings: results.warnings,
         },
       })
       .select()
@@ -268,6 +283,7 @@ export class ForecastCalculationService {
       },
       metrics: results.metrics || [],
       allNodes: results.allNodes || undefined,
+      warnings: results.warnings || [],
     };
   }
 
@@ -345,6 +361,11 @@ export class ForecastCalculationService {
       periodInfo: this.extractPeriodInfoFromForecast(forecast),
       metrics,
       allNodes,
+      warnings: [],
     };
   }
+}
+
+function toWarningDto(issue: Issue): CalculationWarningDto {
+  return { code: issue.code, message: issue.message, nodeIds: [...issue.nodeIds] };
 }

@@ -70,6 +70,7 @@ describe('Node Value Retrieval - Phase 8 Unified', () => {
     id: 'test-result-id',
     forecastId: 'test-forecast',
     calculatedAt: new Date(),
+    warnings: [],
     calculationTypes: ['forecast', 'historical', 'budget'],
     periodInfo: {
       forecastStartMonth: '02-2025',

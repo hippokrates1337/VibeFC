@@ -99,6 +99,7 @@ jest.mock('@/providers/auth-provider', () => ({
 jest.mock('../_components/api-hooks', () => ({
   useVariableApi: jest.fn(),
   useCsvProcessor: jest.fn(),
+  useVariableUsage: () => ({ status: 'loaded', forecasts: [] }),
 }));
 
 // Explicitly DO NOT mock VariableCard, UploadSection, ImportModal, DeleteConfirmationModal, StateDisplay components

@@ -310,4 +310,35 @@ describe('DataIntakeService', () => {
       );
     });
   });
+
+  describe('getVariableUsage', () => {
+    const usageBuilder = (rows: unknown[]) => {
+      const builder = { select: jest.fn().mockReturnThis(), or: jest.fn().mockResolvedValue({ data: rows, error: null }) };
+      tableBuilders.forecast_nodes = builder as any;
+      return builder;
+    };
+
+    it('lists each forecast once, by name, whose nodes read the variable', async () => {
+      const builder = usageBuilder([
+        { forecasts: { id: 'f-2', name: 'Plan 2027' } },
+        { forecasts: { id: 'f-1', name: 'Budget 2026' } },
+        { forecasts: { id: 'f-2', name: 'Plan 2027' } },
+      ]);
+
+      const usage = await service.getVariableUsage('var-1', mockRequest);
+
+      expect(usage.forecasts).toEqual([
+        { id: 'f-1', name: 'Budget 2026' },
+        { id: 'f-2', name: 'Plan 2027' },
+      ]);
+      expect(builder.or).toHaveBeenCalledWith(
+        'attributes->>variableId.eq.var-1,attributes->>historicalVariableId.eq.var-1,attributes->>budgetVariableId.eq.var-1'
+      );
+    });
+
+    it('returns no forecasts for an unused variable', async () => {
+      usageBuilder([]);
+      expect(await service.getVariableUsage('var-1', mockRequest)).toEqual({ forecasts: [] });
+    });
+  });
 });

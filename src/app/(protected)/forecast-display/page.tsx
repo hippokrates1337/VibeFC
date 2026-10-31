@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { Forecast } from '@/lib/api/forecast';
 import { PeriodManagementPanel } from '@/components/forecast/period-management-panel';
 import { ForecastResultsTable } from '@/components/forecast/forecast-results-table';
+import { CalculationWarnings } from '@/components/forecast/calculation-warnings';
 import { forecastApi, mapForecastToClientFormat } from '@/lib/api/forecast';
 
 // Helper function to safely format dates
@@ -133,7 +134,7 @@ export default function ForecastDisplayPage() {
   const { loadForecast } = useForecastGraphActions();
   
   // Get forecast data and calculation results
-  const { forecastName, forecastStartDate, forecastEndDate } = useForecastGraph();
+  const { forecastName, forecastStartDate, forecastEndDate, nodes } = useForecastGraph();
   const { calculationResults, isCalculating, calculationError } = useCalculations();
   const { loadUnifiedCalculationResults } = useCalculationActions();
 
@@ -261,6 +262,8 @@ export default function ForecastDisplayPage() {
                 </AlertDescription>
               </Alert>
             )}
+
+            <CalculationWarnings warnings={calculationResults?.warnings} nodes={nodes} />
           </>
         )}
 

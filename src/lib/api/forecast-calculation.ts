@@ -1,6 +1,7 @@
 import type { 
   UnifiedCalculationResult,
-  UnifiedCalculationRequest
+  UnifiedCalculationRequest,
+  CalculationWarning
 } from '@/types/forecast';
 import { joinBackendUrl } from '@/lib/api/join-backend-url';
 
@@ -99,6 +100,8 @@ interface UnifiedCalculationResultDto {
   readonly periodInfo: PeriodInfoDto;
   readonly metrics: UnifiedNodeResultDto[];
   readonly allNodes?: UnifiedNodeResultDto[];
+  /** Missing on results stored before warnings were kept. */
+  readonly warnings?: CalculationWarning[];
 }
 
 interface CalculationHealthDto {
@@ -287,6 +290,7 @@ function transformUnifiedFromDto(dto: UnifiedCalculationResultDto): UnifiedCalcu
       periodInfo: dto.periodInfo,
       metrics: transformedMetrics,
       allNodes: transformedAllNodes,
+      warnings: dto.warnings ?? [],
     };
 
     return result;
