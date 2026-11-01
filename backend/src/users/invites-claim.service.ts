@@ -36,9 +36,8 @@ export class InvitesClaimService {
       .ilike('email', email);
 
     if (listError) {
-      throw new InternalServerErrorException(
-        `Failed to list invitations: ${listError.message}`,
-      );
+      this.logger.error(`Failed to list invitations: ${listError.message}`);
+      throw new InternalServerErrorException('Failed to check your invitations');
     }
 
     if (!invites?.length) {

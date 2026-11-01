@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsArray, ValidateNested, IsString, IsObject, IsOptional, Matches } from 'class-validator';
+import { IsNotEmpty, IsArray, ValidateNested, IsString, IsObject, IsOptional, Matches, IsDateString, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Regex pattern for MM-YYYY format validation
@@ -9,12 +9,10 @@ export class ForecastMetadataDto {
   @IsNotEmpty()
   name: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsDateString()
   forecastStartDate: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsDateString()
   forecastEndDate: string;
 
   // New MM-YYYY period fields
@@ -44,8 +42,7 @@ export class BulkNodeDto {
   @IsNotEmpty()
   clientId: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsIn(['DATA', 'CONSTANT', 'OPERATOR', 'METRIC', 'SEED'])
   kind: string;
 
   @IsObject()

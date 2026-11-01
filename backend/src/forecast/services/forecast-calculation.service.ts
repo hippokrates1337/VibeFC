@@ -1,4 +1,6 @@
 import { Injectable, Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { toHttpException, type DatabaseError } from '../../common/errors/database-error';
+import { assertValidPeriods } from './forecast-periods';
 import { Request } from 'express';
 import { formatMonth, monthIndexFromDateString, parseMonth, type CalcType, type Issue } from '@vibefc/forecast-engine';
 import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
@@ -159,31 +161,23 @@ export class ForecastCalculationService {
     userId: string,
     request: Request
   ): Promise<ForecastCalculationResultDto[]> {
-    try {
-      await this.forecastService.findOne(forecastId, userId, request);
-      const client = this.supabaseService.getClientForRequest(request);
+    await this.forecastService.findOne(forecastId, userId, request);
+    const client = this.supabaseService.getClientForRequest(request);
 
-      const { data, error } = await client
-        .from('forecast_calculation_results')
-        .select('*')
-        .eq('forecast_id', forecastId)
-        .order('calculated_at', { ascending: false });
+    const { data, error } = await client
+      .from('forecast_calculation_results')
+      .select('*')
+      .eq('forecast_id', forecastId)
+      .order('calculated_at', { ascending: false });
 
-      if (error) {
-        this.logger.error(`Database error fetching history:`, error);
-        throw new InternalServerErrorException(`Database error: ${error.message}`);
-      }
-
-      return data.map((item: any) => this.mapDatabaseResultToDto(item));
-    } catch (error) {
-      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
-        throw error;
-      }
-      this.logger.error(`Failed to fetch calculation history:`, error);
-      throw new InternalServerErrorException(
-        `Failed to fetch calculation history: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+    if (error) {
+      throw this.dbError(error, 'load the calculation history');
     }
+    return data.map((item: any) => this.mapDatabaseResultToDto(item));
+  }
+
+  private dbError(error: DatabaseError, action: string) {
+    return toHttpException(error, { action, subject: 'Calculation result', logger: this.logger });
   }
 
   private mapDatabaseResultToDto(data: any): ForecastCalculationResultDto {
@@ -204,6 +198,13 @@ export class ForecastCalculationService {
   private extractPeriodInfoFromForecast(forecast: any): PeriodInfoDto {
     const forecastStartMonth = forecast.forecastStartMonth || formatMonth(monthIndexFromDateString(forecast.forecastStartDate));
     const forecastEndMonth = forecast.forecastEndMonth || formatMonth(monthIndexFromDateString(forecast.forecastEndDate));
+    // Stored before periods were checked on save: say what is wrong instead of a 500 or empty series
+    assertValidPeriods({
+      forecastStartMonth,
+      forecastEndMonth,
+      actualStartMonth: forecast.actualStartMonth || forecastStartMonth,
+      actualEndMonth: forecast.actualEndMonth || forecastStartMonth,
+    });
     const forecastStart = parseMonth(forecastStartMonth);
     let actualStart = forecast.actualStartMonth ? parseMonth(forecast.actualStartMonth) : forecastStart - 6;
     let actualEnd = forecast.actualEndMonth ? parseMonth(forecast.actualEndMonth) : forecastStart - 1;
@@ -262,8 +263,7 @@ export class ForecastCalculationService {
       .single();
 
     if (error) {
-      this.logger.error(`Failed to store calculation results:`, error);
-      throw new InternalServerErrorException(`Failed to store unified calculation results: ${error.message}`);
+      throw this.dbError(error, 'store calculation results for this forecast');
     }
     return this.mapUnifiedDatabaseResultToDto(data);
   }
@@ -310,8 +310,7 @@ export class ForecastCalculationService {
       .maybeSingle();
 
     if (error) {
-      this.logger.error(`Failed to fetch unified calculation results:`, error);
-      throw new InternalServerErrorException(`Failed to fetch unified calculation results: ${error.message}`);
+      throw this.dbError(error, 'load the calculation results');
     }
     if (!data) {
       return null;

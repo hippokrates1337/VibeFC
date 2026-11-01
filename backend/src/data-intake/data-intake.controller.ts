@@ -65,7 +65,7 @@ export class DataIntakeController {
       throw new HttpException(
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: `Failed to add variables: ${error.message}`,
+          message: 'Failed to add variables',
           error: 'Internal Server Error',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -75,7 +75,7 @@ export class DataIntakeController {
 
   // READ - Get variables by user ID
   @Get('variables/:userId')
-  async getVariablesByUser(@Req() req: AuthenticatedRequest, @Param('userId') userId: string) {
+  async getVariablesByUser(@Req() req: AuthenticatedRequest, @Param('userId', ParseUUIDPipe) userId: string) {
     try {
       this.logger.log(`Fetching variables for user: ${userId}`);
       
@@ -96,7 +96,7 @@ export class DataIntakeController {
       throw new HttpException(
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: `Failed to retrieve variables: ${error.message}`,
+          message: 'Failed to retrieve variables',
           error: 'Internal Server Error',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -133,7 +133,7 @@ export class DataIntakeController {
       throw new HttpException(
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: `Failed to update variables: ${error.message}`,
+          message: 'Failed to update variables',
           error: 'Internal Server Error',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -185,7 +185,7 @@ export class DataIntakeController {
       throw new HttpException(
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: `Failed to delete variables: ${error.message}`,
+          message: 'Failed to delete variables',
           error: 'Internal Server Error',
         },
         HttpStatus.INTERNAL_SERVER_ERROR

@@ -1,9 +1,10 @@
 import { IsNotEmpty, IsString, IsUUID, IsOptional, IsObject } from 'class-validator';
 
 export class CreateForecastEdgeDto {
-  @IsNotEmpty()
+  /** Ignored: the forecast in the URL decides. Kept optional for older clients. */
+  @IsOptional()
   @IsUUID()
-  forecastId: string;
+  forecastId?: string;
 
   @IsNotEmpty()
   @IsUUID()

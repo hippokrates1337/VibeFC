@@ -284,12 +284,22 @@ describe('DataIntakeService', () => {
           ],
           error: null,
         })
-        .mockResolvedValueOnce({ data: null, error: null });
+        .mockResolvedValueOnce({ data: null, error: null, count: 2 });
 
       const result = await service.deleteVariables(dto, 'user-123', 'org-1', mockRequest);
 
-      expect(tableBuilders.variables.delete).toHaveBeenCalledTimes(1);
+      expect(tableBuilders.variables.delete).toHaveBeenCalledWith({ count: 'exact' });
       expect(result).toEqual({ message: 'Variables deleted successfully', count: 2, deletedIds: ['id-1', 'id-2'] });
+    });
+
+    it('answers 403 instead of success when row-level security keeps the variables (editor)', async () => {
+      tableBuilders.variables.in
+        .mockResolvedValueOnce({ data: [{ id: 'id-1', organization_id: 'org-1', name: 'A' }], error: null })
+        .mockResolvedValueOnce({ data: null, error: null, count: 0 });
+
+      await expect(service.deleteVariables({ ids: ['id-1'] }, 'user-123', 'org-1', mockRequest)).rejects.toBeInstanceOf(
+        ForbiddenException
+      );
     });
 
     it('answers 403 when a variable belongs to another organization', async () => {

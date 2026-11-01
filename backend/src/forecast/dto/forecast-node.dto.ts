@@ -58,9 +58,10 @@ export type NodeAttributes =
   | SeedNodeAttributes;
 
 export class CreateForecastNodeDto {
-  @IsNotEmpty()
+  /** Ignored: the forecast in the URL decides. Kept optional for older clients. */
+  @IsOptional()
   @IsUUID()
-  forecastId: string;
+  forecastId?: string;
 
   @IsNotEmpty()
   @IsEnum(ForecastNodeKind)

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Request, UseGuards, Logger, Body } from '@nestjs/common';
+import { Controller, Post, Get, Param, Request, UseGuards, Logger, Body, ParseUUIDPipe } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ForecastCalculationService } from '../services/forecast-calculation.service';
 import { DebugCalculationService } from '../services/debug-calculation.service';
@@ -41,7 +41,7 @@ export class ForecastCalculationController {
    */
   @Post(':forecastId/calculate-unified')
   async calculateUnified(
-    @Param('forecastId') forecastId: string,
+    @Param('forecastId', ParseUUIDPipe) forecastId: string,
     @Body() body: UnifiedCalculationRequestDto,
     @CurrentUser() user: AuthenticatedUser,
     @Request() req: AuthenticatedRequest
@@ -76,7 +76,7 @@ export class ForecastCalculationController {
    */
   @Get(':forecastId/calculation-results-unified')
   async getUnifiedCalculationResults(
-    @Param('forecastId') forecastId: string,
+    @Param('forecastId', ParseUUIDPipe) forecastId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Request() req: AuthenticatedRequest
   ): Promise<UnifiedCalculationResultDto | null> {
@@ -112,7 +112,7 @@ export class ForecastCalculationController {
    */
   @Get(':forecastId/calculation-results/history')
   async getCalculationHistory(
-    @Param('forecastId') forecastId: string,
+    @Param('forecastId', ParseUUIDPipe) forecastId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Request() req: AuthenticatedRequest
   ): Promise<ForecastCalculationResultDto[]> {
@@ -161,7 +161,7 @@ export class ForecastCalculationController {
    */
   @Post(':forecastId/calculate-debug')
   async calculateWithDebug(
-    @Param('forecastId') forecastId: string,
+    @Param('forecastId', ParseUUIDPipe) forecastId: string,
     @Body() body: DebugCalculationRequestDto,
     @CurrentUser() user: AuthenticatedUser,
     @Request() req: AuthenticatedRequest
@@ -200,7 +200,7 @@ export class ForecastCalculationController {
    */
   @Get(':forecastId/debug/calculation-tree')
   async getCalculationTree(
-    @Param('forecastId') forecastId: string,
+    @Param('forecastId', ParseUUIDPipe) forecastId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Request() req: AuthenticatedRequest
   ): Promise<DebugCalculationTreeDto> {
@@ -228,7 +228,7 @@ export class ForecastCalculationController {
    */
   @Get(':forecastId/debug/calculation-steps')
   async getCalculationSteps(
-    @Param('forecastId') forecastId: string,
+    @Param('forecastId', ParseUUIDPipe) forecastId: string,
     @CurrentUser() user: AuthenticatedUser
   ): Promise<any[]> {
     try {

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, HttpCode, HttpStatus, Request as NestRequest } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, HttpCode, HttpStatus, Request as NestRequest, ParseUUIDPipe } from '@nestjs/common';
 import { MembersService } from '../services/members.service';
 import { InviteMemberDto, UpdateMemberRoleDto, AddMemberResponseDto } from '../dto/member.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -15,7 +15,7 @@ export class MembersController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
-  async findAll(@Param('orgId') orgId: string, @NestRequest() req: AuthenticatedRequest) {
+  async findAll(@Param('orgId', ParseUUIDPipe) orgId: string, @NestRequest() req: AuthenticatedRequest) {
     return this.membersService.findAllInOrganization(orgId, req);
   }
 
@@ -24,7 +24,7 @@ export class MembersController {
   @Roles(OrganizationRole.ADMIN)
   @HttpCode(HttpStatus.CREATED)
   async addMember(
-    @Param('orgId') orgId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
     @Body() inviteMemberDto: InviteMemberDto,
     @NestRequest() req: AuthenticatedRequest
   ): Promise<AddMemberResponseDto> {
@@ -36,8 +36,8 @@ export class MembersController {
   @Roles(OrganizationRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async updateRole(
-    @Param('orgId') orgId: string,
-    @Param('userId') userId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
     @Body() updateRoleDto: UpdateMemberRoleDto,
     @NestRequest() req: AuthenticatedRequest
   ): Promise<void> {
@@ -49,8 +49,8 @@ export class MembersController {
   @Roles(OrganizationRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMember(
-    @Param('orgId') orgId: string,
-    @Param('userId') userId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
     @NestRequest() req: AuthenticatedRequest
   ): Promise<void> {
     return this.membersService.removeMember(orgId, userId, req);

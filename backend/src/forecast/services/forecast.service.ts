@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, Logger, ForbiddenException } from '@nestjs/common';
 import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateForecastDto, UpdateForecastDto, ForecastDto, UpdateForecastPeriodsDto } from '../dto/forecast.dto';
 import { BulkSaveGraphDto, FlattenedForecastWithDetailsDto } from '../dto/bulk-save-graph.dto';
 import { PerformanceService } from '../../common/services/performance.service';
+import { toHttpException, type DatabaseError } from '../../common/errors/database-error';
+import { assertDateOrder, assertValidPeriods, defaultActualWindow, isoDateToMonth, storedPeriods } from './forecast-periods';
 import { Request } from 'express';
 
 @Injectable()
@@ -14,134 +16,65 @@ export class ForecastService {
     private performanceService: PerformanceService,
   ) {}
 
-  /**
-   * Helper method to convert date to MM-YYYY format
-   */
-  private dateToMMYYYY(date: Date): string {
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${month}-${year}`;
-  }
-
-  /**
-   * MM-YYYY from an ISO date string (YYYY-MM-DD or ISO datetime) using **calendar** fields only.
-   * Avoids timezone drift from `new Date(iso)` vs stored DATE in Postgres / `to_char(..., 'MM-YYYY')`.
-   */
-  private isoDateToMmYyyy(isoDate: string): string {
-    const dateOnly = isoDate.split('T')[0];
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
-    if (!m) {
-      throw new InternalServerErrorException(`Invalid forecast date for MM-YYYY: ${isoDate}`);
-    }
-    const [, year, month] = m;
-    return `${month}-${year}`;
-  }
-
-  /**
-   * Helper method to generate default MM-YYYY periods from date ranges
-   */
-  private generateDefaultPeriods(forecastStartDate: string, forecastEndDate: string) {
-    const startDate = new Date(forecastStartDate);
-    const endDate = new Date(forecastEndDate);
-    
-    // Default actual period: 6 months before forecast start to 1 month before
-    const actualStartDate = new Date(startDate);
-    actualStartDate.setMonth(actualStartDate.getMonth() - 6);
-    const actualEndDate = new Date(startDate);
-    actualEndDate.setMonth(actualEndDate.getMonth() - 1);
-
-    return {
-      forecastStartMonth: this.dateToMMYYYY(startDate),
-      forecastEndMonth: this.dateToMMYYYY(endDate),
-      actualStartMonth: this.dateToMMYYYY(actualStartDate),
-      actualEndMonth: this.dateToMMYYYY(actualEndDate)
-    };
+  private dbError(error: DatabaseError, action: string) {
+    return toHttpException(error, { action, subject: 'Forecast', logger: this.logger });
   }
 
   async create(userId: string, dto: CreateForecastDto, request: Request): Promise<ForecastDto> {
-    this.logger.debug(`ForecastService.create called by userId: ${userId}`);
-    this.logger.debug(`CreateForecastDto: ${JSON.stringify(dto)}`);
-
     if (!userId) {
-      this.logger.error('ForecastService.create called with undefined or null userId.');
       throw new InternalServerErrorException('User ID is missing, cannot create forecast.');
     }
 
-    try {
-      this.logger.debug('Attempting to insert forecast into Supabase...');
-      
-      // Generate default periods if not provided
-      const defaultPeriods = this.generateDefaultPeriods(dto.forecastStartDate, dto.forecastEndDate);
-      const forecastStartMonth = this.isoDateToMmYyyy(dto.forecastStartDate);
-      const forecastEndMonth = this.isoDateToMmYyyy(dto.forecastEndDate);
+    assertDateOrder(dto.forecastStartDate, dto.forecastEndDate);
+    // Forecast months always follow the dates; actual months default to the 6 months before
+    const forecastStartMonth = isoDateToMonth(dto.forecastStartDate, 'forecastStartDate');
+    const forecastEndMonth = isoDateToMonth(dto.forecastEndDate, 'forecastEndDate');
+    const defaults = defaultActualWindow(forecastStartMonth);
+    const periods = {
+      forecastStartMonth,
+      forecastEndMonth,
+      actualStartMonth: dto.actualStartMonth || defaults.actualStartMonth,
+      actualEndMonth: dto.actualEndMonth || defaults.actualEndMonth,
+    };
+    assertValidPeriods(periods);
 
-      const client = this.supabaseService.getClientForRequest(request);
-      const { data: insertedForecast, error: insertError } = await client
-        .from('forecasts')
-        .insert({
-          name: dto.name,
-          forecast_start_date: dto.forecastStartDate,
-          forecast_end_date: dto.forecastEndDate,
-          organization_id: dto.organizationId,
-          user_id: userId,
-          // Forecast MM-YYYY always follows ISO dates (client cannot drift from calculation UI)
-          forecast_start_month: forecastStartMonth,
-          forecast_end_month: forecastEndMonth,
-          actual_start_month: dto.actualStartMonth || defaultPeriods.actualStartMonth,
-          actual_end_month: dto.actualEndMonth || defaultPeriods.actualEndMonth,
-        })
-        .select('*')
-        .single();
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data: insertedForecast, error } = await client
+      .from('forecasts')
+      .insert({
+        name: dto.name,
+        forecast_start_date: dto.forecastStartDate,
+        forecast_end_date: dto.forecastEndDate,
+        organization_id: dto.organizationId,
+        user_id: userId,
+        forecast_start_month: periods.forecastStartMonth,
+        forecast_end_month: periods.forecastEndMonth,
+        actual_start_month: periods.actualStartMonth,
+        actual_end_month: periods.actualEndMonth,
+      })
+      .select('*')
+      .single();
 
-      if (insertError) {
-        this.logger.error(`Supabase insert error for forecast: ${insertError.message}`, insertError.stack);
-        this.logger.error(`Insert error details: ${JSON.stringify(insertError)}`);
-        
-        // Handle RLS violation specifically
-        if (insertError.code === '23514' || // Standard PostgreSQL check_violation
-            insertError.message.toLowerCase().includes('violates row-level security policy') || 
-            insertError.message.toLowerCase().includes('permission denied for table forecasts')) {
-          this.logger.warn(`RLS violation or permission denied for user ${userId} creating forecast in org ${dto.organizationId}: ${insertError.message}`);
-          throw new ForbiddenException('You do not have permission to create a forecast in this organization, or the organization does not exist for you.');
-        }
-        // Handle other potential DB errors (like not-null constraint if userId was indeed null despite earlier check)
-        if (insertError.message.toLowerCase().includes('null value in column') && insertError.message.toLowerCase().includes('user_id')) {
-            this.logger.error('Database rejected insert due to null user_id. This indicates userId became null before DB operation.');
-            throw new InternalServerErrorException('User identification failed before forecast creation.');
-        }
-
-        throw new InternalServerErrorException(`Failed to create forecast due to database error: ${insertError.message}`);
-      }
-
-      if (!insertedForecast) {
-        this.logger.error('Forecast insert attempt returned no data and no error. This is unexpected.');
-        throw new InternalServerErrorException('Failed to create forecast, data missing after insert and no explicit error from database.');
-      }
-
-      this.logger.debug(`Supabase insert successful. Raw inserted data: ${JSON.stringify(insertedForecast)}`);
-      const createdForecast = this.mapDbEntityToDto(insertedForecast);
-      this.logger.log(`Forecast created successfully via service: ${createdForecast.id} by user ${userId}`);
-
-      return createdForecast;
-    } catch (error) {
-      if (error instanceof ForbiddenException || error instanceof InternalServerErrorException || error instanceof NotFoundException || error instanceof ConflictException) {
-        throw error;
-      }
-      this.logger.error(`Unexpected error caught in ForecastService.create: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('An unexpected error occurred in the forecast service during creation.');
+    if (error) {
+      throw this.dbError(error, 'create a forecast in this organization');
     }
+    if (!insertedForecast) {
+      throw new InternalServerErrorException('Failed to create the forecast');
+    }
+
+    const createdForecast = this.mapDbEntityToDto(insertedForecast);
+    this.logger.log(`Forecast created: ${createdForecast.id} by user ${userId}`);
+    return createdForecast;
   }
 
   async findAll(userId: string, organizationId: string, request: Request): Promise<ForecastDto[]> {
     if (!userId) {
-      this.logger.warn('Attempt to find forecasts without providing a userId');
-      return []; // Return empty array for security
+      return [];
     }
 
     // List by organization only. Row-level security already limits rows to organizations
     // the JWT may access; do not additionally filter by creator (user_id), or members
-    // miss forecasts created by teammates (and the UI disagrees with the Supabase table).
-    this.logger.debug(`Listing forecasts for organization ${organizationId} (requester ${userId})`);
+    // miss forecasts created by teammates.
     const client = this.supabaseService.getClientForRequest(request);
     const { data, error } = await client
       .from('forecasts')
@@ -149,205 +82,124 @@ export class ForecastService {
       .eq('organization_id', organizationId);
 
     if (error) {
-      this.logger.error(`Failed to fetch forecasts: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to fetch forecasts: ${error.message}`);
+      throw this.dbError(error, 'load the forecasts');
     }
-
-    return data.map(forecast => this.mapDbEntityToDto(forecast));
+    return data.map((forecast) => this.mapDbEntityToDto(forecast));
   }
 
+  /** The forecast if the caller may read it; 404 otherwise (also for forecasts of other organizations). */
   async findOne(id: string, userId: string, request: Request): Promise<ForecastDto> {
-    // Log the request for debugging purposes
-    this.logger.debug(`Finding forecast ${id} for user ${userId}`);
-    
     if (!userId) {
-      this.logger.warn(`Attempt to find forecast ${id} without providing a userId`);
-      throw new NotFoundException(`Forecast with ID ${id} not found.`);
+      throw new NotFoundException('Forecast not found');
     }
 
     const client = this.supabaseService.getClientForRequest(request);
-    const { data, error } = await client
-      .from('forecasts')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data, error } = await client.from('forecasts').select('*').eq('id', id).maybeSingle();
 
     if (error) {
-      // Check specifically for PostgreSQL not found error
-      if (error.code === 'PGRST116' || error.message?.includes('not found')) {
-        this.logger.warn(`Forecast ${id} not found or not accessible for user ${userId}.`);
-        throw new NotFoundException(`Forecast with ID ${id} not found.`);
-      }
-      
-      this.logger.error(`Error fetching forecast ${id}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to retrieve forecast details: ${error.message}`);
+      throw this.dbError(error, 'load the forecast');
     }
-    
     if (!data) {
-      this.logger.warn(`Forecast ${id} not found.`);
-      throw new NotFoundException(`Forecast with ID ${id} not found.`);
+      throw new NotFoundException('Forecast not found');
     }
-
     return this.mapDbEntityToDto(data);
   }
 
   async update(id: string, userId: string, dto: UpdateForecastDto, request: Request): Promise<void> {
     const forecast = await this.findOne(id, userId, request);
-
-    // Check if there's anything to update before proceeding
-    if (Object.keys(dto).length === 0) {
-      return; // Nothing to update
-    }
-
     const updateData: Record<string, any> = {};
 
     if (dto.name !== undefined) {
       updateData.name = dto.name;
     }
-
     if (dto.forecastStartDate !== undefined) {
       updateData.forecast_start_date = dto.forecastStartDate;
     }
-
     if (dto.forecastEndDate !== undefined) {
       updateData.forecast_end_date = dto.forecastEndDate;
     }
 
-    if (dto.forecastStartDate !== undefined || dto.forecastEndDate !== undefined) {
-      const mergedStart = dto.forecastStartDate ?? forecast.forecastStartDate;
-      const mergedEnd = dto.forecastEndDate ?? forecast.forecastEndDate;
-      updateData.forecast_start_month = this.isoDateToMmYyyy(mergedStart);
-      updateData.forecast_end_month = this.isoDateToMmYyyy(mergedEnd);
-    } else {
-      if (dto.forecastStartMonth !== undefined) {
-        updateData.forecast_start_month = dto.forecastStartMonth;
-      }
-
-      if (dto.forecastEndMonth !== undefined) {
-        updateData.forecast_end_month = dto.forecastEndMonth;
-      }
+    const datesChanged = dto.forecastStartDate !== undefined || dto.forecastEndDate !== undefined;
+    const startDate = dto.forecastStartDate ?? forecast.forecastStartDate;
+    const endDate = dto.forecastEndDate ?? forecast.forecastEndDate;
+    if (datesChanged) {
+      assertDateOrder(startDate, endDate);
+    }
+    // Forecast months follow the dates whenever the dates change
+    const stored = storedPeriods(forecast);
+    const periods = {
+      forecastStartMonth: datesChanged
+        ? isoDateToMonth(startDate, 'forecastStartDate')
+        : (dto.forecastStartMonth ?? stored.forecastStartMonth),
+      forecastEndMonth: datesChanged
+        ? isoDateToMonth(endDate, 'forecastEndDate')
+        : (dto.forecastEndMonth ?? stored.forecastEndMonth),
+      actualStartMonth: dto.actualStartMonth ?? stored.actualStartMonth,
+      actualEndMonth: dto.actualEndMonth ?? stored.actualEndMonth,
+    };
+    const periodsChanged =
+      datesChanged ||
+      [dto.forecastStartMonth, dto.forecastEndMonth, dto.actualStartMonth, dto.actualEndMonth].some((v) => v !== undefined);
+    if (periodsChanged) {
+      assertValidPeriods(periods);
+      updateData.forecast_start_month = periods.forecastStartMonth;
+      updateData.forecast_end_month = periods.forecastEndMonth;
+      updateData.actual_start_month = periods.actualStartMonth;
+      updateData.actual_end_month = periods.actualEndMonth;
     }
 
-    if (dto.actualStartMonth !== undefined) {
-      updateData.actual_start_month = dto.actualStartMonth;
-    }
-
-    if (dto.actualEndMonth !== undefined) {
-      updateData.actual_end_month = dto.actualEndMonth;
-    }
-
-    // Add updated_at timestamp
-    updateData.updated_at = new Date().toISOString();
-
-    if (Object.keys(updateData).length === 1 && updateData.updated_at) {
-      // Only the timestamp was added, nothing else to update
+    if (Object.keys(updateData).length === 0) {
       return;
     }
-
-    const client = this.supabaseService.getClientForRequest(request);
-    const { data, error } = await client
-      .from('forecasts')
-      .update(updateData)
-      .eq('id', id)
-      .select('id')
-      .single();
-
-    if (error) {
-      this.logger.error(`Failed to update forecast ${id}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to update forecast ${id}: ${error.message}`);
-    }
-
-    if (!data) {
-      this.logger.warn(`Attempted to update non-existent forecast: ${id}`);
-      throw new NotFoundException(`Forecast with ID ${id} not found.`);
-    }
-
+    updateData.updated_at = new Date().toISOString();
+    await this.writeForecast(id, updateData, request, 'change this forecast');
     this.logger.log(`Forecast updated: ${id} by user: ${userId}`);
   }
 
-  /**
-   * Update only the MM-YYYY period fields for a forecast
-   */
+  /** Update only the MM-YYYY period fields; the result must still be a valid set of periods. */
   async updatePeriods(id: string, userId: string, dto: UpdateForecastPeriodsDto, request: Request): Promise<void> {
-    await this.findOne(id, userId, request);
-    
-    // Check if there's anything to update before proceeding
-    if (Object.keys(dto).length === 0) {
-      return; // Nothing to update
-    }
-    
-    const updateData: Record<string, any> = {};
-
-    // Handle MM-YYYY period fields
-    if (dto.forecastStartMonth !== undefined) {
-      updateData.forecast_start_month = dto.forecastStartMonth;
-    }
-
-    if (dto.forecastEndMonth !== undefined) {
-      updateData.forecast_end_month = dto.forecastEndMonth;
-    }
-
-    if (dto.actualStartMonth !== undefined) {
-      updateData.actual_start_month = dto.actualStartMonth;
-    }
-
-    if (dto.actualEndMonth !== undefined) {
-      updateData.actual_end_month = dto.actualEndMonth;
-    }
-
-    // Add updated_at timestamp
-    updateData.updated_at = new Date().toISOString();
-
-    if (Object.keys(updateData).length === 1 && updateData.updated_at) {
-      // Only the timestamp was added, nothing else to update
+    const forecast = await this.findOne(id, userId, request);
+    if (Object.values(dto).every((value) => value === undefined)) {
       return;
     }
 
-    const client = this.supabaseService.getClientForRequest(request);
-    const { data, error } = await client
-      .from('forecasts')
-      .update(updateData)
-      .eq('id', id)
-      .select('id')
-      .single();
+    const stored = storedPeriods(forecast);
+    const periods = {
+      forecastStartMonth: dto.forecastStartMonth ?? stored.forecastStartMonth,
+      forecastEndMonth: dto.forecastEndMonth ?? stored.forecastEndMonth,
+      actualStartMonth: dto.actualStartMonth ?? stored.actualStartMonth,
+      actualEndMonth: dto.actualEndMonth ?? stored.actualEndMonth,
+    };
+    assertValidPeriods(periods);
 
-    if (error) {
-      this.logger.error(`Failed to update forecast periods ${id}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to update forecast periods ${id}: ${error.message}`);
-    }
-
-    if (!data) {
-      this.logger.warn(`Attempted to update periods for non-existent forecast: ${id}`);
-      throw new NotFoundException(`Forecast with ID ${id} not found.`);
-    }
-
+    await this.writeForecast(
+      id,
+      {
+        forecast_start_month: periods.forecastStartMonth,
+        forecast_end_month: periods.forecastEndMonth,
+        actual_start_month: periods.actualStartMonth,
+        actual_end_month: periods.actualEndMonth,
+        updated_at: new Date().toISOString(),
+      },
+      request,
+      "change this forecast's periods"
+    );
     this.logger.log(`Forecast periods updated: ${id} by user: ${userId}`);
   }
 
   async remove(id: string, userId: string, request: Request): Promise<void> {
-    try {
-      await this.findOne(id, userId, request);
-    } catch (error) {
-      // Re-throw the NotFoundException
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      // Otherwise handle unexpected errors
-      this.logger.error(`Unexpected error checking forecast before delete: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('An error occurred while trying to delete the forecast');
-    }
-    
+    await this.findOne(id, userId, request);
+
     const client = this.supabaseService.getClientForRequest(request);
-    const { error } = await client
-      .from('forecasts')
-      .delete()
-      .eq('id', id);
+    const { error, count } = await client.from('forecasts').delete({ count: 'exact' }).eq('id', id);
 
     if (error) {
-      this.logger.error(`Error deleting forecast ${id}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to delete forecast: ${error.message}`);
+      throw this.dbError(error, 'delete this forecast');
     }
-    
+    // The caller can read the forecast (findOne), so no deleted row means no permission
+    if (count === 0) {
+      throw new ForbiddenException('You do not have permission to delete this forecast');
+    }
     this.logger.log(`Forecast deleted: ${id} by user: ${userId}`);
   }
 
@@ -360,49 +212,58 @@ export class ForecastService {
     return this.performanceService.trackOperation(
       'forecast.bulkSaveGraph',
       async () => {
-        // Single ownership check
-        await this.findOne(forecastId, userId, request);
-        
-        try {
-          this.logger.log(`Starting bulk save for forecast ${forecastId} with ${dto.nodes.length} nodes and ${dto.edges.length} edges`);
-          
-          const client = this.supabaseService.getClientForRequest(request);
-          const { data, error } = await client
-            .rpc('bulk_save_forecast_graph', {
-              p_forecast_id: forecastId,
-              p_forecast_data: dto.forecast,
-              p_nodes_data: dto.nodes,
-              p_edges_data: dto.edges
-            });
+        const forecast = await this.findOne(forecastId, userId, request);
 
-          if (error) {
-            this.logger.error(`Bulk save failed for forecast ${forecastId}: ${error.message}`, error.stack);
-            throw new InternalServerErrorException(`Failed to save forecast: ${error.message}`);
-          }
+        // The function writes the dates and actual months as sent; check the result first
+        const startDate = dto.forecast.forecastStartDate || forecast.forecastStartDate;
+        const endDate = dto.forecast.forecastEndDate || forecast.forecastEndDate;
+        assertDateOrder(startDate, endDate);
+        assertValidPeriods({
+          forecastStartMonth: isoDateToMonth(startDate, 'forecastStartDate'),
+          forecastEndMonth: isoDateToMonth(endDate, 'forecastEndDate'),
+          actualStartMonth: dto.forecast.actualStartMonth || storedPeriods(forecast).actualStartMonth,
+          actualEndMonth: dto.forecast.actualEndMonth || storedPeriods(forecast).actualEndMonth,
+        });
 
-          if (!data) {
-            this.logger.error(`Bulk save returned no data for forecast ${forecastId}`);
-            throw new InternalServerErrorException('Failed to save forecast: No data returned');
-          }
+        this.logger.log(`Bulk save for forecast ${forecastId}: ${dto.nodes.length} nodes, ${dto.edges.length} edges`);
+        const client = this.supabaseService.getClientForRequest(request);
+        const { data, error } = await client.rpc('bulk_save_forecast_graph', {
+          p_forecast_id: forecastId,
+          p_forecast_data: dto.forecast,
+          p_nodes_data: dto.nodes,
+          p_edges_data: dto.edges,
+        });
 
-          this.logger.log(`Forecast ${forecastId} bulk saved successfully`);
-
-          return data as FlattenedForecastWithDetailsDto;
-        } catch (error) {
-          if (error instanceof InternalServerErrorException || error instanceof NotFoundException) {
-            throw error;
-          }
-          this.logger.error(`Unexpected error in bulk save: ${error.message}`, error.stack);
-          throw new InternalServerErrorException('Failed to save forecast graph');
+        if (error) {
+          throw this.dbError(error, 'save this forecast');
         }
+        if (!data) {
+          throw new InternalServerErrorException('Failed to save the forecast');
+        }
+        return data as FlattenedForecastWithDetailsDto;
       },
       {
         forecastId,
         userId,
         nodeCount: dto.nodes.length,
-        edgeCount: dto.edges.length
+        edgeCount: dto.edges.length,
       }
     );
+  }
+
+  /**
+   * Updates one forecast row. The caller has read it already (findOne), so a row the
+   * update does not reach was filtered by row-level security: no permission.
+   */
+  private async writeForecast(id: string, row: Record<string, unknown>, request: Request, action: string): Promise<void> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data, error } = await client.from('forecasts').update(row).eq('id', id).select('id').maybeSingle();
+    if (error) {
+      throw this.dbError(error, action);
+    }
+    if (!data) {
+      throw new ForbiddenException(`You do not have permission to ${action}`);
+    }
   }
 
   private mapDbEntityToDto(entity: any): ForecastDto {
@@ -415,7 +276,6 @@ export class ForecastService {
       userId: entity.user_id,
       createdAt: new Date(entity.created_at),
       updatedAt: new Date(entity.updated_at),
-      // Add MM-YYYY period fields
       forecastStartMonth: entity.forecast_start_month,
       forecastEndMonth: entity.forecast_end_month,
       actualStartMonth: entity.actual_start_month,
@@ -440,4 +300,4 @@ export class ForecastService {
       nodeTypes: [] as string[],
     }));
   }
-} 
+}

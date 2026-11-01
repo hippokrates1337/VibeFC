@@ -81,8 +81,8 @@ describe('MembersController (Integration)', () => {
     await app.close();
   });
 
-  const orgId = 'org-test-123';
-  const memberUserId = 'member-user-456';
+  const orgId = 'a1b2c3d4-0000-4000-8000-000000000001';
+  const memberUserId = 'a1b2c3d4-0000-4000-8000-000000000003';
 
   // --- GET /organizations/:orgId/members --- 
   describe(`GET /organizations/${orgId}/members`, () => {

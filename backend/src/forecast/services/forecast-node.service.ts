@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, Logger, ForbiddenException } from '@nestjs/common';
 import { SupabaseOptimizedService } from '../../supabase/supabase-optimized.service';
 import { CreateForecastNodeDto, UpdateForecastNodeDto, ForecastNodeDto, ForecastNodeKind } from '../dto/forecast-node.dto';
+import { toHttpException, type DatabaseError } from '../../common/errors/database-error';
 import { Request } from 'express';
 
+/**
+ * Nodes of a forecast. Every single-node call takes the forecast id and only finds nodes
+ * of that forecast, so a node cannot be read or changed through another forecast's URL.
+ */
 @Injectable()
 export class ForecastNodeService {
   private readonly logger = new Logger(ForecastNodeService.name);
@@ -11,41 +16,33 @@ export class ForecastNodeService {
     private supabaseService: SupabaseOptimizedService,
   ) {}
 
-  async create(dto: CreateForecastNodeDto, request: Request): Promise<ForecastNodeDto> {
-    try {
-      const client = this.supabaseService.getClientForRequest(request);
-      const { data: insertedNode, error: insertError } = await client
-        .from('forecast_nodes')
-        .insert({
-          forecast_id: dto.forecastId,
-          kind: dto.kind,
-          attributes: dto.attributes,
-          position: dto.position,
-        })
-        .select('*')
-        .single();
+  private dbError(error: DatabaseError, action: string) {
+    return toHttpException(error, { action, subject: 'Forecast node', logger: this.logger });
+  }
 
-      if (insertError) {
-        this.logger.error(`Failed to insert forecast node: ${insertError.message}`, insertError.stack);
-        throw new InternalServerErrorException(`Failed to create forecast node: ${insertError.message}`);
-      }
+  async create(dto: CreateForecastNodeDto & { forecastId: string }, request: Request): Promise<ForecastNodeDto> {
+    const client = this.supabaseService.getClientForRequest(request);
+    const { data: insertedNode, error } = await client
+      .from('forecast_nodes')
+      .insert({
+        forecast_id: dto.forecastId,
+        kind: dto.kind,
+        attributes: dto.attributes,
+        position: dto.position,
+      })
+      .select('*')
+      .single();
 
-      if (!insertedNode) {
-        this.logger.error('Forecast node insert succeeded but no data returned.');
-        throw new InternalServerErrorException('Failed to create forecast node, data missing after insert.');
-      }
-
-      const createdNode = this.mapDbEntityToDto(insertedNode);
-      this.logger.log(`Forecast node created: ${createdNode.id} for forecast ${dto.forecastId}`);
-
-      return createdNode;
-    } catch (error) {
-      if (error instanceof InternalServerErrorException) {
-        throw error;
-      }
-      this.logger.error(`Unexpected error during forecast node creation: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('An unexpected error occurred while creating the forecast node.');
+    if (error) {
+      throw this.dbError(error, 'add nodes to this forecast');
     }
+    if (!insertedNode) {
+      throw new InternalServerErrorException('Failed to create the forecast node');
+    }
+
+    const createdNode = this.mapDbEntityToDto(insertedNode);
+    this.logger.log(`Forecast node created: ${createdNode.id} for forecast ${dto.forecastId}`);
+    return createdNode;
   }
 
   async findByForecast(forecastId: string, request: Request): Promise<ForecastNodeDto[]> {
@@ -56,132 +53,83 @@ export class ForecastNodeService {
       .eq('forecast_id', forecastId);
 
     if (error) {
-      this.logger.error(`Failed to fetch forecast nodes: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to fetch forecast nodes: ${error.message}`);
+      throw this.dbError(error, 'load the forecast nodes');
     }
-
     return data.map(node => this.mapDbEntityToDto(node));
   }
 
-  async findOne(id: string, request: Request, forecastId?: string): Promise<ForecastNodeDto> {
+  /** The node if it belongs to the forecast; 404 otherwise. */
+  async findOne(forecastId: string, id: string, request: Request): Promise<ForecastNodeDto> {
     const client = this.supabaseService.getClientForRequest(request);
-    let query = client
+    const { data, error } = await client
       .from('forecast_nodes')
       .select('*')
-      .eq('id', id);
-
-    if (forecastId) {
-      query = query.eq('forecast_id', forecastId);
-    }
-
-    const { data, error } = await query.single();
+      .eq('id', id)
+      .eq('forecast_id', forecastId)
+      .maybeSingle();
 
     if (error) {
-      if (error.code === 'PGRST116' || error.message?.includes('not found')) {
-        const message = forecastId 
-          ? `Forecast node with ID ${id} not found in forecast ${forecastId}.`
-          : `Forecast node with ID ${id} not found.`;
-        this.logger.warn(message);
-        throw new NotFoundException(message);
-      }
-      
-      this.logger.error(`Error fetching forecast node ${id}${forecastId ? ' for forecast ' + forecastId : ''}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to retrieve forecast node details: ${error.message}`);
+      throw this.dbError(error, 'load the forecast node');
     }
-    
     if (!data) {
-      // This case should ideally be covered by error.code === 'PGRST116' when .single() is used
-      const message = forecastId 
-        ? `Forecast node with ID ${id} not found in forecast ${forecastId} (no data).`
-        : `Forecast node with ID ${id} not found (no data).`;
-      this.logger.warn(message);
-      throw new NotFoundException(message);
+      throw new NotFoundException('Forecast node not found in this forecast');
     }
-
     return this.mapDbEntityToDto(data);
   }
 
-  async update(id: string, dto: UpdateForecastNodeDto, request: Request): Promise<void> {
-    // Check if there's anything to update before proceeding
-    if (Object.keys(dto).length === 0) {
-      return; // Nothing to update
-    }
-    
-    const updateData: Record<string, any> = {};
+  async update(forecastId: string, id: string, dto: UpdateForecastNodeDto, request: Request): Promise<void> {
+    await this.findOne(forecastId, id, request);
 
+    const updateData: Record<string, any> = {};
     if (dto.kind !== undefined) {
       updateData.kind = dto.kind;
     }
-
     if (dto.attributes !== undefined) {
       updateData.attributes = dto.attributes;
     }
-
     if (dto.position !== undefined) {
       updateData.position = dto.position;
     }
-
-    // Add updated_at timestamp
-    updateData.updated_at = new Date().toISOString();
-
-    if (Object.keys(updateData).length === 1 && updateData.updated_at) {
-      // Only the timestamp was added, nothing else to update
+    if (Object.keys(updateData).length === 0) {
       return;
     }
+    updateData.updated_at = new Date().toISOString();
 
     const client = this.supabaseService.getClientForRequest(request);
     const { data, error } = await client
       .from('forecast_nodes')
       .update(updateData)
       .eq('id', id)
+      .eq('forecast_id', forecastId)
       .select('id')
-      .single();
+      .maybeSingle();
 
     if (error) {
-      // PGRST116 occurs when .single() is used and no row (or multiple rows) are returned.
-      if (error.code === 'PGRST116') {
-        this.logger.warn(`Attempted to update non-existent forecast node ${id} (PGRST116).`);
-        throw new NotFoundException(`Forecast node with ID ${id} not found.`);
-      }
-      this.logger.error(`Failed to update forecast node ${id}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to update forecast node ${id}: ${error.message}`);
+      throw this.dbError(error, 'change this forecast node');
     }
-
-    // The .single() call would have thrown an error if no data was returned, 
-    // so this !data check is theoretically not strictly needed here if PGRST116 is handled.
-    // However, keeping it as a fallback or for clarity if .select() was different.
+    // Readable (findOne) but not updated: filtered by row-level security
     if (!data) {
-      this.logger.warn(`Attempted to update non-existent forecast node: ${id} (no data returned post-update).`);
-      throw new NotFoundException(`Forecast node with ID ${id} not found.`);
+      throw new ForbiddenException('You do not have permission to change this forecast node');
     }
-
     this.logger.log(`Forecast node updated: ${id}`);
   }
 
-  async remove(id: string, request: Request): Promise<void> {
-    this.logger.debug(`Attempting to remove forecast node with id: ${id}`);
+  async remove(forecastId: string, id: string, request: Request): Promise<void> {
+    await this.findOne(forecastId, id, request);
 
-    // Step 1: Verify the node exists before attempting to delete.
-    // findOne will throw NotFoundException if it doesn't exist.
-    // We don't need to pass forecastId here as deletion is by node ID only, 
-    // but RLS on the forecast_nodes table should prevent unauthorized deletion.
-    // However, the controller should verify forecast ownership before calling this.
-    await this.findOne(id, request); // This will now correctly use the single-argument version if called by other parts of this service
-
-    // Step 2: If findOne succeeded, the node exists, so proceed with deletion.
     const client = this.supabaseService.getClientForRequest(request);
-    const { error } = await client
+    const { error, count } = await client
       .from('forecast_nodes')
-      .delete()
-      .eq('id', id);
+      .delete({ count: 'exact' })
+      .eq('id', id)
+      .eq('forecast_id', forecastId);
 
     if (error) {
-      // This error would be for the delete operation itself, not for non-existence.
-      this.logger.error(`Failed to delete forecast node ${id} during Supabase operation: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(`Failed to delete forecast node ${id}: ${error.message}`);
+      throw this.dbError(error, 'delete this forecast node');
     }
-
-    // If no error, deletion is considered successful.
+    if (count === 0) {
+      throw new ForbiddenException('You do not have permission to delete this forecast node');
+    }
     this.logger.log(`Forecast node deleted: ${id}`);
   }
 
@@ -196,4 +144,4 @@ export class ForecastNodeService {
       updatedAt: new Date(entity.updated_at),
     };
   }
-} 
+}

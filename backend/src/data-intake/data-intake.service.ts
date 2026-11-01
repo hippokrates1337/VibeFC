@@ -9,6 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SupabaseOptimizedService } from '../supabase/supabase-optimized.service';
+import { toHttpException, type DatabaseError } from '../common/errors/database-error';
 import { Request } from 'express';
 import { formatMonth, monthIndex } from '@vibefc/forecast-engine';
 
@@ -166,9 +167,13 @@ export class DataIntakeService {
       }
     }
 
-    const { error: deleteError } = await client.from('variables').delete().in('id', ids);
+    const { error: deleteError, count } = await client.from('variables').delete({ count: 'exact' }).in('id', ids);
     if (deleteError) {
       throw this.toHttpException(deleteError, 'delete variables');
+    }
+    // Readable but not deleted: row-level security lets only admins delete variables
+    if (count !== ids.length) {
+      throw new ForbiddenException('Only admins can delete variables');
     }
 
     this.logger.log(`Deleted ${ids.length} variables`);
@@ -280,25 +285,8 @@ export class DataIntakeService {
   }
 
   /** Maps a Supabase/PostgREST error to an HTTP status without echoing database internals. */
-  private toHttpException(error: { code?: string; message?: string }, action: string): HttpException {
-    this.logger.error(`Failed to ${action}: [${error.code}] ${error.message}`);
-    switch (error.code) {
-      case 'P0002':
-        return new NotFoundException(error.message);
-      case '23505':
-        return new ConflictException('A variable with this ID already exists');
-      case '42501':
-        return new ForbiddenException('You do not have permission to change variables in this organization');
-      case '22P02':
-      case '22007':
-      case '22008':
-      case '23514':
-        return new BadRequestException(`Invalid variable data (${action})`);
-      default:
-        if (error.message?.toLowerCase().includes('row-level security')) {
-          return new ForbiddenException('You do not have permission to change variables in this organization');
-        }
-        return new InternalServerErrorException(`Failed to ${action}`);
-    }
+  private toHttpException(error: DatabaseError, action: string): HttpException {
+    return toHttpException(error, { action, subject: 'Variable', logger: this.logger });
   }
+
 }
