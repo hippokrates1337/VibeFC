@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, Request as NestRequest, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, Request as NestRequest, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
 import { OrganizationsService } from '../services/organizations.service';
 import { CreateOrganizationDto, UpdateOrganizationDto, OrganizationDto } from '../dto/organization.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -32,7 +32,7 @@ export class OrganizationsController {
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
   async listForecastSummaries(
-    @Param('orgId') orgId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
     @NestRequest() req: AuthenticatedRequest,
   ): Promise<Array<ForecastDto & { nodeCount: number; edgeCount: number; nodeTypes: string[] }>> {
     return this.forecastService.findSummariesByOrganization(req.user.userId, orgId, req);
@@ -41,7 +41,7 @@ export class OrganizationsController {
   @Get(':orgId')
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN, OrganizationRole.EDITOR, OrganizationRole.VIEWER)
-  async findOne(@Param('orgId') orgId: string, @NestRequest() req: AuthenticatedRequest): Promise<OrganizationDto> {
+  async findOne(@Param('orgId', ParseUUIDPipe) orgId: string, @NestRequest() req: AuthenticatedRequest): Promise<OrganizationDto> {
     return this.organizationsService.findOne(orgId, req.user.userId, req);
   }
 
@@ -50,7 +50,7 @@ export class OrganizationsController {
   @Roles(OrganizationRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async update(
-    @Param('orgId') orgId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
     @Body() updateOrganizationDto: UpdateOrganizationDto,
     @NestRequest() req: AuthenticatedRequest
   ): Promise<void> {
@@ -61,7 +61,7 @@ export class OrganizationsController {
   @UseGuards(RolesGuard)
   @Roles(OrganizationRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('orgId') orgId: string, @NestRequest() req: AuthenticatedRequest): Promise<void> {
+  async remove(@Param('orgId', ParseUUIDPipe) orgId: string, @NestRequest() req: AuthenticatedRequest): Promise<void> {
     return this.organizationsService.remove(orgId, req);
   }
 } 

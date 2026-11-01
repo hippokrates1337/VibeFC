@@ -112,7 +112,7 @@ describe('OrganizationsController (Integration)', () => {
     await app.close();
   });
 
-  const orgId = 'test-org-123';
+  const orgId = 'a1b2c3d4-0000-4000-8000-000000000002';
 
   // --- GET /organizations ---
   describe('GET /organizations', () => {

@@ -194,33 +194,12 @@ export const useOrganizationStore = create<OrganizationState>()(
         // UI" and unmounts the create-org modal, losing form state and error messages.
         set({ error: null });
 
-        // The shared supabase client already holds the user's session (AuthProvider owns it).
-        // Never call setSession here: overwriting it drops the refresh token.
+        // Writes go through the backend; the database makes the creator admin
         try {
-          const { data: newOrg, error: createError } = await supabase
-            .from('organizations')
-            .insert({ name, owner_id: userId })
-            .select()
-            .single();
+          const { data: newOrg, error: createError } = await organizationApi.createOrganization(name);
 
-          if (createError) throw createError;
+          if (createError) throw new Error(createError.message);
           if (!newOrg) throw new Error('Failed to create organization.');
-
-          const { error: memberError } = await supabase
-            .from('organization_members')
-            .upsert(
-              {
-                organization_id: newOrg.id,
-                user_id: userId,
-                role: 'admin',
-              },
-              {
-                onConflict: 'organization_id,user_id',
-                ignoreDuplicates: true,
-              }
-            );
-
-          if (memberError) throw memberError;
 
           const currentOrgs = get().organizations;
           set({
@@ -246,17 +225,13 @@ export const useOrganizationStore = create<OrganizationState>()(
         
         try {
           
-          const { data: updatedOrg, error } = await supabase
-            .from('organizations')
-            .update({ name })
-            .eq('id', id)
-            .select()
-            .single();
-            
-          if (error) throw error;
-          if (!updatedOrg) throw new Error('Failed to update organization.');
-          
+          const { error } = await organizationApi.updateOrganization(id, name);
+          if (error) throw new Error(error.message);
+
           const currentOrgs = get().organizations;
+          const existing = currentOrgs.find(org => org.id === id);
+          if (!existing) throw new Error('Failed to update organization.');
+          const updatedOrg = { ...existing, name };
           const updatedOrgs = currentOrgs.map(org => 
             org.id === id ? updatedOrg : org
           );
@@ -284,27 +259,9 @@ export const useOrganizationStore = create<OrganizationState>()(
         
         try {
           
-          // First, delete all members associated with this organization
-          const { error: memberDeleteError } = await supabase
-            .from('organization_members')
-            .delete()
-            .eq('organization_id', id);
-            
-          if (memberDeleteError) {
-            logger.error(`[OrganizationStore] Error deleting members for org ${id}:`, memberDeleteError);
-            // Optionally, decide if you want to proceed with organization deletion even if members fail to delete
-            // For now, we'll throw the error to stop the process
-            throw memberDeleteError;
-          }
-          logger.log(`[OrganizationStore] Successfully deleted members for org ${id}.`);
-          
-          // Now, delete the organization itself
-          const { error } = await supabase
-            .from('organizations')
-            .delete()
-            .eq('id', id);
-            
-          if (error) throw error;
+          // The backend deletes the organization; members, forecasts and variables go with it
+          const { error } = await organizationApi.deleteOrganization(id);
+          if (error) throw new Error(error.message);
           
           const currentOrgs = get().organizations.filter(org => org.id !== id);
           set({ organizations: currentOrgs });
@@ -379,13 +336,9 @@ export const useOrganizationStore = create<OrganizationState>()(
         
         try {
           
-          const { error } = await supabase
-            .from('organization_members')
-            .update({ role })
-            .eq('organization_id', currentOrgId)
-            .eq('user_id', userId);
-            
-          if (error) throw error;
+          // The backend refuses to demote the last admin
+          const { error } = await organizationApi.updateMemberRole(currentOrgId, userId, role);
+          if (error) throw new Error(error.message);
           
           const currentMembers = get().members;
           const updatedMembers = currentMembers.map(member => 
@@ -418,13 +371,9 @@ export const useOrganizationStore = create<OrganizationState>()(
         
         try {
           
-          const { error } = await supabase
-            .from('organization_members')
-            .delete()
-            .eq('organization_id', currentOrgId)
-            .eq('user_id', userId);
-            
-          if (error) throw error;
+          // The backend refuses to remove the last admin
+          const { error } = await organizationApi.removeMember(currentOrgId, userId);
+          if (error) throw new Error(error.message);
           
           const updatedMembers = get().members.filter(
             member => !(member.user_id === userId && member.organization_id === currentOrgId)

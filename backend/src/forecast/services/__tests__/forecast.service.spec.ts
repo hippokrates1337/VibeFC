@@ -1,745 +1,168 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
 import { ForecastService } from '../forecast.service';
-import { SupabaseOptimizedService } from '../../../supabase/supabase-optimized.service';
-import { PerformanceService } from '../../../common/services/performance.service';
-import { Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { CreateForecastDto, UpdateForecastDto, ForecastDto, UpdateForecastPeriodsDto } from '../../dto/forecast.dto';
+import { fakeSupabase, rlsError, type RecordedQuery, type FakeResult } from '../../../common/testing/fake-supabase';
 
-// Mock Supabase client methods
-const mockSupabaseInsert = jest.fn();
-const mockSupabaseSelect = jest.fn();
-const mockSupabaseUpdate = jest.fn();
-const mockSupabaseDelete = jest.fn();
-
-const mockSupabaseClient = {
-  from: jest.fn().mockReturnThis(),
-  select: jest.fn().mockReturnThis(),
-  insert: mockSupabaseInsert,
-  update: mockSupabaseUpdate,
-  delete: mockSupabaseDelete,
-  eq: jest.fn().mockReturnThis(),
-  single: jest.fn(),
-};
-
-// Mock Logger
 Logger.prototype.log = jest.fn();
 Logger.prototype.error = jest.fn();
-Logger.prototype.warn = jest.fn();
+
+const request = { headers: { authorization: 'Bearer t' } } as any;
+const performance = { trackOperation: (_name: string, operation: () => unknown) => operation() } as any;
+
+const row = (overrides: Record<string, unknown> = {}) => ({
+  id: 'f1',
+  name: 'Plan',
+  organization_id: 'org-1',
+  user_id: 'u1',
+  forecast_start_date: '2026-01-01',
+  forecast_end_date: '2026-12-31',
+  forecast_start_month: '01-2026',
+  forecast_end_month: '12-2026',
+  actual_start_month: '07-2025',
+  actual_end_month: '12-2025',
+  created_at: '2026-01-01',
+  updated_at: '2026-01-01',
+  ...overrides,
+});
+
+function setup(respond: (query: RecordedQuery) => FakeResult = (q) => (q.op === 'select' ? { data: row() } : { data: { id: 'f1' } })) {
+  const db = fakeSupabase(respond);
+  return { db, service: new ForecastService(db.supabaseService, performance) };
+}
+const writes = (queries: RecordedQuery[]) => queries.filter((q) => q.op !== 'select');
 
 describe('ForecastService', () => {
-  let service: ForecastService;
-  let supabaseService: SupabaseOptimizedService;
-  const testUserId = 'test-user-123';
-  const testOrgId = 'test-org-123';
-
-  // Add new test data for MM-YYYY period testing
-  const createDtoWithPeriods: CreateForecastDto = {
-    name: 'Test Forecast with Periods',
-    forecastStartDate: '2023-01-01',
-    forecastEndDate: '2023-12-31',
-    organizationId: testOrgId,
-    forecastStartMonth: '01-2023',
-    forecastEndMonth: '12-2023',
-    actualStartMonth: '07-2022',
-    actualEndMonth: '12-2022',
-  };
-
-  const updatePeriodsDto: UpdateForecastPeriodsDto = {
-    forecastStartMonth: '02-2023',
-    forecastEndMonth: '11-2023',
-    actualStartMonth: '08-2022',
-    actualEndMonth: '01-2023',
-  };
-
-  const mockDbResultWithPeriods = {
-    id: 'forecast-123',
-    name: 'Test Forecast',
-    forecast_start_date: '2023-01-01',
-    forecast_end_date: '2023-12-31',
-    forecast_start_month: '01-2023',
-    forecast_end_month: '12-2023', 
-    actual_start_month: '07-2022',
-    actual_end_month: '12-2022',
-    organization_id: testOrgId,
-    user_id: testUserId,
-    created_at: '2023-01-01T00:00:00.000Z',
-    updated_at: '2023-01-01T00:00:00.000Z'
-  };
-
-  const expectedForecastWithPeriods: ForecastDto = {
-    id: 'forecast-123',
-    name: 'Test Forecast',
-    forecastStartDate: '2023-01-01',
-    forecastEndDate: '2023-12-31',
-    forecastStartMonth: '01-2023',
-    forecastEndMonth: '12-2023',
-    actualStartMonth: '07-2022',
-    actualEndMonth: '12-2022',
-    organizationId: testOrgId,
-    userId: testUserId,
-    createdAt: new Date('2023-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2023-01-01T00:00:00.000Z')
-  };
-
-  const mockSupabaseService = {
-    getClientForRequest: jest.fn().mockReturnValue(mockSupabaseClient),
-  };
-
-  // Mock request object
-  const mockRequest = {
-    headers: { authorization: 'Bearer mock-token' },
-    user: { id: 'test-user-123', email: 'test@example.com' }
-  } as any;
-
-  beforeEach(async () => {
-    jest.clearAllMocks();
-
-    // Reset specific mocks for chaining
-    mockSupabaseClient.from.mockImplementation(() => {
-      return {
-        select: mockSupabaseSelect,
-        insert: mockSupabaseInsert,
-        update: mockSupabaseUpdate,
-        delete: mockSupabaseDelete,
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn(),
-      };
-    });
-
-    mockSupabaseSelect.mockReturnValue({
-      eq: jest.fn().mockReturnThis(),
-      filter: jest.fn().mockReturnThis(),
-      match: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({ data: null, error: null }),
-    });
-
-    mockSupabaseInsert.mockReturnValue({
-      select: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({ data: { id: 'new-forecast-id' }, error: null })
-    });
-
-    mockSupabaseUpdate.mockReturnValue({
-      eq: jest.fn().mockReturnThis(),
-      match: jest.fn().mockReturnThis(),
-      select: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({ data: { id: 'updated-forecast-id' }, error: null })
-    });
-
-    mockSupabaseDelete.mockReturnValue({
-      eq: jest.fn().mockResolvedValue({ count: 1, error: null }),
-      match: jest.fn().mockResolvedValue({ count: 1, error: null }),
-    });
-
-    const mockPerformanceService = {
-      measureTime: jest.fn(),
-      logPerformance: jest.fn(),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ForecastService,
-        { provide: SupabaseOptimizedService, useValue: mockSupabaseService },
-        { provide: PerformanceService, useValue: mockPerformanceService },
-        Logger,
-      ],
-    }).compile();
-
-    service = module.get<ForecastService>(ForecastService);
-    supabaseService = module.get<SupabaseOptimizedService>(SupabaseOptimizedService);
-
-    // Clear logger mocks before each test
-    (Logger.prototype.log as jest.Mock).mockClear();
-    (Logger.prototype.error as jest.Mock).mockClear();
-    (Logger.prototype.warn as jest.Mock).mockClear();
-  });
-
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-
-  // --- create Test ---
   describe('create', () => {
-    const userId = testUserId;
-    const createDto: CreateForecastDto = {
-      name: 'New Forecast',
-      forecastStartDate: '2023-01-01',
-      forecastEndDate: '2023-12-31',
-      organizationId: testOrgId
-    };
-    const newForecast = {
-      id: 'new-forecast-id',
-      name: 'New Forecast',
-      forecast_start_date: '2023-01-01',
-      forecast_end_date: '2023-12-31',
-      forecast_start_month: '01-2023',
-      forecast_end_month: '12-2023',
-      actual_start_month: '07-2022',
-      actual_end_month: '12-2022',
-      organization_id: testOrgId,
-      user_id: userId,
-      created_at: '2023-01-01T00:00:00.000Z',
-      updated_at: '2023-01-01T00:00:00.000Z'
-    };
+    const dto = { name: 'Plan', organizationId: 'org-1', forecastStartDate: '2026-01-01', forecastEndDate: '2026-12-31' };
 
-    it('should create a forecast and return it', async () => {
-      // Mock insert to return the new forecast
-      const mockInsertSingle = jest.fn().mockResolvedValue({ data: newForecast, error: null });
-      mockSupabaseInsert.mockReturnValue({ select: jest.fn().mockReturnThis(), single: mockInsertSingle });
+    it('derives the forecast months from the dates and defaults the actual window to the 6 months before', async () => {
+      const { db, service } = setup(() => ({ data: row() }));
 
-      const result = await service.create(userId, createDto, mockRequest);
+      await service.create('u1', dto as any, request);
 
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
-      expect(mockSupabaseInsert).toHaveBeenCalledWith({
-        name: createDto.name,
-        forecast_start_date: createDto.forecastStartDate,
-        forecast_end_date: createDto.forecastEndDate,
-        organization_id: createDto.organizationId,
-        user_id: userId,
-        forecast_start_month: '01-2023', // MM-YYYY format from forecastStartDate
-        forecast_end_month: '12-2023',   // MM-YYYY format from forecastEndDate
-        actual_start_month: '07-2022',   // 6 months before forecast start
-        actual_end_month: '12-2022',     // 1 month before forecast start
+      expect(db.queries[0].payload).toMatchObject({
+        forecast_start_month: '01-2026',
+        forecast_end_month: '12-2026',
+        actual_start_month: '07-2025',
+        actual_end_month: '12-2025',
       });
-      expect(mockInsertSingle).toHaveBeenCalledTimes(1);
-      expect(result).toEqual({
-        id: newForecast.id,
-        name: newForecast.name,
-        forecastStartDate: newForecast.forecast_start_date,
-        forecastEndDate: newForecast.forecast_end_date,
-        forecastStartMonth: newForecast.forecast_start_month,
-        forecastEndMonth: newForecast.forecast_end_month,
-        actualStartMonth: newForecast.actual_start_month,
-        actualEndMonth: newForecast.actual_end_month,
-        organizationId: newForecast.organization_id,
-        userId: newForecast.user_id,
-        createdAt: new Date(newForecast.created_at),
-        updatedAt: new Date(newForecast.updated_at),
-      });
-      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast created successfully via service: ${newForecast.id} by user ${userId}`);
     });
 
-    it('should throw InternalServerErrorException if forecast creation fails', async () => {
-      const dbError = { message: 'Insert failed', code: 'DB500' };
-      mockSupabaseInsert.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: null, error: dbError })
-      });
+    it('rejects an end date before the start date and an actual window that runs backwards, before writing', async () => {
+      const { db, service } = setup();
 
-      await expect(service.create(userId, createDto, mockRequest))
-        .rejects.toThrow(new InternalServerErrorException(`Failed to create forecast due to database error: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
+      await expect(service.create('u1', { ...dto, forecastEndDate: '2025-12-31' } as any, request)).rejects.toThrow(
+        /end date \(2025-12-31\) is before the start date/
+      );
+      await expect(
+        service.create('u1', { ...dto, actualStartMonth: '12-2025', actualEndMonth: '06-2025' } as any, request)
+      ).rejects.toThrow(/actual period ends \(06-2025\) before it starts/);
+      expect(db.queries).toHaveLength(0);
     });
 
-    it('should throw InternalServerErrorException if insert succeeds but no data is returned', async () => {
-      mockSupabaseInsert.mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: null, error: null })
-      });
+    it('answers 403 without the database text when the caller may not write (viewer)', async () => {
+      const { service } = setup(() => ({ error: rlsError }));
 
-      await expect(service.create(userId, createDto, mockRequest))
-        .rejects.toThrow(new InternalServerErrorException('Failed to create forecast, data missing after insert and no explicit error from database.'));
-      expect(Logger.prototype.error).toHaveBeenCalled();
+      const error = await service.create('u1', dto as any, request).catch((e) => e);
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect(error.message).toBe('You do not have permission to create a forecast in this organization');
     });
   });
 
-  // --- findAll Test ---
-  describe('findAll', () => {
-    const userId = testUserId;
-    const organizationId = testOrgId;
-    const mockDbResult = [
-      {
-        id: 'forecast-1',
-        name: 'Forecast 1',
-        forecast_start_date: '2023-01-01',
-        forecast_end_date: '2023-12-31',
-        organization_id: organizationId,
-        user_id: userId,
-        created_at: '2023-01-01T00:00:00.000Z',
-        updated_at: '2023-01-01T00:00:00.000Z'
-      },
-      {
-        id: 'forecast-2',
-        name: 'Forecast 2',
-        forecast_start_date: '2023-02-01',
-        forecast_end_date: '2023-12-31',
-        organization_id: organizationId,
-        user_id: userId,
-        created_at: '2023-01-02T00:00:00.000Z',
-        updated_at: '2023-01-02T00:00:00.000Z'
-      }
-    ];
-    const expectedForecasts = [
-      {
-        id: 'forecast-1',
-        name: 'Forecast 1',
-        forecastStartDate: '2023-01-01',
-        forecastEndDate: '2023-12-31',
-        organizationId: organizationId,
-        userId: userId,
-        createdAt: new Date('2023-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2023-01-01T00:00:00.000Z')
-      },
-      {
-        id: 'forecast-2',
-        name: 'Forecast 2',
-        forecastStartDate: '2023-02-01',
-        forecastEndDate: '2023-12-31',
-        organizationId: organizationId,
-        userId: userId,
-        createdAt: new Date('2023-01-02T00:00:00.000Z'),
-        updatedAt: new Date('2023-01-02T00:00:00.000Z')
-      }
-    ];
-
-    it('should return all forecasts for the specified organization', async () => {
-      const mockSelectEq = jest.fn().mockResolvedValue({ data: mockDbResult, error: null });
-      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
-
-      const result = await service.findAll(userId, organizationId, mockRequest);
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
-      expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
-      expect(mockSelectEq).toHaveBeenCalledWith('organization_id', organizationId);
-      expect(result).toEqual(expectedForecasts);
-    });
-
-    it('should throw InternalServerErrorException if DB query fails', async () => {
-      const dbError = { message: 'Query failed', code: 'DB500' };
-      const mockSelectEq = jest.fn().mockResolvedValue({ data: null, error: dbError });
-      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
-
-      await expect(service.findAll(userId, organizationId, mockRequest))
-        .rejects.toThrow(new InternalServerErrorException(`Failed to fetch forecasts: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
-    });
-  });
-
-  // --- findOne Test ---
   describe('findOne', () => {
-    const userId = testUserId;
-    const forecastId = 'forecast-123';
-    const mockDbResult = {
-      id: forecastId,
-      name: 'Test Forecast',
-      forecast_start_date: '2023-01-01',
-      forecast_end_date: '2023-12-31',
-      organization_id: testOrgId,
-      user_id: userId,
-      created_at: '2023-01-01T00:00:00.000Z',
-      updated_at: '2023-01-01T00:00:00.000Z'
-    };
-    const expectedForecast = {
-      id: forecastId,
-      name: 'Test Forecast',
-      forecastStartDate: '2023-01-01',
-      forecastEndDate: '2023-12-31',
-      organizationId: testOrgId,
-      userId: userId,
-      createdAt: new Date('2023-01-01T00:00:00.000Z'),
-      updatedAt: new Date('2023-01-01T00:00:00.000Z')
-    };
-
-    it('should return a specific forecast by ID', async () => {
-      const mockSingle = jest.fn().mockResolvedValue({ data: mockDbResult, error: null });
-      const mockSelectEq = jest.fn().mockReturnValue({ single: mockSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
-
-      const result = await service.findOne(forecastId, userId, mockRequest);
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
-      expect(mockSupabaseSelect).toHaveBeenCalledWith('*');
-      expect(mockSelectEq).toHaveBeenCalledWith('id', forecastId);
-      expect(mockSingle).toHaveBeenCalled();
-      expect(result).toEqual(expectedForecast);
+    it('answers 404 for a forecast the caller cannot read', async () => {
+      const { service } = setup(() => ({ data: null }));
+      await expect(service.findOne('f1', 'u1', request)).rejects.toThrow(new NotFoundException('Forecast not found'));
     });
 
-    it('should throw NotFoundException if forecast does not exist', async () => {
-      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: null });
-      const mockSelectEq = jest.fn().mockReturnValue({ single: mockSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
-
-      await expect(service.findOne(forecastId, userId, mockRequest))
-        .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
-      expect(Logger.prototype.warn).toHaveBeenCalled();
-    });
-
-    it('should throw InternalServerErrorException if DB query fails', async () => {
-      const dbError = { message: 'Query failed', code: 'DB500' };
-      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: dbError });
-      const mockSelectEq = jest.fn().mockReturnValue({ single: mockSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
-
-      await expect(service.findOne(forecastId, userId, mockRequest))
-        .rejects.toThrow(new InternalServerErrorException(`Failed to retrieve forecast details: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
+    it('answers 400, not 500, for invalid input the database rejects', async () => {
+      const { service } = setup(() => ({ error: { code: '22P02', message: 'invalid input syntax for type uuid' } }));
+      await expect(service.findOne('x', 'u1', request)).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
-  // --- update Test ---
   describe('update', () => {
-    const forecastId = 'forecast-123';
-    const updateDto: UpdateForecastDto = {
-      name: 'Updated Forecast',
-      forecastStartDate: '2023-02-01',
-      forecastEndDate: '2023-11-30'
-    };
+    it('re-derives the forecast months when the dates change', async () => {
+      const { db, service } = setup();
 
-    it('should update a forecast successfully', async () => {
-      // First mock findOne to return the existing forecast
-      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
-        data: { 
-          id: forecastId, 
-          name: 'Old name', 
-          forecast_start_date: '2023-01-01',
-          forecast_end_date: '2023-12-31',
-          organization_id: testOrgId,
-          user_id: testUserId,
-          created_at: '2023-01-01T00:00:00.000Z',
-          updated_at: '2023-01-01T00:00:00.000Z'
-        }, 
-        error: null 
-      });
-      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
+      await service.update('f1', 'u1', { forecastEndDate: '2027-06-30' }, request);
 
-      // Then mock the update operation
-      const mockUpdateSingle = jest.fn().mockResolvedValue({ data: { id: forecastId }, error: null });
-      const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
-      const mockUpdateEq = jest.fn().mockReturnValue({ select: mockUpdateSelect });
-      mockSupabaseUpdate.mockReturnValue({ eq: mockUpdateEq });
-
-      await service.update(forecastId, testUserId, updateDto, mockRequest);
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
-      expect(mockSupabaseUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        name: updateDto.name,
-        forecast_start_date: updateDto.forecastStartDate,
-        forecast_end_date: updateDto.forecastEndDate,
-        forecast_start_month: '02-2023',
-        forecast_end_month: '11-2023',
-        updated_at: expect.any(String)
-      }));
-      expect(mockUpdateEq).toHaveBeenCalledWith('id', forecastId);
-      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast updated: ${forecastId} by user: ${testUserId}`);
+      expect(writes(db.queries)[0].payload).toMatchObject({ forecast_start_month: '01-2026', forecast_end_month: '06-2027' });
     });
 
-    it('should do nothing if no update data is provided', async () => {
-      // First mock findOne to return the existing forecast (since update() calls findOne first)
-      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
-        data: { 
-          id: forecastId, 
-          name: 'Test name', 
-          forecast_start_date: '2023-01-01',
-          forecast_end_date: '2023-12-31',
-          organization_id: testOrgId,
-          user_id: testUserId,
-          created_at: '2023-01-01T00:00:00.000Z',
-          updated_at: '2023-01-01T00:00:00.000Z'
-        }, 
-        error: null 
-      });
-      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
+    it('rejects dates that end before they start after merging with the stored ones', async () => {
+      const { db, service } = setup();
 
-      await service.update(forecastId, testUserId, {}, mockRequest);
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts'); // Called for findOne
-      expect(mockSupabaseUpdate).not.toHaveBeenCalled(); // Update not called due to empty dto
+      await expect(service.update('f1', 'u1', { forecastStartDate: '2027-01-01' }, request)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+      expect(writes(db.queries)).toHaveLength(0);
     });
 
-    it('should throw NotFoundException if forecast does not exist', async () => {
-      mockSupabaseUpdate.mockReturnValue({
-        eq: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: null, error: null })
-      });
-
-      await expect(service.update(forecastId, testUserId, updateDto, mockRequest))
-        .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
-      expect(Logger.prototype.warn).toHaveBeenCalled();
-    });
-
-    it('should throw InternalServerErrorException if DB update fails', async () => {
-      // First mock successful findOne
-      const mockFindOneSingle = jest.fn().mockResolvedValue({ 
-        data: { 
-          id: forecastId, 
-          name: 'Old name', 
-          forecast_start_date: '2023-01-01',
-          forecast_end_date: '2023-12-31',
-          organization_id: testOrgId,
-          user_id: testUserId,
-          created_at: '2023-01-01T00:00:00.000Z',
-          updated_at: '2023-01-01T00:00:00.000Z'
-        }, 
-        error: null 
-      });
-      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
-
-      // Then mock update failure
-      const dbError = { message: 'Update failed', code: 'DB500' };
-      const mockUpdateSingle = jest.fn().mockResolvedValue({ data: null, error: dbError });
-      const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
-      const mockUpdateEq = jest.fn().mockReturnValue({ select: mockUpdateSelect });
-      mockSupabaseUpdate.mockReturnValue({ eq: mockUpdateEq });
-
-      await expect(service.update(forecastId, testUserId, updateDto, mockRequest))
-        .rejects.toThrow(new InternalServerErrorException(`Failed to update forecast ${forecastId}: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
+    it('answers 403 when the update reaches no row (row-level security)', async () => {
+      const { service } = setup((q) => (q.op === 'select' ? { data: row() } : { data: null }));
+      await expect(service.update('f1', 'u1', { name: 'New' }, request)).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 
-  // --- remove Test ---
+  describe('updatePeriods', () => {
+    it('checks the merged periods and writes all four', async () => {
+      const { db, service } = setup();
+
+      await expect(service.updatePeriods('f1', 'u1', { actualStartMonth: '01-2026' }, request)).rejects.toThrow(
+        /actual period ends \(12-2025\) before it starts \(01-2026\)/
+      );
+      await service.updatePeriods('f1', 'u1', { actualStartMonth: '01-2025' }, request);
+
+      expect(writes(db.queries)).toHaveLength(1);
+      expect(writes(db.queries)[0].payload).toMatchObject({
+        forecast_start_month: '01-2026',
+        forecast_end_month: '12-2026',
+        actual_start_month: '01-2025',
+        actual_end_month: '12-2025',
+      });
+    });
+  });
+
   describe('remove', () => {
-    const forecastId = 'forecast-123';
+    it('deletes the forecast, and answers 403 when nothing was deleted', async () => {
+      let deleted = 1;
+      const { db, service } = setup((q) => (q.op === 'select' ? { data: row() } : { count: deleted }));
 
-    it('should delete a forecast successfully', async () => {
-      // First mock the findOne call (to check forecast exists)
-      const mockFindOneSingle = jest.fn().mockResolvedValue({ data: { id: forecastId }, error: null });
-      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
+      await expect(service.remove('f1', 'u1', request)).resolves.toBeUndefined();
+      expect(writes(db.queries)[0].options).toEqual({ count: 'exact' });
 
-      // Then mock the delete call
-      const mockDeleteEq = jest.fn().mockResolvedValue({ error: null });
-      mockSupabaseDelete.mockReturnValue({ eq: mockDeleteEq });
-
-      await service.remove(forecastId, testUserId, mockRequest);
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
-      expect(mockSupabaseDelete).toHaveBeenCalled();
-      expect(mockDeleteEq).toHaveBeenCalledWith('id', forecastId);
-      expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast deleted: ${forecastId} by user: ${testUserId}`);
-    });
-
-    it('should throw NotFoundException if forecast does not exist', async () => {
-      // Mock findOne to throw NotFoundException (forecast doesn't exist)
-      const mockFindOneSingle = jest.fn().mockResolvedValue({ data: null, error: null });
-      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
-
-      await expect(service.remove(forecastId, testUserId, mockRequest))
-        .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
-      expect(Logger.prototype.warn).toHaveBeenCalled();
-    });
-
-    it('should throw InternalServerErrorException if DB delete fails', async () => {
-      // First mock successful findOne
-      const mockFindOneSingle = jest.fn().mockResolvedValue({ data: { id: forecastId }, error: null });
-      const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-      mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
-
-      // Then mock delete failure
-      const dbError = { message: 'Delete failed', code: 'DB500' };
-      const mockDeleteEq = jest.fn().mockResolvedValue({ error: dbError });
-      mockSupabaseDelete.mockReturnValue({ eq: mockDeleteEq });
-
-      await expect(service.remove(forecastId, testUserId, mockRequest))
-        .rejects.toThrow(new InternalServerErrorException(`Failed to delete forecast: ${dbError.message}`));
-      expect(Logger.prototype.error).toHaveBeenCalled();
+      deleted = 0;
+      await expect(service.remove('f1', 'u1', request)).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 
-  // --- Phase 1: MM-YYYY Period Tests ---
-  describe('Phase 1 - MM-YYYY Period Management', () => {
-    describe('create with MM-YYYY periods', () => {
-      const userId = testUserId;
+  describe('bulkSaveGraph', () => {
+    const graph = (forecast: Record<string, unknown>) => ({ forecast: { name: 'Plan', forecastStartDate: '2026-01-01', forecastEndDate: '2026-12-31', ...forecast }, nodes: [], edges: [] });
 
-      it('should create forecast with provided MM-YYYY periods', async () => {
-        mockSupabaseInsert.mockReturnValue({
-          select: jest.fn().mockReturnThis(),
-          single: jest.fn().mockResolvedValue({ data: mockDbResultWithPeriods, error: null })
-        });
+    it('checks the periods before calling the database function', async () => {
+      const { db, service } = setup();
 
-        const result = await service.create(userId, createDtoWithPeriods, mockRequest);
-
-        expect(mockSupabaseClient.from).toHaveBeenCalledWith('forecasts');
-        expect(mockSupabaseInsert).toHaveBeenCalledWith({
-          name: createDtoWithPeriods.name,
-          forecast_start_date: createDtoWithPeriods.forecastStartDate,
-          forecast_end_date: createDtoWithPeriods.forecastEndDate,
-          organization_id: createDtoWithPeriods.organizationId,
-          user_id: userId,
-          forecast_start_month: '01-2023',
-          forecast_end_month: '12-2023',
-          actual_start_month: createDtoWithPeriods.actualStartMonth,
-          actual_end_month: createDtoWithPeriods.actualEndMonth,
-        });
-        expect(result).toEqual(expectedForecastWithPeriods);
-      });
-
-      it('should create forecast with generated default MM-YYYY periods when not provided', async () => {
-        const createDtoWithoutPeriods: CreateForecastDto = {
-          name: 'Test Forecast',
-          forecastStartDate: '2023-06-01',
-          forecastEndDate: '2023-12-31',
-          organizationId: testOrgId,
-        };
-
-        const mockDbResultWithDefaults = {
-          ...mockDbResultWithPeriods,
-          forecast_start_date: '2023-06-01',
-          forecast_start_month: '06-2023',
-          forecast_end_month: '12-2023',
-          actual_start_month: '12-2022', // 6 months before
-          actual_end_month: '05-2023', // 1 month before
-        };
-
-        mockSupabaseInsert.mockReturnValue({
-          select: jest.fn().mockReturnThis(),
-          single: jest.fn().mockResolvedValue({ data: mockDbResultWithDefaults, error: null })
-        });
-
-        const result = await service.create(userId, createDtoWithoutPeriods, mockRequest);
-
-        // Verify default periods were generated
-        expect(mockSupabaseInsert).toHaveBeenCalledWith(
-          expect.objectContaining({
-            forecast_start_month: '06-2023',
-            forecast_end_month: '12-2023',
-            actual_start_month: '12-2022',
-            actual_end_month: '05-2023',
-          })
-        );
-      });
+      await expect(service.bulkSaveGraph('f1', 'u1', graph({ forecastEndDate: '2025-06-30' }) as any, request)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+      expect(db.rpcCalls).toHaveLength(0);
     });
 
-    describe('updatePeriods', () => {
-      const forecastId = 'forecast-123';
-      const userId = testUserId;
+    it('maps an error raised by the function to 400 without its text', async () => {
+      const { db, service } = setup();
+      db.setRpcResult({ error: { code: 'P0001', message: 'Invalid edge client reference: x' } });
 
-      beforeEach(() => {
-        const mockFindOneSingle = jest.fn().mockResolvedValue({ 
-          data: mockDbResultWithPeriods, 
-          error: null 
-        });
-        const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-        mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
-      });
-
-      it('should update MM-YYYY periods successfully', async () => {
-        const mockUpdateSingle = jest.fn().mockResolvedValue({ 
-          data: { id: forecastId }, 
-          error: null 
-        });
-        const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
-        const mockUpdateEq = jest.fn().mockReturnValue({ select: mockUpdateSelect });
-        mockSupabaseUpdate.mockReturnValue({ eq: mockUpdateEq });
-
-        await service.updatePeriods(forecastId, userId, updatePeriodsDto, mockRequest);
-
-        expect(mockSupabaseUpdate).toHaveBeenCalled();
-        expect(mockUpdateEq).toHaveBeenCalledWith('id', forecastId);
-        expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast periods updated: ${forecastId} by user: ${userId}`);
-      });
-
-      it('should handle partial period updates', async () => {
-        const partialUpdateDto: UpdateForecastPeriodsDto = {
-          forecastStartMonth: '03-2023',
-          // Only updating forecast start month
-        };
-
-        const mockUpdateSingle = jest.fn().mockResolvedValue({ 
-          data: { id: forecastId }, 
-          error: null 
-        });
-        const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
-        const mockUpdateEq = jest.fn().mockReturnValue({ select: mockUpdateSelect });
-        mockSupabaseUpdate.mockReturnValue({ eq: mockUpdateEq });
-
-        await service.updatePeriods(forecastId, userId, partialUpdateDto, mockRequest);
-
-        expect(mockSupabaseUpdate).toHaveBeenCalled();
-        expect(Logger.prototype.log).toHaveBeenCalledWith(`Forecast periods updated: ${forecastId} by user: ${userId}`);
-      });
-
-      it('should throw NotFoundException if forecast does not exist during period update', async () => {
-        const mockFindOneSingle = jest.fn().mockResolvedValue({ data: null, error: null });
-        const mockFindOneEq = jest.fn().mockReturnValue({ single: mockFindOneSingle });
-        mockSupabaseSelect.mockReturnValue({ eq: mockFindOneEq });
-
-        await expect(service.updatePeriods(forecastId, userId, updatePeriodsDto, mockRequest))
-          .rejects.toThrow(new NotFoundException(`Forecast with ID ${forecastId} not found.`));
-      });
-
-      it('should throw InternalServerErrorException if period update fails', async () => {
-        const dbError = { message: 'Update failed', code: 'DB500' };
-        const mockUpdateSingle = jest.fn().mockResolvedValue({ 
-          data: null, 
-          error: dbError 
-        });
-        const mockUpdateSelect = jest.fn().mockReturnValue({ single: mockUpdateSingle });
-        const mockUpdateEq = jest.fn().mockReturnValue({ select: mockUpdateSelect });
-        mockSupabaseUpdate.mockReturnValue({ eq: mockUpdateEq });
-
-        await expect(service.updatePeriods(forecastId, userId, updatePeriodsDto, mockRequest))
-          .rejects.toThrow(new InternalServerErrorException(`Failed to update forecast periods ${forecastId}: ${dbError.message}`));
-        expect(Logger.prototype.error).toHaveBeenCalled();
-      });
-
-      it('should return early if no period fields to update', async () => {
-        const emptyUpdateDto: UpdateForecastPeriodsDto = {};
-
-        await service.updatePeriods(forecastId, userId, emptyUpdateDto, mockRequest);
-
-        // Should only call findOne for ownership check, not update
-        expect(mockSupabaseUpdate).not.toHaveBeenCalled();
-      });
+      const error = await service.bulkSaveGraph('f1', 'u1', graph({}) as any, request).catch((e) => e);
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect(error.message).not.toContain('client reference');
     });
 
-    describe('updated findOne with MM-YYYY periods', () => {
-      const forecastId = 'forecast-123';
-      const userId = testUserId;
+    it('saves through the database function', async () => {
+      const { db, service } = setup();
+      db.setRpcResult({ data: { id: 'f1', nodes: [], edges: [] } });
 
-      it('should return forecast with MM-YYYY period fields', async () => {
-        const mockSingle = jest.fn().mockResolvedValue({ 
-          data: mockDbResultWithPeriods, 
-          error: null 
-        });
-        const mockSelectEq = jest.fn().mockReturnValue({ single: mockSingle });
-        mockSupabaseSelect.mockReturnValue({ eq: mockSelectEq });
-
-        const result = await service.findOne(forecastId, userId, mockRequest);
-
-        expect(result).toEqual(expectedForecastWithPeriods);
-        expect(result.forecastStartMonth).toBe('01-2023');
-        expect(result.forecastEndMonth).toBe('12-2023');
-        expect(result.actualStartMonth).toBe('07-2022');
-        expect(result.actualEndMonth).toBe('12-2022');
-      });
-    });
-
-    describe('MM-YYYY period utility functions', () => {
-      it('should convert date to MM-YYYY format correctly', async () => {
-        // Test the private dateToMMYYYY method indirectly through create
-        const testDate = '2023-01-15'; // Mid-month date
-        const createDto: CreateForecastDto = {
-          name: 'Test',
-          forecastStartDate: testDate,
-          forecastEndDate: '2023-12-31',
-          organizationId: testOrgId,
-        };
-
-        mockSupabaseInsert.mockReturnValue({
-          select: jest.fn().mockReturnThis(),
-          single: jest.fn().mockResolvedValue({ 
-            data: { 
-              ...mockDbResultWithPeriods, 
-              forecast_start_month: '01-2023' 
-            }, 
-            error: null 
-          })
-        });
-
-        await service.create(testUserId, createDto, mockRequest);
-
-        // Verify the generated period is correct MM-YYYY format
-        expect(mockSupabaseInsert).toHaveBeenCalledWith(
-          expect.objectContaining({
-            forecast_start_month: '01-2023',
-          })
-        );
-      });
+      await expect(service.bulkSaveGraph('f1', 'u1', graph({}) as any, request)).resolves.toMatchObject({ id: 'f1' });
+      expect(db.rpcCalls[0]).toMatchObject({ name: 'bulk_save_forecast_graph', args: { p_forecast_id: 'f1' } });
     });
   });
-}); 
+});

@@ -8,8 +8,19 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
   
-  // Enable CORS
-  app.enableCors();
+  // Browsers may only call the API from the app's own origins (CORS_ORIGINS, comma-separated).
+  // Without it every origin is allowed, as before; set it in every deployed environment.
+  const corsOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  if (corsOrigins.length > 0) {
+    app.enableCors({ origin: corsOrigins, exposedHeaders: ['x-request-id'] });
+    logger.log(`CORS allowed origins: ${corsOrigins.join(', ')}`);
+  } else {
+    app.enableCors({ exposedHeaders: ['x-request-id'] });
+    logger.warn('CORS_ORIGINS is not set: requests from any origin are allowed');
+  }
 
   app.use((req: Request & { requestId?: string }, res: Response, next: NextFunction) => {
     const requestId = req.headers['x-request-id']?.toString() || randomUUID();

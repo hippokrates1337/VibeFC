@@ -16,6 +16,7 @@ import {
   OrganizationRole,
   AddMemberResponseDto,
 } from '../dto/member.dto';
+import { toHttpException, type DatabaseError } from '../../common/errors/database-error';
 import { Request } from 'express';
 
 @Injectable()
@@ -27,6 +28,10 @@ export class MembersService {
     private readonly configService: ConfigService,
   ) {}
 
+  private dbError(error: DatabaseError, action: string) {
+    return toHttpException(error, { action, subject: 'Member', logger: this.logger });
+  }
+
   async findAllInOrganization(organizationId: string, request: Request): Promise<any[]> {
     const client = this.supabaseService.getClientForRequest(request);
     const { data, error } = await client
@@ -35,7 +40,7 @@ export class MembersService {
       .eq('organization_id', organizationId);
 
     if (error) {
-      throw new InternalServerErrorException(`Failed to fetch members: ${error.message}`);
+      throw this.dbError(error, 'fetch members');
     }
 
     return (data || []).map((row: { user_id: string; email: string | null; role: string; joined_at: string }) => ({
@@ -62,7 +67,7 @@ export class MembersService {
       .maybeSingle();
 
     if (profileError) {
-      throw new InternalServerErrorException(`Failed to look up user profile: ${profileError.message}`);
+      throw this.dbError(profileError, 'look up user profile');
     }
 
     if (profile?.id) {
@@ -86,7 +91,7 @@ export class MembersService {
     });
 
     if (invErr && invErr.code !== '23505') {
-      throw new InternalServerErrorException(`Failed to record invitation: ${invErr.message}`);
+      throw this.dbError(invErr, 'record invitation');
     }
 
     const redirectTo = this.configService.get<string>('SUPABASE_INVITE_REDIRECT_TO');
@@ -120,7 +125,8 @@ export class MembersService {
         }
       }
 
-      throw new InternalServerErrorException(`Failed to send invitation email: ${msg}`);
+      this.logger.error(`Invitation email failed: ${msg}`);
+      throw new InternalServerErrorException('Failed to send the invitation email');
     }
 
     this.logger.log(`Invitation email queued: org=${organizationId} email=${normalizedEmail} role=${dto.role}`);
@@ -162,9 +168,7 @@ export class MembersService {
       .maybeSingle();
 
     if (memberCheckError) {
-      throw new InternalServerErrorException(
-        `Failed to check existing membership: ${memberCheckError.message}`,
-      );
+      throw this.dbError(memberCheckError, 'check existing membership');
     }
 
     if (existingMember) {
@@ -178,7 +182,7 @@ export class MembersService {
     });
 
     if (insertError) {
-      throw new InternalServerErrorException(`Failed to add member: ${insertError.message}`);
+      throw this.dbError(insertError, 'add member');
     }
   }
 
@@ -199,7 +203,7 @@ export class MembersService {
       .maybeSingle();
 
     if (memberCheckError) {
-      throw new InternalServerErrorException(`Failed to check membership: ${memberCheckError.message}`);
+      throw this.dbError(memberCheckError, 'check membership');
     }
 
     if (!existingMember) {
@@ -214,7 +218,7 @@ export class MembersService {
         .eq('role', OrganizationRole.ADMIN);
 
       if (countError) {
-        throw new InternalServerErrorException(`Failed to check admin count: ${countError.message}`);
+        throw this.dbError(countError, 'check admin count');
       }
 
       if (adminCount.length <= 1) {
@@ -229,7 +233,7 @@ export class MembersService {
       .eq('user_id', userId);
 
     if (updateError) {
-      throw new InternalServerErrorException(`Failed to update member role: ${updateError.message}`);
+      throw this.dbError(updateError, 'update member role');
     }
 
     this.logger.log(`Member role updated: org=${organizationId} user=${userId} role=${dto.role}`);
@@ -247,7 +251,7 @@ export class MembersService {
       .maybeSingle();
 
     if (memberCheckError) {
-      throw new InternalServerErrorException(`Failed to check membership: ${memberCheckError.message}`);
+      throw this.dbError(memberCheckError, 'check membership');
     }
 
     if (!existingMember) {
@@ -262,7 +266,7 @@ export class MembersService {
         .eq('role', OrganizationRole.ADMIN);
 
       if (countError) {
-        throw new InternalServerErrorException(`Failed to check admin count: ${countError.message}`);
+        throw this.dbError(countError, 'check admin count');
       }
 
       if (adminCount.length <= 1) {
@@ -277,7 +281,7 @@ export class MembersService {
       .eq('user_id', userId);
 
     if (deleteError) {
-      throw new InternalServerErrorException(`Failed to remove member: ${deleteError.message}`);
+      throw this.dbError(deleteError, 'remove member');
     }
 
     this.logger.log(`Member removed: org=${organizationId} user=${userId}`);
